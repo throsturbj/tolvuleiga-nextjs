@@ -291,12 +291,23 @@ export default function DashboardPage() {
           </div>
 
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Velkomin, {user?.full_name}!
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300">
-              Hér getur þú séð stöðu þinna pantana.
-            </p>
+            {(() => {
+              const fallbackName =
+                (session?.user as unknown as { user_metadata?: { full_name?: string } })?.user_metadata?.full_name ||
+                session?.user?.email ||
+                "Notandi";
+              const displayName = (user?.full_name && user.full_name.trim().length > 0) ? user.full_name : fallbackName;
+              return (
+                <>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    Velkomin, {displayName}
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Hér getur þú séð stöðu þinna pantana.
+                  </p>
+                </>
+              );
+            })()}
           </div>
 
 

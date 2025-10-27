@@ -243,9 +243,9 @@ export default function OrderConfirmationPage() {
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900">Vörur fannst ekki</h1>
             <p className="mt-4 text-gray-600">Þessi vara er ekki til.</p>
-            <Link href="/" className="mt-6 inline-flex items-center px-3.5 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[var(--color-accent)] hover:brightness-95">
+            <button onClick={() => router.back()} type="button" className="mt-6 inline-flex items-center px-3.5 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[var(--color-accent)] hover:brightness-95">
               Fara til baka í vörulista
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -274,9 +274,9 @@ export default function OrderConfirmationPage() {
         <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900">Villa kom upp</h1>
             <p className="mt-4 text-gray-600">{profileError}</p>
-            <Link href="/" className="mt-6 inline-flex items-center px-3.5 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[var(--color-accent)] hover:brightness-95">
+            <button onClick={() => router.back()} type="button" className="mt-6 inline-flex items-center px-3.5 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[var(--color-accent)] hover:brightness-95">
               Fara til baka í vörulista
-          </Link>
+          </button>
           </div>
         </div>
       </div>
@@ -288,7 +288,7 @@ export default function OrderConfirmationPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white shadow rounded-lg">
           <div className="px-4 py-5 sm:p-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-8">Pöntun staðfest</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-8">Staðfestu pöntunina þína</h1>
             
             {/* Product Summary */}
             <div className="bg-gray-50 rounded-lg p-6 mb-8">
@@ -353,18 +353,19 @@ export default function OrderConfirmationPage() {
                   rows={4}
                   value={formData.message}
                   onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Skrifaðu skilaboð hér..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400 dark:placeholder-gray-500"
+                  placeholder="Eitthvað sem við þurfum að vita um pöntunina þína..."
                 />
               </div>
 
               <div className="flex items-center justify-between">
-                <Link 
-                  href="/" 
+                <button 
+                  type="button"
+                  onClick={() => router.back()} 
                   className="text-gray-600 hover:text-gray-800 font-medium"
                 >
-                  ← Fara til baka í vörulista
-                </Link>
+                  ← Til baka
+                </button>
                 
                 <button
                   type="submit"

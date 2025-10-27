@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Product {
@@ -50,6 +51,12 @@ export default function ProductDetailPage() {
 
   const product = products[productId];
 
+  // Minimal rental UI state (visual only)
+  const durations = [1, 3, 6, 12] as const;
+  const [durationIndex, setDurationIndex] = useState<number>(1);
+  const sliderProgress = (durationIndex / (durations.length - 1)) * 100;
+  const [addons, setAddons] = useState({ skjár: false, lyklabord: false, mus: false });
+
   const handleOrderClick = () => {
     if (session?.user) {
       // User is signed in, redirect to order confirmation page
@@ -83,108 +90,123 @@ export default function ProductDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-          >
-            <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Til baka
-          </button>
-        </div>
-      </div>
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid gap-8 md:grid-cols-2 items-start">
+          {/* Left: Product Image */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+            <div className="aspect-[4/3] bg-gray-200 dark:bg-gray-700" />
+          </div>
 
-      {/* Product Content */}
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
-          {/* Product Image */}
-          <div className="aspect-video bg-gray-200 dark:bg-gray-700" />
+          {/* Right: Details */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 space-y-6">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">{product.title}</h1>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Stutt samantekt á helstu eiginleikum</p>
+            </div>
 
-          {/* Product Details */}
-          <div className="p-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
-              {product.title}
-            </h1>
-            
-            {/* Specifications */}
-            <div className="grid gap-6 sm:grid-cols-2 mb-8">
-              <div className="space-y-4">
-                <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Skjákort
-                  </h3>
-                  <p className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">
-                    {product.beds}
-                  </p>
-                </div>
-                <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Örgjörvi
-                  </h3>
-                  <p className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">
-                    {product.baths}
-                  </p>
-                </div>
+            {/* Key specs */}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+                <p className="text-gray-500 dark:text-gray-400">Skjákort</p>
+                <p className="mt-1 font-medium text-gray-900 dark:text-white">{product.beds}</p>
               </div>
-              <div className="space-y-4">
-                <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Geymsla
-                  </h3>
-                  <p className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">
-                    {product.sqft}
-                  </p>
-                </div>
-                <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Verð
-                  </h3>
-              <p className="mt-2 text-2xl font-bold text-[var(--color-secondary)]">
-                    {product.price}/mánuði
-                  </p>
-                </div>
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+                <p className="text-gray-500 dark:text-gray-400">Örgjörvi</p>
+                <p className="mt-1 font-medium text-gray-900 dark:text-white">{product.baths}</p>
+              </div>
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+                <p className="text-gray-500 dark:text-gray-400">Geymsla</p>
+                <p className="mt-1 font-medium text-gray-900 dark:text-white">{product.sqft}</p>
+              </div>
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+                <p className="text-gray-500 dark:text-gray-400">Verð</p>
+                <p className="mt-1 text-xl font-semibold text-[var(--color-secondary)]">{product.price}/mánuði</p>
               </div>
             </div>
 
-            {/* Description */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Um vöruna
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                Þetta er hágæða tölva sem er tilbúin fyrir allt sem þú getur ímyndað þér. 
-                Með nýjustu tækni og öflugustu íhlutum er þetta fullkomna valið fyrir leikja, 
-                vinnu og skemmtun. Tölvan kemur með öllum nauðsynlegum íhlutum og er tilbúin 
-                til notkunar strax.
-              </p>
+            {/* Duration slider */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">Tímabil</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{durations[durationIndex]} mánuðir</p>
+              </div>
+              <div className="w-full max-w-xs sm:max-w-sm mx-auto">
+                <input
+                  type="range"
+                  min={0}
+                  max={3}
+                  step={1}
+                  value={durationIndex}
+                  onChange={(e) => setDurationIndex(parseInt(e.target.value))}
+                  className="range-compact"
+                  style={{ ['--progress' as any]: `${sliderProgress}%` }}
+                  aria-label="Veldu leigutímabil"
+                />
+              </div>
+              <div className="mt-1 w-full max-w-xs sm:max-w-sm mx-auto flex justify-between text-[11px] text-gray-500 dark:text-gray-400">
+                {durations.map((m, idx) => (
+                  <span key={m} className={idx === durationIndex ? 'text-[var(--color-accent)] font-medium' : ''}>{m}m</span>
+                ))}
+              </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button 
+            {/* Add-on toggles */}
+            <div className="space-y-3">
+              <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">Aukahlutir</p>
+              <div className="grid grid-cols-3 gap-3">
+                {/* Skjár */}
+                <label htmlFor="toggle-skrar" className="group flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  <input id="toggle-skrar" type="checkbox" className="sr-only" checked={addons.skjár}
+                    onChange={(e) => setAddons({ ...addons, skjár: e.target.checked })} />
+                  <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
+                    <span className="inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform duration-200 group-has-[:checked]:translate-x-4" />
+                  </span>
+                  Skjár
+                </label>
+                {/* Lyklaborð */}
+                <label htmlFor="toggle-lyklabord" className="group flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  <input id="toggle-lyklabord" type="checkbox" className="sr-only" checked={addons.lyklabord}
+                    onChange={(e) => setAddons({ ...addons, lyklabord: e.target.checked })} />
+                  <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
+                    <span className="inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform duration-200 group-has-[:checked]:translate-x-4" />
+                  </span>
+                  Lyklaborð
+                </label>
+                {/* Mús */}
+                <label htmlFor="toggle-mus" className="group flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  <input id="toggle-mus" type="checkbox" className="sr-only" checked={addons.mus}
+                    onChange={(e) => setAddons({ ...addons, mus: e.target.checked })} />
+                  <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
+                    <span className="inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform duration-200 group-has-[:checked]:translate-x-4" />
+                  </span>
+                  Mús
+                </label>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
                 onClick={handleOrderClick}
-                className="flex-1 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]">
+                className="flex-1 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+              >
                 Leigja núna
               </button>
-               <button
-                 onClick={() => {
-                   router.push('/');
-                   setTimeout(() => {
-                     window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
-                   }, 100);
-                 }}
-                 className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-center">
-                 Sjá allar vörur
-               </button>
+              <button
+                onClick={() => {
+                  router.push('/');
+                  setTimeout(() => {
+                    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+                  }, 100);
+                }}
+                className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-center"
+              >
+                Sjá allar vörur
+              </button>
             </div>
           </div>
         </div>
       </div>
-
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import type React from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Product {
@@ -139,7 +140,7 @@ export default function ProductDetailPage() {
                   value={durationIndex}
                   onChange={(e) => setDurationIndex(parseInt(e.target.value))}
                   className="range-compact"
-                  style={{ ['--progress' as any]: `${sliderProgress}%` }}
+                  style={{ ...( { ['--progress']: `${sliderProgress}%` } as unknown as React.CSSProperties ) }}
                   aria-label="Veldu leigutímabil"
                 />
               </div>

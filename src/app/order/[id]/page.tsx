@@ -34,7 +34,7 @@ export default function OrderConfirmationPage() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [profileLoading, setProfileLoading] = useState(true);
+  // Removed unused loading state
   const [profileError, setProfileError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     message: ''
@@ -96,14 +96,12 @@ export default function OrderConfirmationPage() {
       loadedForUidRef.current = uid;
       setUserProfile(user);
       setProfileError(null);
-      setProfileLoading(false);
       return;
     }
 
     // Otherwise fetch from Supabase
     const loadProfile = async () => {
       try {
-        setProfileLoading(true);
         setProfileError(null);
         const { data: profile, error } = await supabase
           .from('users')
@@ -124,7 +122,6 @@ export default function OrderConfirmationPage() {
             };
             loadedForUidRef.current = uid;
             setUserProfile(basicProfile);
-            setProfileLoading(false);
             return;
           }
           throw error;
@@ -132,14 +129,12 @@ export default function OrderConfirmationPage() {
 
         loadedForUidRef.current = uid;
         setUserProfile(profile as UserProfile);
-        setProfileLoading(false);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error('Order: Error loading profile:', {
           message,
         });
         setProfileError('Tókst ekki að sækja notandaupplýsingar');
-        setProfileLoading(false);
       }
     };
 

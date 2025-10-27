@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { checkSession } from '@/lib/auth-utils';
@@ -140,7 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []); // Run once on mount to avoid re-subscribing on every session change
 
-  const fetchUserProfile = async (authUid: string) => {
+  const fetchUserProfile = useCallback(async (authUid: string) => {
     try {
       
       // Check if we already have this user profile to prevent unnecessary fetches
@@ -200,7 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setLoading(false);
     }
-  };
+  }, [user]);
 
   // Keep a ref pointer to the latest fetch function to avoid effect deps
   useEffect(() => {

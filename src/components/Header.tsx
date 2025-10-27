@@ -18,8 +18,10 @@ export default function Header() {
 	};
 
 	// Build a display label: prefer profile name, then auth metadata name, else full email
-	const getDisplayLabel = () => {
-		const metaFullName = (session?.user as any)?.user_metadata?.full_name as string | undefined;
+  const getDisplayLabel = () => {
+    const metaFullName = (
+      session?.user as { user_metadata?: { full_name?: string } } | undefined
+    )?.user_metadata?.full_name as string | undefined;
 		const name = user?.full_name || metaFullName;
 		if (name && name.trim().length > 0) {
 			return getFirstName(name.trim());

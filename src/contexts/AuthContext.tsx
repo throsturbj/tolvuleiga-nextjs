@@ -3,7 +3,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { checkSession, refreshSession } from '@/lib/auth-utils';
+import { checkSession } from '@/lib/auth-utils';
+import type { Session } from '@supabase/supabase-js';
 
 interface User {
   id: string;
@@ -19,10 +20,10 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  session: any | null;
+  session: Session | null;
   signOut: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<{ data: any; error: any }>;
-  signUp: (email: string, password: string, metadata?: Record<string, any>) => Promise<{ data: any; error: any }>;
+  signIn: (email: string, password: string) => Promise<Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>>;
+  signUp: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<Awaited<ReturnType<typeof supabase.auth.signUp>>>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,7 +31,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState<any | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const router = useRouter();
 
   useEffect(() => {

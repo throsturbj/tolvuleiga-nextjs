@@ -124,7 +124,7 @@ export default function OrderConfirmationPage() {
           .single();
 
         if (error) {
-          if ((error as any).code === 'PGRST116') {
+          if ((error as { code?: string }).code === 'PGRST116') {
             console.log('Order: No profile found; using basic placeholder');
             const basicProfile: UserProfile = {
               id: uid,
@@ -146,11 +146,10 @@ export default function OrderConfirmationPage() {
         loadedForUidRef.current = uid;
         setUserProfile(profile as UserProfile);
         setProfileLoading(false);
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
         console.error('Order: Error loading profile:', {
-          message: err?.message,
-          code: err?.code,
-          details: err?.details,
+          message,
         });
         setProfileError('Tókst ekki að sækja notandaupplýsingar');
         setProfileLoading(false);
@@ -199,15 +198,15 @@ export default function OrderConfirmationPage() {
     if (!session?.user) return null;
     if (userProfile) return userProfile;
     if (user) return user as unknown as UserProfile;
-    const meta: any = (session.user as any).user_metadata || {};
+    const meta = (session.user as { user_metadata?: Record<string, unknown> }).user_metadata || {};
     return {
       id: session.user.id,
       auth_uid: session.user.id,
-      full_name: meta.full_name || '',
-      phone: meta.phone || '',
-      address: meta.address || '',
-      city: meta.city || '',
-      postal_code: meta.postal_code || '',
+      full_name: typeof meta.full_name === 'string' ? meta.full_name : '',
+      phone: typeof meta.phone === 'string' ? meta.phone : '',
+      address: typeof meta.address === 'string' ? meta.address : '',
+      city: typeof meta.city === 'string' ? meta.city : '',
+      postal_code: typeof meta.postal_code === 'string' ? meta.postal_code : '',
     };
   })();
 
@@ -230,7 +229,7 @@ export default function OrderConfirmationPage() {
           userProfile,
           message: formData.message,
           authUid: session?.user?.id,
-          accessToken: (session as any)?.access_token,
+          accessToken: (session as import('@supabase/supabase-js').Session | null)?.access_token,
         }),
       });
 

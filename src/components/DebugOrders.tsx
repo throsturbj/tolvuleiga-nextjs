@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+
+type QueryResult = { data: unknown; error: string | null } | null;
 
 export default function DebugOrders() {
   const { user } = useAuth();
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<QueryResult>(null);
   const [loading, setLoading] = useState(false);
 
   const testQuery = async () => {
@@ -42,7 +43,8 @@ export default function DebugOrders() {
       setResult({ data: ordersData, error: null });
     } catch (err) {
       console.error('Debug: Query error:', err);
-      setResult({ data: null, error: err });
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setResult({ data: null, error: message });
     } finally {
       setLoading(false);
     }

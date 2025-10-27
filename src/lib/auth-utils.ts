@@ -1,8 +1,9 @@
 import { supabase } from './supabase';
+import type { User } from '@supabase/supabase-js';
 
 export interface SessionInfo {
   isValid: boolean;
-  user: any | null;
+  user: User | null;
   error: string | null;
 }
 

@@ -62,7 +62,7 @@ export default function UserInfoPage() {
           .single();
 
         if (error) {
-          if ((error as any).code === "PGRST116") {
+          if ((error as { code?: string }).code === "PGRST116") {
             const { data: created, error: createError } = await supabase
               .from("users")
               .insert({
@@ -102,8 +102,11 @@ export default function UserInfoPage() {
           }
         }
         clearTimeout(timeout);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Tókst ekki að sækja notandaupplýsingar");
+      } catch (e: unknown) {
+        if (!cancelled) {
+          const message = e instanceof Error ? e.message : "Tókst ekki að sækja notandaupplýsingar";
+          setError(message);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -143,8 +146,9 @@ export default function UserInfoPage() {
           window.sessionStorage.setItem('profileUpdated', '1');
         }
       } catch {}
-    } catch (e: any) {
-      setError(e?.message || "Tókst ekki að uppfæra notandaupplýsingar");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Tókst ekki að uppfæra notandaupplýsingar";
+      setError(message);
     } finally {
       setSaving(false);
     }

@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { getUserProfile } from "@/lib/auth-utils";
 
 interface Product {
   id: string;

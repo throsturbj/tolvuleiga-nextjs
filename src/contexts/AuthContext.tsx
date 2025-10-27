@@ -34,6 +34,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const router = useRouter();
 
+  // Intentional single-subscribe effect; exhaustive-deps suppressed
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let isMounted = true;
 
@@ -107,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
             });
           }
-        } else if (event === 'SIGNED_IN' || event === 'SIGNED_UP' || event === 'TOKEN_REFRESHED' || event === 'PASSWORD_RECOVERY') {
+        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'PASSWORD_RECOVERY' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
           console.log('AuthContext: User signed in/up or token refreshed, event:', event);
           if (session?.user) {
             console.log('AuthContext: Fetching profile for user:', session.user.id);
@@ -127,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('AuthContext: Tab became visible, checking session...');
         try {
           const sessionInfo = await checkSession();
-          if (sessionInfo.isValid && !user) {
+          if (sessionInfo.isValid && sessionInfo.user && !user) {
             console.log('AuthContext: Session restored on tab focus');
             await fetchUserProfile(sessionInfo.user.id);
           } else if (!sessionInfo.isValid && user) {
@@ -247,46 +249,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    try {
-      console.log('AuthContext: Starting sign in...');
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) {
-        console.error('AuthContext: Sign in error:', error);
-      } else {
-        console.log('AuthContext: Successfully signed in');
-      }
-      
-      return { data, error };
-    } catch (error) {
-      console.error('AuthContext: Unexpected error during sign in:', error);
-      return { data: null, error };
+    console.log('AuthContext: Starting sign in...');
+    const result = await supabase.auth.signInWithPassword({ email, password });
+    if (result.error) {
+      console.error('AuthContext: Sign in error:', result.error);
+    } else {
+      console.log('AuthContext: Successfully signed in');
     }
+    return result;
   };
 
-  const signUp = async (email: string, password: string, metadata?: Record<string, any>) => {
-    try {
-      console.log('AuthContext: Starting sign up...');
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: metadata ? { data: metadata } : undefined,
-      });
-      
-      if (error) {
-        console.error('AuthContext: Sign up error:', error);
-      } else {
-        console.log('AuthContext: Successfully signed up');
-      }
-      
-      return { data, error };
-    } catch (error) {
-      console.error('AuthContext: Unexpected error during sign up:', error);
-      return { data: null, error };
+  const signUp = async (email: string, password: string, metadata?: Record<string, unknown>) => {
+    console.log('AuthContext: Starting sign up...');
+    const result = await supabase.auth.signUp({
+      email,
+      password,
+      options: metadata ? { data: metadata } : undefined,
+    });
+    if (result.error) {
+      console.error('AuthContext: Sign up error:', result.error);
+    } else {
+      console.log('AuthContext: Successfully signed up');
     }
+    return result;
   };
 
   const signOut = async () => {

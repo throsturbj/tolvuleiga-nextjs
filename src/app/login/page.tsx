@@ -18,7 +18,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -29,7 +29,7 @@ export default function LoginPage() {
         // Redirect to dashboard or home page
         router.push("/dashboard");
       }
-    } catch (error) {
+    } catch {
       setError("Villa kom upp við innskráningu");
     } finally {
       setLoading(false);

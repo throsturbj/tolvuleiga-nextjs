@@ -2,9 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 
 interface Product {
   id: string;
@@ -18,7 +16,7 @@ interface Product {
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, session } = useAuth();
+  const { session } = useAuth();
   const productId = params.id as string;
 
 

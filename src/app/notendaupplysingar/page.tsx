@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -15,12 +15,12 @@ interface UserProfile {
   postal_code: string;
 }
 
-export default function UserInfoPage() {
-  const { session, loading: authLoading } = useAuth();
+function UserInfoPageInner() {
+  const { session } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -304,5 +304,13 @@ export default function UserInfoPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function UserInfoPage() {
+  return (
+    <Suspense fallback={null}>
+      <UserInfoPageInner />
+    </Suspense>
   );
 }

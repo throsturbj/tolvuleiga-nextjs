@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 type QueryResult = { data: unknown; error: string | null } | null;
@@ -10,7 +10,7 @@ export default function DebugOrders() {
   const [result, setResult] = useState<QueryResult>(null);
   const [loading, setLoading] = useState(false);
 
-  const testQuery = async () => {
+  const testQuery = useCallback(async () => {
     if (!user) return;
     
     setLoading(true);
@@ -48,13 +48,13 @@ export default function DebugOrders() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     if (user) {
       testQuery();
     }
-  }, [user]);
+  }, [user, testQuery]);
 
   return (
     <div className="p-4 border rounded">

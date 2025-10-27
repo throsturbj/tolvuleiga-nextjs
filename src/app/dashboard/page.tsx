@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Global flag to prevent duplicate fetches across React Strict Mode
@@ -177,6 +176,7 @@ export default function DashboardPage() {
       globalFetchInProgress = false;
       console.log('Dashboard: Cleanup function called');
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]); // Depend on session instead of authLoading
 
   // Handle page focus/visibility - refresh data when tab becomes visible
@@ -200,12 +200,10 @@ export default function DashboardPage() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []); // Remove dependencies to prevent infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentional empty deps to avoid loops
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/");
-  };
+  // Removed unused handleLogout
 
   const retryFetchOrders = async () => {
     if (globalFetchInProgress) {

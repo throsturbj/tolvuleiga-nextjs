@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { checkSession } from '@/lib/auth-utils';
@@ -33,21 +33,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const router = useRouter();
+  const userRef = useRef<User | null>(null);
+  const fetchUserProfileRef = useRef<(authUid: string) => Promise<void>>(async () => {});
 
-  // Intentional single-subscribe effect; exhaustive-deps suppressed
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  // Intentional single-subscribe effect
   useEffect(() => {
     let isMounted = true;
 
     // Get initial session - properly await it
     const getInitialSession = async () => {
       try {
-        console.log('AuthContext: Getting initial session...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (!isMounted) return;
         
-        console.log('AuthContext: Session:', session);
         setSession(session);
         
         if (error) {
@@ -57,19 +60,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (session?.user) {
-          console.log('AuthContext: User found, fetching profile...', {
-            user_id: session.user.id,
-            email: session.user.email
-          });
           try {
-            await fetchUserProfile(session.user.id);
+            await fetchUserProfileRef.current(session.user.id);
           } catch (error) {
             console.error('AuthContext: Error fetching profile in getInitialSession:', error);
             setUser(null);
             setLoading(false);
           }
         } else {
-          console.log('AuthContext: No user found, setting loading to false');
           setUser(null);
           setLoading(false);
         }
@@ -83,7 +81,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Fallback timeout to prevent infinite loading
     const timeout = setTimeout(() => {
-      console.log('AuthContext: Timeout reached, setting loading to false');
       if (isMounted) setLoading(false);
     }, 5000);
 
@@ -91,12 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!isMounted) return;
-        
-        console.log('AuthContext: Auth event:', event, session?.user?.id);
         setSession(session);
         
         if (event === 'SIGNED_OUT') {
-          console.log('AuthContext: User signed out - clearing all state');
           setUser(null);
           setLoading(false);
           // Clear localStorage on sign out
@@ -110,15 +104,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
           }
         } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'PASSWORD_RECOVERY' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
-          console.log('AuthContext: User signed in/up or token refreshed, event:', event);
           if (session?.user) {
-            console.log('AuthContext: Fetching profile for user:', session.user.id);
-            await fetchUserProfile(session.user.id);
+            await fetchUserProfileRef.current(session.user.id);
           } else {
-            console.log('AuthContext: No session user found for event:', event);
           }
         } else {
-          console.log('AuthContext: Unhandled auth event:', event);
         }
       }
     );
@@ -126,14 +116,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Handle tab visibility changes to refresh session
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && isMounted) {
-        console.log('AuthContext: Tab became visible, checking session...');
         try {
           const sessionInfo = await checkSession();
-          if (sessionInfo.isValid && sessionInfo.user && !user) {
-            console.log('AuthContext: Session restored on tab focus');
-            await fetchUserProfile(sessionInfo.user.id);
-          } else if (!sessionInfo.isValid && user) {
-            console.log('AuthContext: Session invalid on tab focus, clearing user');
+          if (sessionInfo.isValid && sessionInfo.user && !userRef.current) {
+            await fetchUserProfileRef.current(sessionInfo.user.id);
+          } else if (!sessionInfo.isValid && userRef.current) {
             setUser(null);
             setLoading(false);
           }
@@ -155,11 +142,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserProfile = async (authUid: string) => {
     try {
-      console.log('AuthContext: Fetching profile for auth_uid:', authUid);
       
       // Check if we already have this user profile to prevent unnecessary fetches
       if (user && user.auth_uid === authUid) {
-        console.log('AuthContext: User profile already loaded for this auth_uid');
         setLoading(false);
         return;
       }
@@ -167,20 +152,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Check if we have a valid session first
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
-        console.log('AuthContext: No valid session, skipping profile fetch');
         setUser(null);
         setLoading(false);
         return;
       }
       
-      console.log('AuthContext: Session details:', {
-        user_id: session.user.id,
-        email: session.user.email,
-        expires_at: session.expires_at
-      });
-      
       // Use Supabase client instead of direct fetch
-      console.log('AuthContext: Using Supabase client...');
       
       const { data: profileData, error } = await supabase
         .from('users')
@@ -188,28 +165,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('auth_uid', authUid)
         .single();
       
-      console.log('AuthContext: Supabase query completed:', { 
-        profileData, 
-        error: error ? {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint
-        } : null,
-        authUid
-      });
-      
       if (error) {
-        console.log('AuthContext: Supabase error details:', {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint
-        });
-        
         if (error.code === 'PGRST116') {
           // No rows returned - profile doesn't exist
-          console.log('AuthContext: Profile not found for existing user - this is normal for new users');
           // Don't set a user object if there's no profile - let them complete their profile first
           setUser(null);
           setLoading(false);
@@ -220,8 +178,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else if (profileData) {
         // Profile exists
-        console.log('AuthContext: Profile found:', profileData);
-        
         // Get email from current session
         const email = session?.user?.email || '';
 
@@ -231,12 +187,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: email
         };
 
-        console.log('AuthContext: Profile fetched:', userWithEmail);
         setUser(userWithEmail);
         setLoading(false);
       } else {
         // Profile doesn't exist
-        console.log('AuthContext: Profile not found for existing user');
         setUser(null);
         setLoading(false);
       }
@@ -248,19 +202,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Keep a ref pointer to the latest fetch function to avoid effect deps
+  useEffect(() => {
+    fetchUserProfileRef.current = fetchUserProfile;
+  }, [fetchUserProfile]);
+
   const signIn = async (email: string, password: string) => {
-    console.log('AuthContext: Starting sign in...');
     const result = await supabase.auth.signInWithPassword({ email, password });
     if (result.error) {
       console.error('AuthContext: Sign in error:', result.error);
-    } else {
-      console.log('AuthContext: Successfully signed in');
     }
     return result;
   };
 
   const signUp = async (email: string, password: string, metadata?: Record<string, unknown>) => {
-    console.log('AuthContext: Starting sign up...');
     const result = await supabase.auth.signUp({
       email,
       password,
@@ -268,15 +223,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (result.error) {
       console.error('AuthContext: Sign up error:', result.error);
-    } else {
-      console.log('AuthContext: Successfully signed up');
     }
     return result;
   };
 
   const signOut = async () => {
     try {
-      console.log('AuthContext: Starting sign out...');
       
       // Clear session state first
       setSession(null);
@@ -288,8 +240,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (error) {
         console.error('AuthContext: Sign out error:', error);
-      } else {
-        console.log('AuthContext: Successfully signed out');
       }
       
       // Clear localStorage manually to ensure clean state
@@ -306,7 +256,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Navigate to home page
       router.push('/');
-      console.log('AuthContext: Navigated to home page');
       
     } catch (error) {
       console.error('AuthContext: Unexpected error during sign out:', error);

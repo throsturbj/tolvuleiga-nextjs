@@ -86,28 +86,10 @@
       "namedRegex": "^/legal(?:/)?$"
     },
     {
-      "page": "/login",
-      "regex": "^/login(?:/)?$",
-      "routeKeys": {},
-      "namedRegex": "^/login(?:/)?$"
-    },
-    {
       "page": "/notendaupplysingar",
       "regex": "^/notendaupplysingar(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/notendaupplysingar(?:/)?$"
-    },
-    {
-      "page": "/products",
-      "regex": "^/products(?:/)?$",
-      "routeKeys": {},
-      "namedRegex": "^/products(?:/)?$"
-    },
-    {
-      "page": "/signup",
-      "regex": "^/signup(?:/)?$",
-      "routeKeys": {},
-      "namedRegex": "^/signup(?:/)?$"
     }
   ],
   "dataRoutes": [],

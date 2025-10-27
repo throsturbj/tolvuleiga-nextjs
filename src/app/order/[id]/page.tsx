@@ -73,22 +73,13 @@ export default function OrderConfirmationPage() {
 
   // Fetch user profile: prefer AuthContext user; otherwise load from Supabase; redirect if no session
   useEffect(() => {
-    console.log('Order: useEffect triggered', { 
-      authLoading, 
-      session: !!session, 
-      user: !!user,
-      profileLoading
-    });
-
     // If auth is still loading, wait
     if (authLoading) {
-      console.log('Order: Auth still loading...');
       return;
     }
 
     // If no session, redirect
     if (!session?.user) {
-      console.log('Order: No session, redirecting to auth');
       router.push(`/auth?redirect=/order/${productId}`);
       return;
     }
@@ -102,7 +93,6 @@ export default function OrderConfirmationPage() {
 
     // If AuthContext provided a user profile, use it immediately
     if (user) {
-      console.log('Order: Using user data from AuthContext');
       loadedForUidRef.current = uid;
       setUserProfile(user);
       setProfileError(null);
@@ -115,7 +105,6 @@ export default function OrderConfirmationPage() {
       try {
         setProfileLoading(true);
         setProfileError(null);
-        console.log('Order: Fetching profile from Supabase for uid:', uid);
         const { data: profile, error } = await supabase
           .from('users')
           .select('*')
@@ -124,7 +113,6 @@ export default function OrderConfirmationPage() {
 
         if (error) {
           if ((error as { code?: string }).code === 'PGRST116') {
-            console.log('Order: No profile found; using basic placeholder');
             const basicProfile: UserProfile = {
               id: uid,
               auth_uid: uid,
@@ -156,7 +144,7 @@ export default function OrderConfirmationPage() {
     };
 
     loadProfile();
-  }, [authLoading, session, user, productId]);
+  }, [authLoading, session, user, productId, router, userProfile]);
 
   // Refresh profile on return from profile page
   useEffect(() => {
@@ -255,7 +243,7 @@ export default function OrderConfirmationPage() {
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900">Vörur fannst ekki</h1>
             <p className="mt-4 text-gray-600">Þessi vara er ekki til.</p>
-            <Link href="/products" className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+            <Link href="/" className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
               Fara til baka í vörulista
             </Link>
           </div>
@@ -286,7 +274,7 @@ export default function OrderConfirmationPage() {
         <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900">Villa kom upp</h1>
             <p className="mt-4 text-gray-600">{profileError}</p>
-            <Link href="/products" className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+            <Link href="/" className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
               Fara til baka í vörulista
           </Link>
           </div>
@@ -372,7 +360,7 @@ export default function OrderConfirmationPage() {
 
               <div className="flex items-center justify-between">
                 <Link 
-                  href="/products" 
+                  href="/" 
                   className="text-gray-600 hover:text-gray-800 font-medium"
                 >
                   ← Fara til baka í vörulista

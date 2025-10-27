@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import logo from "../../img/logo.png";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -52,11 +54,17 @@ export default function Header() {
 				Skip to content
 			</a>
 			<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-				<div className="flex h-16 items-center justify-between">
-					<Link href="/" className="font-semibold tracking-tight text-lg">
-						Tölvuleiga
-					</Link>
-					<nav aria-label="Primary" className="hidden md:flex items-center gap-6">
+				<div className="flex h-14 items-center justify-between">
+					<div className="flex items-center gap-3">
+					<Link href="/" className="flex items-center gap-2">
+						<Image src={logo} alt="TL" width={48} height={48} priority />
+							<div className="leading-tight">
+							<span className="block font-semibold tracking-tight text-xl sm:text-1xl">Tölvuleiga</span>
+							<span className="block text-[var(--color-accent)] text-[10px] sm:text-xs opacity-80 mt-0 ml-0.5 sm:ml-1">Leigja · Spila · Skila</span>
+							</div>
+						</Link>
+					</div>
+					<nav aria-label="Primary" className="hidden md:flex items-center gap-5">
 						<Link href="/about" className="hover:underline underline-offset-4">Um Okkur</Link>
 						<Link href="/contact" className="hover:underline underline-offset-4">Hafa Samband</Link>
 						{/* Auth controls: hide until auth check resolves; show either signed-in menu or signed-out link */}
@@ -120,7 +128,7 @@ export default function Header() {
 								)}
 							</div>
 						) : !loading ? (
-							<Link href="/auth?redirect=/dashboard" className="hover:underline underline-offset-4">Mínar síður</Link>
+							<Link href="/auth?redirect=/dashboard" className="inline-flex items-center px-3.5 py-2 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium hover:brightness-95">Mínar síður</Link>
 						) : null}
 					</nav>
 					<button
@@ -164,7 +172,7 @@ export default function Header() {
 								</button>
 							</>
 						) : !loading ? (
-							<Link href="/auth?redirect=/dashboard" className="py-2">Mínar síður</Link>
+							<Link href="/auth?redirect=/dashboard" className="py-2 inline-flex items-center px-3.5 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium hover:brightness-95">Mínar síður</Link>
 						) : null}
 					</div>
 				</div>

@@ -72,7 +72,7 @@ export default function ProductDetailPage() {
           </p>
           <Link
             href="/"
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+            className="rounded-md bg-[var(--color-accent)] px-3.5 py-2 text-sm font-medium text-white hover:brightness-95"
           >
             Til baka
           </Link>
@@ -143,7 +143,7 @@ export default function ProductDetailPage() {
                   <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     Verð
                   </h3>
-                  <p className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">
+              <p className="mt-2 text-2xl font-bold text-[var(--color-secondary)]">
                     {product.price}/mánuði
                   </p>
                 </div>
@@ -167,7 +167,7 @@ export default function ProductDetailPage() {
             <div className="flex flex-col sm:flex-row gap-4">
               <button 
                 onClick={handleOrderClick}
-                className="flex-1 rounded-md bg-blue-600 px-6 py-3 text-lg font-semibold text-white hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                className="flex-1 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]">
                 Leigja núna
               </button>
                <button
@@ -177,7 +177,7 @@ export default function ProductDetailPage() {
                      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
                    }, 100);
                  }}
-                 className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 px-6 py-3 text-lg font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-center">
+                 className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-center">
                  Sjá allar vörur
                </button>
             </div>

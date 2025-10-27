@@ -272,8 +272,8 @@ export default function DashboardPage() {
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[var(--color-secondary)] mx-auto"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-300">Hleður...</p>
         </div>
       </div>
@@ -322,7 +322,7 @@ export default function DashboardPage() {
                 <button
                   onClick={retryFetchOrders}
                   disabled={loading}
-                  className="inline-flex items-center px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center px-3.5 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>
@@ -354,7 +354,7 @@ export default function DashboardPage() {
                       window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
                     }, 100);
                   }}
-                  className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  className="inline-flex items-center px-3 py-1.5 text-sm bg-[var(--color-accent)] text-white rounded-md hover:brightness-95"
                 >
                   Sjá vörur
                 </button>

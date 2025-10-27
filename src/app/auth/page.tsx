@@ -29,11 +29,8 @@ function AuthPageInner() {
 
   // Redirect if already authenticated - rely on session only
   useEffect(() => {
-    console.log('Auth: Session state changed:', session);
-    console.log('Auth: User state changed:', user);
     if (session?.user && !hasNavigated.current) {
       hasNavigated.current = true;
-      console.log('Auth: User and session found, redirecting to:', redirectTo);
       router.replace(redirectTo);
     }
   }, [session, user, router, redirectTo]);
@@ -193,7 +190,7 @@ function AuthPageInner() {
                     value={formData.email}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
@@ -208,14 +205,14 @@ function AuthPageInner() {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? 'Skrái inn...' : 'Skrá inn'}
                 </button>
@@ -224,7 +221,7 @@ function AuthPageInner() {
               <div className="mt-6">
                 <Link
                   href="/"
-                  className="text-blue-600 dark:text-blue-400 hover:text-blue-500 text-sm"
+                  className="text-[var(--color-secondary)] hover:opacity-80 text-sm"
                 >
                   ← Til baka á forsíðu
                 </Link>
@@ -254,7 +251,7 @@ function AuthPageInner() {
                     value={formData.name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
@@ -269,7 +266,7 @@ function AuthPageInner() {
                     value={formData.email}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
@@ -284,7 +281,7 @@ function AuthPageInner() {
                     value={formData.phone}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
@@ -299,7 +296,7 @@ function AuthPageInner() {
                     value={formData.address}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
@@ -315,7 +312,7 @@ function AuthPageInner() {
                       value={formData.city}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
                     />
                   </div>
                   <div>
@@ -329,7 +326,7 @@ function AuthPageInner() {
                       value={formData.postal_code}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
                     />
                   </div>
                 </div>
@@ -345,7 +342,7 @@ function AuthPageInner() {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
@@ -360,14 +357,14 @@ function AuthPageInner() {
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? 'Býr til reikning...' : 'Búa til reikning'}
                 </button>
@@ -376,7 +373,7 @@ function AuthPageInner() {
               <div className="mt-6">
                 <Link
                   href="/"
-                  className="text-blue-600 dark:text-blue-400 hover:text-blue-500 text-sm"
+                  className="text-[var(--color-secondary)] hover:opacity-80 text-sm"
                 >
                   ← Til baka á forsíðu
                 </Link>

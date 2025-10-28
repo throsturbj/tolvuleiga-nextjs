@@ -52,13 +52,27 @@ export default function ProductDetailPage() {
 
   const product = products[productId];
 
-  // Minimal rental UI state (visual only)
+  // Rental UI (kept on product page)
   const durations = [1, 3, 6, 12] as const;
   const [durationIndex, setDurationIndex] = useState<number>(1);
   const sliderProgress = (durationIndex / (durations.length - 1)) * 100;
   const [addons, setAddons] = useState({ skjár: false, lyklabord: false, mus: false });
 
   const handleOrderClick = () => {
+    try {
+      if (typeof window !== 'undefined') {
+        const selection = {
+          productId,
+          months: durations[durationIndex],
+          addons: {
+            skjár: addons.skjár,
+            lyklabord: addons.lyklabord,
+            mus: addons.mus,
+          }
+        };
+        window.sessionStorage.setItem('orderSelection', JSON.stringify(selection));
+      }
+    } catch {}
     if (session?.user) {
       // User is signed in, redirect to order confirmation page
       router.push(`/order/${productId}`);

@@ -15,6 +15,12 @@ interface Order {
   status: string;
   created_at: string;
   updated_at: string;
+  orderNumber?: string;
+  timabilFra?: string;
+  timabilTil?: string;
+  skjar?: boolean;
+  lyklabord?: boolean;
+  mus?: boolean;
 }
 
 export default function DashboardPage() {
@@ -269,6 +275,12 @@ export default function DashboardPage() {
     });
   };
 
+  const formatDateOnly = (dateString?: string) => {
+    if (!dateString) return '—';
+    const d = new Date(dateString);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('is-IS');
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -372,30 +384,50 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {orders.map((order: Order) => (
-                  <div key={order.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h4 className="text-lg font-medium text-gray-900 dark:text-white">
-                            Pöntun #{order.id.slice(-8)}
-                          </h4>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
-                            {order.status}
-                          </span>
+                {orders.map((order: Order) => {
+                  const addons: string[] = [];
+                  if (order.skjar) addons.push('Skjár');
+                  if (order.lyklabord) addons.push('Lyklaborð');
+                  if (order.mus) addons.push('Mús');
+
+                  return (
+                    <div key={order.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <h4 className="text-lg font-medium text-gray-900 dark:text-white">
+                              Pöntun #{order.orderNumber || order.id.slice(-8)}
+                            </h4>
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
+                              {order.status}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-gray-600 dark:text-gray-300">Stofnað: {formatDate(order.created_at)}</p>
+                            {order.updated_at !== order.created_at && (
+                              <p className="text-sm text-gray-600 dark:text-gray-300">Uppfært: {formatDate(order.updated_at)}</p>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Stofnað: {formatDate(order.created_at)}
-                        </p>
-                        {order.updated_at !== order.created_at && (
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Uppfært: {formatDate(order.updated_at)}
-                          </p>
-                        )}
+
+                        <div className="grid sm:grid-cols-3 gap-3 text-sm">
+                          <div className="rounded-md bg-gray-50 dark:bg-gray-700/50 p-3">
+                            <p className="text-gray-500 dark:text-gray-400">Byrjun tímabils</p>
+                            <p className="mt-1 font-medium text-gray-900 dark:text-white">{formatDateOnly(order.timabilFra)}</p>
+                          </div>
+                          <div className="rounded-md bg-gray-50 dark:bg-gray-700/50 p-3">
+                            <p className="text-gray-500 dark:text-gray-400">Tímabil lýkur</p>
+                            <p className="mt-1 font-medium text-gray-900 dark:text-white">{formatDateOnly(order.timabilTil)}</p>
+                          </div>
+                          <div className="rounded-md bg-gray-50 dark:bg-gray-700/50 p-3">
+                            <p className="text-gray-500 dark:text-gray-400">Aukahlutir</p>
+                            <p className="mt-1 font-medium text-gray-900 dark:text-white">{addons.length ? addons.join(', ') : '—'}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

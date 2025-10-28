@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
+//
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 
@@ -40,6 +41,38 @@ export default function OrderConfirmationPage() {
     message: ''
   });
   const loadedForUidRef = useRef<string | null>(null);
+
+  // Selection passed from product page
+  const [selection, setSelection] = useState<{ months: number; addons?: { skjár?: boolean; lyklaborð?: boolean; mus?: boolean } } | null>(null);
+
+  const addMonths = (date: Date, months: number) => {
+    const d = new Date(date);
+    const day = d.getDate();
+    d.setMonth(d.getMonth() + months);
+    // handle month overflow (e.g., Jan 31 + 1 month)
+    if (d.getDate() < day) {
+      d.setDate(0);
+    }
+    return d;
+  };
+
+  // Load selection from sessionStorage
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = window.sessionStorage.getItem('orderSelection');
+        if (raw) {
+          const parsed = JSON.parse(raw) as { months?: number; addons?: Record<string, boolean> };
+          const months = parsed.months && [1,3,6,12].includes(parsed.months) ? parsed.months : 3;
+          setSelection({ months, addons: parsed.addons as any });
+        } else {
+          setSelection({ months: 3, addons: {} });
+        }
+      }
+    } catch {
+      setSelection({ months: 3, addons: {} });
+    }
+  }, []);
 
   // Product data - same as in product page
   const products: Record<string, Product> = {
@@ -199,26 +232,42 @@ export default function OrderConfirmationPage() {
     setSubmitStatus('idle');
 
     try {
-      const response = await fetch('/api/send-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          productId,
-          productTitle: product?.title,
-          productPrice: product?.price,
-          userProfile,
-          message: formData.message,
-          authUid: session?.user?.id,
-          accessToken: (session as import('@supabase/supabase-js').Session | null)?.access_token,
-        }),
-      });
+      const now = new Date();
+      const months = selection?.months ?? 3;
+      const to = addMonths(now, months);
 
-      if (response.ok) {
+      const a = (selection?.addons ?? {}) as Record<string, boolean>;
+      const skjar = !!(a['skjár'] || a['skjar']);
+      const lyklabord = !!(a['lyklaborð'] || a['lyklabord']);
+      const mus = !!(a['mús'] || a['mus']);
+
+      const generateOrderNumber = () => {
+        const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let out = '';
+        for (let i = 0; i < 8; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+        return out;
+      };
+      const orderNumber = generateOrderNumber();
+
+      const { error } = await supabase
+        .from('orders')
+        .insert([
+          {
+            auth_uid: session?.user?.id ?? null,
+            status: 'Undirbúningur',
+            orderNumber,
+            timabilFra: now.toISOString(),
+            timabilTil: to.toISOString(),
+            skjar,
+            lyklabord,
+            mus,
+          },
+        ]);
+
+      if (!error) {
         setSubmitStatus('success');
         setFormData({ message: '' });
-        // Navigate to dashboard after successful email + DB insert (handled server-side)
+        // Navigate to dashboard after successful insert
         router.push('/dashboard');
       } else {
         setSubmitStatus('error');
@@ -335,6 +384,31 @@ export default function OrderConfirmationPage() {
                 </div>
               </div>
             )}
+
+            {/* Rental Selection Summary */}
+            <div className="bg-gray-50 rounded-lg p-6 mb-8">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Leigutímabil og aukahlutir</h2>
+              <div className="space-y-2 text-sm text-gray-700">
+                <p>
+                  <span className="font-medium">Byrjun tímabils:</span>{' '}
+                  {(() => { const now = new Date(); return now.toLocaleDateString('is-IS'); })()}
+                </p>
+                <p>
+                  <span className="font-medium">Tímabil lýkur:</span>{' '}
+                  {(() => { const now = new Date(); const months = selection?.months ?? 3; const to = addMonths(now, months); return to.toLocaleDateString('is-IS'); })()}
+                </p>
+                {(() => {
+                  const a = (selection?.addons ?? {}) as Record<string, boolean>;
+                  const list: string[] = [];
+                  if (a['skjár']) list.push('Skjár');
+                  if (a['lyklaborð'] || a['lyklabord']) list.push('Lyklaborð');
+                  if (a['mús'] || a['mus']) list.push('Mús');
+                  return list.length > 0 ? (
+                    <p><span className="font-medium">Aukahlutir -</span> {list.join(', ')}</p>
+                  ) : null;
+                })()}
+              </div>
+            </div>
 
             {/* Order Form */}
             <form onSubmit={handleSubmit} className="space-y-6">

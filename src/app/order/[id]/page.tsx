@@ -62,9 +62,15 @@ export default function OrderConfirmationPage() {
       if (typeof window !== 'undefined') {
         const raw = window.sessionStorage.getItem('orderSelection');
         if (raw) {
-          const parsed = JSON.parse(raw) as { months?: number; addons?: Record<string, boolean> };
+          const parsed = JSON.parse(raw) as { months?: number; addons?: unknown };
           const months = parsed.months && [1,3,6,12].includes(parsed.months) ? parsed.months : 3;
-          setSelection({ months, addons: parsed.addons as any });
+          const src = (parsed.addons ?? {}) as Record<string, unknown>;
+          const mapped = {
+            skjár: src['skjár'] === true || src['skjar'] === true,
+            lyklaborð: src['lyklaborð'] === true || src['lyklabord'] === true,
+            mus: src['mús'] === true || src['mus'] === true,
+          };
+          setSelection({ months, addons: mapped });
         } else {
           setSelection({ months: 3, addons: {} });
         }

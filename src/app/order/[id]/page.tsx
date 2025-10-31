@@ -39,7 +39,6 @@ export default function OrderConfirmationPage() {
   const productIdNum = Number(productIdParam);
   const [product, setProduct] = useState<GamingPCRow | null>(null);
   const [productLoading, setProductLoading] = useState<boolean>(true);
-  const [productError, setProductError] = useState<string | null>(null);
 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -106,14 +105,11 @@ export default function OrderConfirmationPage() {
           .single();
         if (!isMounted) return;
         if (error) {
-          setProductError(error.message);
           setProduct(null);
         } else {
           setProduct(data as GamingPCRow);
-          setProductError(null);
         }
       } catch (e) {
-        if (isMounted) setProductError(e instanceof Error ? e.message : 'Unknown error');
         setProduct(null);
       } finally {
         if (isMounted) setProductLoading(false);

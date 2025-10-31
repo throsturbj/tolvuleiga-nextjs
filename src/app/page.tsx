@@ -15,7 +15,6 @@ export default function Home() {
   }
 
   const [items, setItems] = useState<GamingPCItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -33,8 +32,6 @@ export default function Home() {
         }
       } catch {
         if (isMounted) setItems([]);
-      } finally {
-        if (isMounted) setLoading(false);
       }
     };
     fetchItems();

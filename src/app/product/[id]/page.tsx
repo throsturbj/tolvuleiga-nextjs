@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type React from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -69,7 +69,8 @@ export default function ProductDetailPage() {
   const [durationIndex, setDurationIndex] = useState<number>(0);
   const sliderProgress = (durationIndex / (durations.length - 1)) * 100;
   const [addons, setAddons] = useState({ skjár: false, lyklabord: false, mus: false });
-  const progressStyle = ({ ['--progress' as any]: `${sliderProgress}%` } as unknown) as React.CSSProperties;
+  type ProgressStyle = React.CSSProperties & { ['--progress']?: string };
+  const progressStyle: ProgressStyle = { '--progress': `${sliderProgress}%` };
 
   const handleOrderClick = () => {
     try {

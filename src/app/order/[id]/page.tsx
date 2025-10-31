@@ -93,7 +93,7 @@ export default function OrderConfirmationPage() {
     let isMounted = true;
     const fetchProduct = async () => {
       if (!productIdNum || Number.isNaN(productIdNum)) {
-        setProductError('Rangt vöruauðkenni');
+        setProduct(null);
         setProductLoading(false);
         return;
       }
@@ -109,7 +109,7 @@ export default function OrderConfirmationPage() {
         } else {
           setProduct(data as GamingPCRow);
         }
-      } catch (e) {
+      } catch {
         setProduct(null);
       } finally {
         if (isMounted) setProductLoading(false);

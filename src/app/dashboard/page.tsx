@@ -21,6 +21,21 @@ interface Order {
   skjar?: boolean;
   lyklabord?: boolean;
   mus?: boolean;
+  verd?: number;
+  GamingPC_uuid?: number | null;
+}
+
+interface GamingPCItem {
+  id: number;
+  name: string;
+  verd?: string | null;
+  cpu?: string | null;
+  gpu?: string | null;
+  storage?: string | null;
+  motherboard?: string | null;
+  powersupply?: string | null;
+  cpucooler?: string | null;
+  ram?: string | null;
 }
 
 export default function DashboardPage() {
@@ -30,6 +45,9 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const fetchedUserRef = useRef<string | null>(null);
+  const [pcNamesById, setPcNamesById] = useState<Record<number, string>>({});
+  const [pcById, setPcById] = useState<Record<number, GamingPCItem>>({});
+  const [openPcId, setOpenPcId] = useState<number | null>(null);
 
   // Redirect to home if signed out
   useEffect(() => {
@@ -144,6 +162,24 @@ export default function DashboardPage() {
           }
           
           const ordersData = await response.json();
+          // After fetching orders, load related GamingPC names
+          const ids = Array.from(new Set((ordersData as Order[]).map(o => o.GamingPC_uuid).filter((v: unknown): v is number => typeof v === 'number')));
+          if (ids.length > 0) {
+            try {
+              const { data: pcRows } = await supabase
+                .from('GamingPC')
+                .select('id,name,verd,cpu,gpu,storage,motherboard,powersupply,cpucooler,ram')
+                .in('id', ids as number[]);
+              const map: Record<number, string> = {};
+              const byId: Record<number, GamingPCItem> = {};
+              (pcRows || []).forEach((r: GamingPCItem) => { map[r.id] = r.name; byId[r.id] = r; });
+              setPcNamesById(map);
+              setPcById(byId);
+            } catch {}
+          } else {
+            setPcNamesById({});
+            setPcById({});
+          }
           console.log('Dashboard: REST API query completed:', ordersData);
           
           // Always update state, even if component is unmounting
@@ -253,16 +289,24 @@ export default function DashboardPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Undirbúningur':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+        return 'bg-yellow-100 text-yellow-800';
+      case 'Í gangi':
+        return 'bg-indigo-100 text-indigo-800';
       case 'Í vinnslu':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+        return 'bg-blue-100 text-blue-800';
       case 'Lokið':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+        return 'bg-green-100 text-green-800';
       case 'Hætt við':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+        return 'bg-red-100 text-red-800';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+        return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const formatPrice = (value: unknown) => {
+    const n = typeof value === 'number' ? value : parseInt((value as string | undefined || '').toString().replace(/\D+/g, ''), 10);
+    if (!Number.isFinite(n)) return null;
+    return `${n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr/mánuði`;
   };
 
   const formatDate = (dateString: string) => {
@@ -283,21 +327,21 @@ export default function DashboardPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[var(--color-secondary)] mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-300">Hleður...</p>
+          <p className="mt-4 text-gray-600">Hleður...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+        <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-2xl font-bold text-gray-900">
               Pantanir
             </h1>
           </div>
@@ -311,10 +355,10 @@ export default function DashboardPage() {
               const displayName = (user?.full_name && user.full_name.trim().length > 0) ? user.full_name : fallbackName;
               return (
                 <>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
                     Velkomin, {displayName}
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-300">
+                  <p className="text-gray-600">
                     Hér getur þú séð stöðu þinna pantana.
                   </p>
                 </>
@@ -325,21 +369,21 @@ export default function DashboardPage() {
 
           {/* Orders Section */}
           <div className="mb-8">
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">
               Mínar pantanir
             </h3>
             
             {error ? (
-              <div className="text-center py-12 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
                 <div className="mb-4">
                   <svg className="mx-auto h-12 w-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                   </svg>
                 </div>
-                <h4 className="text-lg font-medium text-red-900 dark:text-red-200 mb-2">
+                <h4 className="text-lg font-medium text-red-900 mb-2">
                   Villa við að hlaða pöntunum
                 </h4>
-                <p className="text-red-700 dark:text-red-300 mb-4">
+                <p className="text-red-700 mb-4">
                   {error}
                 </p>
                 <button
@@ -358,16 +402,16 @@ export default function DashboardPage() {
                 </button>
               </div>
             ) : orders.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="text-center py-12 bg-gray-50 rounded-lg">
                 <div className="mb-4">
                   <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                <h4 className="text-lg font-medium text-gray-900 mb-2">
                   Engar pantanir
                 </h4>
-                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                <p className="text-gray-600 mb-4">
                   Þú hefur engar pantanir í gangi.
                 </p>
                 <button
@@ -391,37 +435,49 @@ export default function DashboardPage() {
                   if (order.mus) addons.push('Mús');
 
                   return (
-                    <div key={order.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div key={order.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <h4 className="text-lg font-medium text-gray-900 dark:text-white">
+                            <h4 className="text-lg font-medium text-gray-900">
                               Pöntun #{order.orderNumber || order.id.slice(-8)}
                             </h4>
                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
                               {order.status}
                             </span>
                           </div>
+                          <div className="text-sm text-gray-700 mt-1">
+                            {order.GamingPC_uuid ? (
+                              <button
+                                type="button"
+                                onClick={() => setOpenPcId(order.GamingPC_uuid!)}
+                                className="inline-flex items-center px-2.5 py-1 rounded bg-[var(--color-accent)] text-white text-xs font-medium hover:brightness-95 shadow-sm"
+                              >
+                                {pcNamesById[order.GamingPC_uuid] || 'Vara'}
+                              </button>
+                            ) : 'Vara'}
+                            {(() => { const p = formatPrice(order.verd); return p ? (<span className="ml-2 text-gray-900 font-medium">{p}</span>) : null; })()}
+                          </div>
                           <div className="text-right">
-                            <p className="text-sm text-gray-600 dark:text-gray-300">Stofnað: {formatDate(order.created_at)}</p>
+                            <p className="text-sm text-gray-600">Stofnað: {formatDate(order.created_at)}</p>
                             {order.updated_at !== order.created_at && (
-                              <p className="text-sm text-gray-600 dark:text-gray-300">Uppfært: {formatDate(order.updated_at)}</p>
+                              <p className="text-sm text-gray-600">Uppfært: {formatDate(order.updated_at)}</p>
                             )}
                           </div>
                         </div>
 
                         <div className="grid sm:grid-cols-3 gap-3 text-sm">
-                          <div className="rounded-md bg-gray-50 dark:bg-gray-700/50 p-3">
-                            <p className="text-gray-500 dark:text-gray-400">Byrjun tímabils</p>
-                            <p className="mt-1 font-medium text-gray-900 dark:text-white">{formatDateOnly(order.timabilFra)}</p>
+                          <div className="rounded-md bg-gray-50 p-3">
+                            <p className="text-gray-500">Byrjun tímabils</p>
+                            <p className="mt-1 font-medium text-gray-900">{formatDateOnly(order.timabilFra)}</p>
                           </div>
-                          <div className="rounded-md bg-gray-50 dark:bg-gray-700/50 p-3">
-                            <p className="text-gray-500 dark:text-gray-400">Tímabil lýkur</p>
-                            <p className="mt-1 font-medium text-gray-900 dark:text-white">{formatDateOnly(order.timabilTil)}</p>
+                          <div className="rounded-md bg-gray-50 p-3">
+                            <p className="text-gray-500">Tímabil lýkur</p>
+                            <p className="mt-1 font-medium text-gray-900">{formatDateOnly(order.timabilTil)}</p>
                           </div>
-                          <div className="rounded-md bg-gray-50 dark:bg-gray-700/50 p-3">
-                            <p className="text-gray-500 dark:text-gray-400">Aukahlutir</p>
-                            <p className="mt-1 font-medium text-gray-900 dark:text-white">{addons.length ? addons.join(', ') : '—'}</p>
+                          <div className="rounded-md bg-gray-50 p-3">
+                            <p className="text-gray-500">Aukahlutir</p>
+                            <p className="mt-1 font-medium text-gray-900">{addons.length ? addons.join(', ') : '—'}</p>
                           </div>
                         </div>
                       </div>
@@ -432,6 +488,52 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+        {openPcId && pcById[openPcId] ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setOpenPcId(null)} />
+            <div className="relative bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4 p-6 z-10">
+              <div className="flex items-start justify-between mb-4">
+                <h3 className="text-xl font-semibold text-gray-900">{pcById[openPcId].name}</h3>
+                <button onClick={() => setOpenPcId(null)} className="text-gray-500 hover:text-gray-700">✕</button>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <div className="aspect-video bg-gray-200 rounded mb-3" />
+                  <p className="text-sm text-gray-500">Mynd af vöru (pláss fyrir mynd)</p>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="rounded border border-gray-200 p-3">
+                    <p className="text-gray-500">Skjákort</p>
+                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].gpu || '—'}</p>
+                  </div>
+                  <div className="rounded border border-gray-200 p-3">
+                    <p className="text-gray-500">Örgjörvi</p>
+                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].cpu || '—'}</p>
+                  </div>
+                  <div className="rounded border border-gray-200 p-3">
+                    <p className="text-gray-500">Geymsla</p>
+                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].storage || '—'}</p>
+                  </div>
+                  <div className="rounded border border-gray-200 p-3">
+                    <p className="text-gray-500">Móðurborð</p>
+                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].motherboard || '—'}</p>
+                  </div>
+                  <div className="rounded border border-gray-200 p-3">
+                    <p className="text-gray-500">Vinnsluminni</p>
+                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].ram || '—'}</p>
+                  </div>
+                  <div className="rounded border border-gray-200 p-3">
+                    <p className="text-gray-500">Aflgjafi</p>
+                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].powersupply || '—'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 text-right">
+                <button onClick={() => setOpenPcId(null)} className="inline-flex items-center px-3 py-1.5 text-sm rounded border border-gray-300 text-gray-700 hover:bg-gray-50">Loka</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

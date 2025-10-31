@@ -7,13 +7,17 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 
-interface Product {
-  id: string;
-  title: string;
-  beds: string;
-  baths: string;
-  sqft: string;
-  price: string;
+interface GamingPCRow {
+  id: number;
+  name: string;
+  verd: string;
+  cpu: string;
+  gpu: string;
+  storage: string;
+  motherboard?: string | null;
+  powersupply?: string | null;
+  cpucooler?: string | null;
+  ram?: string | null;
 }
 
 interface UserProfile {
@@ -24,13 +28,18 @@ interface UserProfile {
   address: string;
   city: string;
   postal_code: string;
+  kennitala?: string;
 }
 
 export default function OrderConfirmationPage() {
   const params = useParams();
   const router = useRouter();
   const { user, loading: authLoading, session } = useAuth();
-  const productId = params.id as string;
+  const productIdParam = params.id as string;
+  const productIdNum = Number(productIdParam);
+  const [product, setProduct] = useState<GamingPCRow | null>(null);
+  const [productLoading, setProductLoading] = useState<boolean>(true);
+  const [productError, setProductError] = useState<string | null>(null);
 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,35 +89,39 @@ export default function OrderConfirmationPage() {
     }
   }, []);
 
-  // Product data - same as in product page
-  const products: Record<string, Product> = {
-    "tolva-1": {
-      id: "tolva-1",
-      title: "Tölva 1",
-      beds: "Nvidia RTX 5080",
-      baths: "Ryzen 9",
-      sqft: "1 TB SSD Samsung 990",
-      price: "24990 kr"
-    },
-    "tolva-2": {
-      id: "tolva-2", 
-      title: "Tölva 2",
-      beds: "Nvidia RTX 5070",
-      baths: "Ryzen 7",
-      sqft: "1 TB SSD Samsung 990",
-      price: "19990 kr"
-    },
-    "playstation-5": {
-      id: "playstation-5",
-      title: "Playstation 5",
-      beds: "4K@120 Hz",
-      baths: "1 TB SSD",
-      sqft: "8K leikjaspilun",
-      price: "14990 kr"
-    }
-  };
-
-  const product = products[productId];
+  // Fetch selected product from DB
+  useEffect(() => {
+    let isMounted = true;
+    const fetchProduct = async () => {
+      if (!productIdNum || Number.isNaN(productIdNum)) {
+        setProductError('Rangt vöruauðkenni');
+        setProductLoading(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('GamingPC')
+          .select('id,name,verd,cpu,gpu,storage,motherboard,powersupply,cpucooler,ram')
+          .eq('id', productIdNum)
+          .single();
+        if (!isMounted) return;
+        if (error) {
+          setProductError(error.message);
+          setProduct(null);
+        } else {
+          setProduct(data as GamingPCRow);
+          setProductError(null);
+        }
+      } catch (e) {
+        if (isMounted) setProductError(e instanceof Error ? e.message : 'Unknown error');
+        setProduct(null);
+      } finally {
+        if (isMounted) setProductLoading(false);
+      }
+    };
+    fetchProduct();
+    return () => { isMounted = false; };
+  }, [productIdNum]);
 
   // Fetch user profile: prefer AuthContext user; otherwise load from Supabase; redirect if no session
   useEffect(() => {
@@ -119,7 +132,7 @@ export default function OrderConfirmationPage() {
 
     // If no session, redirect
     if (!session?.user) {
-      router.push(`/auth?redirect=/order/${productId}`);
+      router.push(`/auth?redirect=/order/${productIdParam}`);
       return;
     }
 
@@ -154,6 +167,7 @@ export default function OrderConfirmationPage() {
               id: uid,
               auth_uid: uid,
               full_name: '',
+              kennitala: '',
               phone: '',
               address: '',
               city: '',
@@ -178,7 +192,7 @@ export default function OrderConfirmationPage() {
     };
 
     loadProfile();
-  }, [authLoading, session, user, productId, router, userProfile]);
+  }, [authLoading, session, user, productIdParam, router, userProfile]);
 
   // Refresh profile on return from profile page
   useEffect(() => {
@@ -224,6 +238,7 @@ export default function OrderConfirmationPage() {
       id: session.user.id,
       auth_uid: session.user.id,
       full_name: typeof meta.full_name === 'string' ? meta.full_name : '',
+      kennitala: typeof meta.kennitala === 'string' ? meta.kennitala : '',
       phone: typeof meta.phone === 'string' ? meta.phone : '',
       address: typeof meta.address === 'string' ? meta.address : '',
       city: typeof meta.city === 'string' ? meta.city : '',
@@ -254,6 +269,12 @@ export default function OrderConfirmationPage() {
         return out;
       };
       const orderNumber = generateOrderNumber();
+      // Compute order price from product verd with current months discount
+      const baseDigits = (product?.verd || '').toString().replace(/\D+/g, '');
+      const basePrice = parseInt(baseDigits, 10) || 0;
+      const rate = months === 1 ? 0 : months === 3 ? 0.04 : months === 6 ? 0.08 : 0.12;
+      const discountedRaw = Math.round(basePrice * (1 - rate));
+      const discountedRounded = Math.ceil(discountedRaw / 10) * 10;
 
       const { error } = await supabase
         .from('orders')
@@ -267,6 +288,8 @@ export default function OrderConfirmationPage() {
             skjar,
             lyklabord,
             mus,
+            verd: discountedRounded,
+            GamingPC_uuid: productIdNum || null,
           },
         ]);
 
@@ -285,6 +308,16 @@ export default function OrderConfirmationPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (productLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center text-gray-600">Hleður vörunni…</div>
+        </div>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -343,18 +376,28 @@ export default function OrderConfirmationPage() {
             {/* Product Summary */}
             <div className="bg-gray-50 rounded-lg p-6 mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Vara</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                  <h3 className="text-lg font-medium text-gray-900">{product.title}</h3>
-                  <div className="mt-2 space-y-1 text-sm text-gray-600">
-                    <p><span className="font-medium">Vinnsluminni:</span> {product.beds}</p>
-                    <p><span className="font-medium">Örgjörvi:</span> {product.baths}</p>
-                    <p><span className="font-medium">Geymsla:</span> {product.sqft}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-[var(--color-secondary)]">{product.price}</p>
-                </div>
+              <div className="flex items-baseline justify-between mb-3">
+                <h3 className="text-lg font-medium text-gray-900">{product.name}</h3>
+                <p className="text-2xl font-bold text-[var(--color-secondary)]">
+                  {(() => {
+                    const digits = (product.verd || '').replace(/\D+/g, '');
+                    const base = parseInt(digits, 10) || 0;
+                    const m = selection?.months ?? 1;
+                    const rate = m === 1 ? 0 : m === 3 ? 0.04 : m === 6 ? 0.08 : 0.12;
+                    const raw = Math.round(base * (1 - rate));
+                    const rounded = Math.ceil(raw / 10) * 10;
+                    return `${rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr/mánuði`;
+                  })()}
+                </p>
+              </div>
+              <div className="space-y-1 text-sm text-gray-700">
+                <p><span className="font-medium">Skjákort:</span> {product.gpu || '—'}</p>
+                <p><span className="font-medium">Örgjörvi:</span> {product.cpu || '—'}</p>
+                <p><span className="font-medium">Geymsla:</span> {product.storage || '—'}</p>
+                <p><span className="font-medium">Móðurborð:</span> {product.motherboard || '—'}</p>
+                <p><span className="font-medium">Vinnsluminni:</span> {product.ram || '—'}</p>
+                <p><span className="font-medium">Aflgjafi:</span> {product.powersupply || '—'}</p>
+                <p><span className="font-medium">Kæling:</span> {product.cpucooler || '—'}</p>
               </div>
             </div>
 
@@ -366,6 +409,9 @@ export default function OrderConfirmationPage() {
                   <div>
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Nafn:</span> {effectiveProfile.full_name || 'Ekki skráð'}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Kennitala:</span> {effectiveProfile.kennitala || 'Ekki skráð'}
                     </p>
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Sími:</span> {effectiveProfile.phone || 'Ekki skráð'}
@@ -428,7 +474,7 @@ export default function OrderConfirmationPage() {
                   rows={4}
                   value={formData.message}
                   onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400 dark:placeholder-gray-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
                   placeholder="Eitthvað sem við þurfum að vita um pöntunina þína..."
                 />
               </div>

@@ -2,9 +2,9 @@ import Link from "next/link";
 
 export default function Footer() {
 	return (
-		<footer className="mt-12 border-t border-black/10 dark:border-white/10">
+		<footer className="mt-12 border-t border-black/10">
 			<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 grid gap-6 sm:grid-cols-2 items-center">
-				<p className="text-sm text-black/70 dark:text-white/70">© {new Date().getFullYear()} Tölvuleiga. Öll réttindi áskilin. BGÞ ehf.</p>
+				<p className="text-sm text-black/70">© {new Date().getFullYear()} Tölvuleiga. Öll réttindi áskilin. BGÞ ehf.</p>
 				<nav aria-label="Footer" className="justify-self-start sm:justify-self-end flex gap-4 text-sm items-center">
 					<Link href="/contact" className="hover:underline underline-offset-4">Hafa Samband</Link>
 					<Link href="/about" className="hover:underline underline-offset-4">Um Okkur</Link>

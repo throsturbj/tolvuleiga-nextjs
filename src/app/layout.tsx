@@ -18,6 +18,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Tölvuleiga",
   description: "Find and rent quality properties with ease.",
+  icons: {
+    icon: [
+      { url: "/img/logo.png", sizes: "16x16", type: "image/png" },
+      { url: "/img/logo.png", sizes: "32x32", type: "image/png" },
+      { url: "/img/logo.png", sizes: "180x180", type: "image/png" }
+    ],
+    apple: [{ url: "/img/logo.png" }],
+    shortcut: ["/img/logo.png"],
+  },
 };
 
 export default function RootLayout({

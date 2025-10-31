@@ -49,7 +49,7 @@ export default function Header() {
 	}, [isUserMenuOpen]);
 
 	return (
-		<header className="border-b border-black/10 dark:border-white/10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+		<header className="border-b border-black/10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
 			<a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded focus:bg-foreground focus:text-background">
 				Skip to content
 			</a>
@@ -72,12 +72,12 @@ export default function Header() {
 							<div className="relative user-menu-container">
 								<button
 									onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-									className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+							className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors"
 								>
-									<svg className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<svg className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
 									</svg>
-									<span className="text-gray-900 dark:text-white font-medium">
+								<span className="text-gray-900 font-medium">
 										{getDisplayLabel()}
 									</span>
 									<svg 
@@ -90,10 +90,34 @@ export default function Header() {
 									</svg>
 								</button>
 								{isUserMenuOpen && (
-									<div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+									<div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
+										{user?.isAdmin ? (
+											<Link
+												href="/stjornbord"
+												className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+												onClick={() => setIsUserMenuOpen(false)}
+											>
+												<svg className="h-4 w-4 mr-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18" />
+												</svg>
+												Stjórnborð
+											</Link>
+										) : null}
+										{user?.isAdmin ? (
+											<Link
+												href="/vorur"
+												className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+												onClick={() => setIsUserMenuOpen(false)}
+											>
+												<svg className="h-4 w-4 mr-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V7a2 2 0 00-2-2h-3M4 7v10a2 2 0 002 2h12M4 7h16M4 7l4-4M8 3h7" />
+												</svg>
+												Vörur
+											</Link>
+										) : null}
 										<Link
 											href="/dashboard"
-											className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+										className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
 											onClick={() => setIsUserMenuOpen(false)}
 										>
 											<svg className="h-4 w-4 mr-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -104,7 +128,7 @@ export default function Header() {
 										</Link>
 										<Link
 											href="/notendaupplysingar"
-											className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+										className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
 											onClick={() => setIsUserMenuOpen(false)}
 										>
 											<svg className="h-4 w-4 mr-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -117,7 +141,7 @@ export default function Header() {
 												setIsUserMenuOpen(false);
 												signOut();
 											}}
-											className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+									className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
 										>
 											<svg className="h-4 w-4 mr-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 013-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -132,7 +156,7 @@ export default function Header() {
 						) : null}
 					</nav>
 					<button
-						className="md:hidden inline-flex items-center justify-center rounded-md p-2 border border-black/10 dark:border-white/10"
+						className="md:hidden inline-flex items-center justify-center rounded-md p-2 border border-black/10"
 						aria-controls="mobile-menu"
 						aria-expanded={isOpen}
 						onClick={() => setIsOpen((v) => !v)}
@@ -153,8 +177,8 @@ export default function Header() {
 				</div>
 			</div>
 			{isOpen && (
-				<div id="mobile-menu" className="md:hidden border-t border-black/10 dark:border-white/10">
-					<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3 flex flex-col gap-2">
+				<div id="mobile-menu" className="md:hidden border-t border-black/10">
+						<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3 flex flex-col gap-2">
 						<Link href="/about" className="py-2">Um Okkur</Link>
 						<Link href="/contact" className="py-2">Hafa Samband</Link>
 						{!loading && session?.user ? (
@@ -166,7 +190,7 @@ export default function Header() {
 									onClick={() => {
 										signOut();
 									}}
-									className="py-2 text-left text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+								className="py-2 text-left text-gray-600 hover:text-gray-900"
 								>
 									Útskrá
 								</button>

@@ -18,16 +18,6 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --primary: #0f0f0f;
-    --secondary: #93f4d1; /* lighter secondary for dark focus rings */
-    --accent: #ff7a59;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
@@ -90,21 +80,15 @@ body {
   transform: scale(1.03);
 }
 
-/* Force light theme by neutralizing dark: utility variants on dark systems */
+/* Force light theme even when OS prefers dark */
 @media (prefers-color-scheme: dark) {
   :root { color-scheme: light; }
-  .dark\:bg-gray-900 { background-color: #f9fafb !important; }
-  .dark\:bg-gray-800 { background-color: #ffffff !important; }
-  .dark\:bg-gray-700 { background-color: #f3f4f6 !important; }
-  .dark\:bg-gray-700\/50 { background-color: rgba(243,244,246,0.5) !important; }
-  .dark\:text-white { color: #111111 !important; }
-  .dark\:text-gray-300 { color: #4b5563 !important; }
-  .dark\:text-gray-400 { color: #6b7280 !important; }
-  .dark\:border-gray-700 { border-color: #e5e7eb !important; }
-  .dark\:bg-red-900\/20 { background-color: rgba(185,28,28,0.08) !important; }
-  .dark\:border-red-800 { border-color: #fecaca !important; }
-  .dark\:text-red-200 { color: #ef4444 !important; }
-  .dark\:text-red-300 { color: #dc2626 !important; }
+  /* Any element carrying Tailwind dark: utilities will inherit light colors */
+  [class*="dark:"] {
+    color: inherit !important;
+    background-color: inherit !important;
+    border-color: inherit !important;
+  }
 }
 
 /* Reduce motion if user prefers */

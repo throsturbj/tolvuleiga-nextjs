@@ -13,6 +13,7 @@ interface UserProfile {
   address: string;
   city: string;
   postal_code: string;
+  kennitala?: string;
 }
 
 function UserInfoPageInner() {
@@ -31,6 +32,7 @@ function UserInfoPageInner() {
 
   const [formData, setFormData] = useState({
     full_name: "",
+    kennitala: "",
     phone: "",
     address: "",
     city: "",
@@ -68,6 +70,7 @@ function UserInfoPageInner() {
               .insert({
                 auth_uid: uid,
                 full_name: "",
+                kennitala: "",
                 phone: "",
                 address: "",
                 city: "",
@@ -80,6 +83,7 @@ function UserInfoPageInner() {
               setProfile(created as UserProfile);
               setFormData({
                 full_name: created.full_name || "",
+                kennitala: created.kennitala || "",
                 phone: created.phone || "",
                 address: created.address || "",
                 city: created.city || "",
@@ -94,6 +98,7 @@ function UserInfoPageInner() {
             setProfile(data as UserProfile);
             setFormData({
               full_name: data.full_name || "",
+              kennitala: data.kennitala || "",
               phone: data.phone || "",
               address: data.address || "",
               city: data.city || "",
@@ -156,11 +161,11 @@ function UserInfoPageInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Hleður...</h1>
-          <p className="text-gray-600 dark:text-gray-300">Sæki notandaupplýsingar...</p>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">Hleður...</h1>
+          <p className="text-gray-600">Sæki notandaupplýsingar...</p>
         </div>
       </div>
     );
@@ -168,10 +173,10 @@ function UserInfoPageInner() {
 
   if (!uid) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Innskráning nauðsynleg</h1>
-          <p className="text-gray-600 dark:text-gray-300 mb-8">Þú verður að skrá þig inn til að skoða notandaupplýsingar.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Innskráning nauðsynleg</h1>
+          <p className="text-gray-600 mb-8">Þú verður að skrá þig inn til að skoða notandaupplýsingar.</p>
           <button
             onClick={() => router.push("/auth?redirect=/notendaupplysingar")}
             className="rounded-md bg-[var(--color-accent)] px-3.5 py-2 text-sm font-medium text-white hover:brightness-95"
@@ -184,99 +189,112 @@ function UserInfoPageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
-          <div className="p-8 border-b border-gray-200 dark:border-gray-700">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Notendaupplýsingar</h1>
-            <p className="text-gray-600 dark:text-gray-300">Breyta og uppfæra þínar notandaupplýsingar</p>
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="p-8 border-b border-gray-200">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Notendaupplýsingar</h1>
+            <p className="text-gray-600">Breyta og uppfæra þínar notandaupplýsingar</p>
           </div>
 
           <div className="p-8">
             <div className="mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Tölvupóstur</h2>
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <p className="text-gray-600 dark:text-gray-300 text-sm mb-1">Netfang</p>
-                <p className="font-medium text-gray-900 dark:text-white">{session?.user?.email || "Ekki skráð"}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Ekki hægt að breyta hér.</p>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Tölvupóstur</h2>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-gray-600 text-sm mb-1">Netfang</p>
+                <p className="font-medium text-gray-900">{session?.user?.email || "Ekki skráð"}</p>
+                <p className="text-xs text-gray-500 mt-1">Ekki hægt að breyta hér.</p>
               </div>
             </div>
 
             <form onSubmit={onSubmit}>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Upplýsingar sem hægt er að breyta</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Upplýsingar sem hægt er að breyta</h2>
 
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fullt nafn *</label>
+                  <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-2">Fullt nafn *</label>
                   <input
                     id="full_name"
                     name="full_name"
                     value={formData.full_name}
                     onChange={onChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Sláðu inn fullt nafn"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Símanúmer</label>
+                  <label htmlFor="kennitala" className="block text-sm font-medium text-gray-700 mb-2">Kennitala *</label>
+                  <input
+                    id="kennitala"
+                    name="kennitala"
+                    value={formData.kennitala}
+                    onChange={onChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Sláðu inn kennitölu"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">Símanúmer</label>
                   <input
                     id="phone"
                     name="phone"
                     value={formData.phone}
                     onChange={onChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Sláðu inn símanúmer"
                   />
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Heimilisfang</label>
+                  <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">Heimilisfang</label>
                   <input
                     id="address"
                     name="address"
                     value={formData.address}
                     onChange={onChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Sláðu inn heimilisfang"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="city" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Borg</label>
+                  <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">Borg</label>
                   <input
                     id="city"
                     name="city"
                     value={formData.city}
                     onChange={onChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Sláðu inn borg"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="postal_code" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Póstnúmer</label>
+                  <label htmlFor="postal_code" className="block text-sm font-medium text-gray-700 mb-2">Póstnúmer</label>
                   <input
                     id="postal_code"
                     name="postal_code"
                     value={formData.postal_code}
                     onChange={onChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Sláðu inn póstnúmer"
                   />
                 </div>
               </div>
 
               {success && (
-                <div className="mt-6 p-4 bg-green-100 dark:bg-green-900 border border-green-300 dark:border-green-700 rounded-md">
-                  <p className="text-sm text-green-700 dark:text-green-300">✓ Upplýsingar hafa verið uppfærðar!</p>
+                <div className="mt-6 p-4 bg-green-100 border border-green-300 rounded-md">
+                  <p className="text-sm text-green-700">✓ Upplýsingar hafa verið uppfærðar!</p>
                 </div>
               )}
 
               {error && (
-                <div className="mt-6 p-4 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
-                  <p className="text-sm text-red-700 dark:text-red-300">✗ {error}</p>
+                <div className="mt-6 p-4 bg-red-100 border border-red-300 rounded-md">
+                  <p className="text-sm text-red-700">✗ {error}</p>
                 </div>
               )}
 
@@ -287,7 +305,7 @@ function UserInfoPageInner() {
                     if (fromOrder) router.back();
                     else router.push("/");
                   }}
-                  className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   {fromOrder ? "Til baka" : "Til baka á forsíðu"}
                 </button>

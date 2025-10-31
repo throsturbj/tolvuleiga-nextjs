@@ -15,6 +15,8 @@ interface User {
   address: string;
   city: string;
   postal_code: string;
+  kennitala?: string;
+  isAdmin?: boolean;
 }
 
 interface AuthContextType {

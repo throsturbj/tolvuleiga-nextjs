@@ -19,6 +19,7 @@ function AuthPageInner() {
     password: '',
     confirmPassword: '',
     name: '',
+    kennitala: '',
     phone: '',
     address: '',
     city: '',
@@ -85,6 +86,7 @@ function AuthPageInner() {
       // Sign up
       const { data, error: authError } = await signUp(formData.email, formData.password, {
         full_name: formData.name,
+        kennitala: formData.kennitala,
         phone: formData.phone,
         address: formData.address,
         city: formData.city,
@@ -104,6 +106,7 @@ function AuthPageInner() {
           .insert({
             auth_uid: data.user.id,
             full_name: formData.name,
+            kennitala: formData.kennitala,
             phone: formData.phone,
             address: formData.address,
             city: formData.city,
@@ -163,24 +166,24 @@ function AuthPageInner() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl w-full">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-2">
             {/* Left Side - Sign In */}
             <div className="p-8">
               <div className="mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">
                   Skrá inn
                 </h2>
-                <p className="text-gray-600 dark:text-gray-300">
+                <p className="text-gray-600">
                   Skráðu þig inn á reikninginn þinn
                 </p>
               </div>
 
               <form onSubmit={handleSignIn} className="space-y-6">
                 <div>
-                  <label htmlFor="signin-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor="signin-email" className="block text-sm font-medium text-gray-700 mb-1">
                     Netfang
                   </label>
                   <input
@@ -190,12 +193,12 @@ function AuthPageInner() {
                     value={formData.email}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="signin-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor="signin-password" className="block text-sm font-medium text-gray-700 mb-1">
                     Lykilorð
                   </label>
                   <input
@@ -205,7 +208,7 @@ function AuthPageInner() {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
                   />
                 </div>
 
@@ -231,17 +234,17 @@ function AuthPageInner() {
             {/* Right Side - Sign Up */}
             <div className="p-8 bg-gray-50 dark:bg-gray-700">
               <div className="mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">
                   Búa til reikning
                 </h2>
-                <p className="text-gray-600 dark:text-gray-300">
+                <p className="text-gray-600">
                   Búðu til nýjan reikning til að panta tölvur
                 </p>
               </div>
 
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div>
-                  <label htmlFor="signup-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor="signup-name" className="block text-sm font-medium text-gray-700 mb-1">
                     Nafn *
                   </label>
                   <input
@@ -251,12 +254,27 @@ function AuthPageInner() {
                     value={formData.name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor="signup-kennitala" className="block text-sm font-medium text-gray-700 mb-1">
+                    Kennitala *
+                  </label>
+                  <input
+                    type="text"
+                    id="signup-kennitala"
+                    name="kennitala"
+                    value={formData.kennitala}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 mb-1">
                     Netfang *
                   </label>
                   <input
@@ -266,12 +284,12 @@ function AuthPageInner() {
                     value={formData.email}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="signup-phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor="signup-phone" className="block text-sm font-medium text-gray-700 mb-1">
                     Sími *
                   </label>
                   <input
@@ -281,12 +299,12 @@ function AuthPageInner() {
                     value={formData.phone}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="signup-address" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor="signup-address" className="block text-sm font-medium text-gray-700 mb-1">
                     Heimilisfang *
                   </label>
                   <input
@@ -296,13 +314,13 @@ function AuthPageInner() {
                     value={formData.address}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="signup-city" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label htmlFor="signup-city" className="block text-sm font-medium text-gray-700 mb-1">
                       Borg *
                     </label>
                     <input
@@ -312,11 +330,11 @@ function AuthPageInner() {
                       value={formData.city}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
                     />
                   </div>
                   <div>
-                    <label htmlFor="signup-postal" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label htmlFor="signup-postal" className="block text-sm font-medium text-gray-700 mb-1">
                       Póstnúmer *
                     </label>
                     <input
@@ -326,13 +344,13 @@ function AuthPageInner() {
                       value={formData.postal_code}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 mb-1">
                     Lykilorð *
                   </label>
                   <input
@@ -342,12 +360,12 @@ function AuthPageInner() {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="signup-confirm-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor="signup-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">
                     Staðfesta lykilorð *
                   </label>
                   <input
@@ -357,7 +375,7 @@ function AuthPageInner() {
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
                   />
                 </div>
 
@@ -382,9 +400,9 @@ function AuthPageInner() {
           </div>
 
           {/* Error Message */}
-          {error && (
-            <div className="px-8 py-4 bg-red-50 dark:bg-red-900 border-t border-red-200 dark:border-red-700">
-              <p className="text-sm text-red-700 dark:text-red-300">
+            {error && (
+            <div className="px-8 py-4 bg-red-50 border-t border-red-200">
+              <p className="text-sm text-red-700">
                 ✗ {error}
               </p>
             </div>

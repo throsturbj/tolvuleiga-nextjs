@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import PDFDocument from 'pdfkit/js/pdfkit.standalone'
-import fontkit from 'fontkit'
+import * as fontkit from 'fontkit'
 import { createClient } from '@supabase/supabase-js'
 import fs from 'node:fs/promises'
 import path from 'node:path'

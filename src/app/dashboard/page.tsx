@@ -288,22 +288,7 @@ export default function DashboardPage() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Undirbúningur':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Í gangi':
-        return 'bg-indigo-100 text-indigo-800';
-      case 'Í vinnslu':
-        return 'bg-blue-100 text-blue-800';
-      case 'Lokið':
-        return 'bg-green-100 text-green-800';
-      case 'Hætt við':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  // Removed legacy getStatusColor (no longer used)
 
   const getStatusMeta = (status: string) => {
     const accentBadge = 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30';
@@ -407,7 +392,6 @@ export default function DashboardPage() {
       const blobUrl = URL.createObjectURL(blob);
       window.open(blobUrl, '_blank', 'noopener,noreferrer');
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error('Open PDF failed', e);
     } finally {
       setBusyOpenPdfById((p) => ({ ...p, [orderId]: false }));

@@ -7,7 +7,6 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string | un
 if (!supabaseUrl || !supabaseAnonKey) {
   // Provide helpful diagnostics in development
   if (typeof window !== 'undefined') {
-    // eslint-disable-next-line no-console
     console.error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY')
   }
 }

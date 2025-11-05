@@ -4,7 +4,6 @@ import * as fontkit from 'fontkit'
 import { createClient } from '@supabase/supabase-js'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { supabase as anonClient } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
 
@@ -85,9 +84,10 @@ export async function POST(req: NextRequest) {
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const serverClient = (supabaseUrl && serviceKey)
-      ? createClient(supabaseUrl, serviceKey)
-      : anonClient
+    if (!supabaseUrl || !serviceKey) {
+      return NextResponse.json({ success: false, error: 'Server Supabase environment not configured' }, { status: 500 })
+    }
+    const serverClient = createClient(supabaseUrl, serviceKey)
 
     // Fetch order
     const { data: order, error: orderErr } = await serverClient

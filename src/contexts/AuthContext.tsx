@@ -54,6 +54,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!isMounted) return;
         
         setSession(session);
+        // Keep a lightweight client-visible auth flag for middleware UX redirects
+        try {
+          if (session?.user) {
+            document.cookie = `is-authenticated=true; Path=/; Max-Age=${60 * 60 * 24 * 7}`;
+          } else {
+            document.cookie = 'is-authenticated=; Path=/; Max-Age=0';
+          }
+        } catch {}
         
         if (error) {
           console.error('AuthContext: Session error:', error);
@@ -95,10 +103,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (event === 'SIGNED_OUT') {
           setUser(null);
           setLoading(false);
+          // Clear auth flag cookie for middleware UX redirects
+          try { document.cookie = 'is-authenticated=; Path=/; Max-Age=0'; } catch {}
           // Clear localStorage on sign out
           if (typeof window !== 'undefined') {
             localStorage.removeItem('rentify.supabase.auth.token');
-            localStorage.removeItem('sb-aowkzhwmazgsuxuyfhgb-auth-token');
             Object.keys(localStorage).forEach(key => {
               if (key.includes('supabase') || key.includes('auth')) {
                 localStorage.removeItem(key);
@@ -106,6 +115,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
           }
         } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'PASSWORD_RECOVERY' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
+          // Set auth flag cookie so middleware can allow access before server cookies sync
+          try { document.cookie = `is-authenticated=${session?.user ? 'true' : ''}; Path=/; Max-Age=${60 * 60 * 24 * 7}`; } catch {}
           if (session?.user) {
             await fetchUserProfileRef.current(session.user.id);
           } else {

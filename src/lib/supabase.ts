@@ -1,59 +1,16 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 // Read from environment variables (browser-safe)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string | undefined
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string | undefined
 
-function createBrowserClient() {
-  // Avoid constructing a Supabase client during SSR/build to prevent env errors
-  if (typeof window === 'undefined') {
-    // Return a proxy that throws on use, but does not execute at import time
-    return new Proxy({}, {
-      get() {
-        throw new Error('Supabase client is not available on the server during build/prerender.');
-      },
-    }) as unknown as ReturnType<typeof createClient>;
-  }
-
+export const supabase = (() => {
   if (!supabaseUrl || !supabaseAnonKey) {
-    // Helpful diagnostic in the browser; still return a proxy to avoid crashes
-    console.error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY')
-    return new Proxy({}, {
-      get() {
-        throw new Error('Supabase environment variables are missing.');
-      },
-    }) as unknown as ReturnType<typeof createClient>;
+    // Keep a runtime error that surfaces clearly in development
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY')
   }
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storageKey: 'rentify.supabase.auth.token',
-      storage: {
-        getItem: (key: string) => {
-          if (typeof window !== 'undefined') {
-            return localStorage.getItem(key);
-          }
-          return null;
-        },
-        setItem: (key: string, value: string) => {
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(key, value);
-          }
-        },
-        removeItem: (key: string) => {
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem(key);
-          }
-        },
-      },
-    },
-  })
-}
-
-export const supabase = createBrowserClient()
+  return createBrowserClient(supabaseUrl, supabaseAnonKey)
+})()
 
 // Database types
 export interface User {

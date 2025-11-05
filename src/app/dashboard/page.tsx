@@ -124,81 +124,48 @@ export default function DashboardPage() {
       fetchedUserRef.current = session.user.id;
 
       try {
-        console.log('Dashboard: User found, fetching orders for auth_uid:', session.user.id);
-        
         // Clear any previous errors
-        if (isMounted) {
-          setError(null);
-        }
-        
-        // Try a simple orders query with a reasonable timeout
-        console.log('Dashboard: Starting orders query...');
-        console.log('Dashboard: Query details:', {
-          auth_uid: session.user.id,
-          timestamp: new Date().toISOString()
-        });
-        
-        // Test with a simpler approach first
-        console.log('Dashboard: Testing simple query without order...');
-        
-        try {
-          // Try using direct REST API call instead of Supabase client
-          console.log('Dashboard: Using direct REST API call...');
-          
-          const url = `https://aowkzhwmazgsuxuyfhgb.supabase.co/rest/v1/orders?auth_uid=eq.${session.user.id}&select=*`;
-          console.log('Dashboard: API URL:', url);
-          
-          const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvd2t6aHdtYXpnc3V4dXlmaGdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MDgyOTMsImV4cCI6MjA3NjE4NDI5M30.B-Slkijbt_fjHVpY8-Z8_O-q8P5qNgqRWbpcu1STIAY',
-              'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvd2t6aHdtYXpnc3V4dXlmaGdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MDgyOTMsImV4cCI6MjA3NjE4NDI5M30.B-Slkijbt_fjHVpY8-Z8_O-q8P5qNgqRWbpcu1STIAY',
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          console.log('Dashboard: Response status:', response.status);
-          
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
-          const ordersData = await response.json();
-          // After fetching orders, load related GamingPC names
-          const ids = Array.from(new Set((ordersData as Order[]).map(o => o.gamingpc_uuid).filter((v: unknown): v is number => typeof v === 'number')));
-          if (ids.length > 0) {
-            try {
-              const { data: pcRows } = await supabase
-                .from('GamingPC')
-                .select('id,name,verd,cpu,gpu,storage,motherboard,powersupply,cpucooler,ram')
-                .in('id', ids as number[]);
-              const map: Record<number, string> = {};
-              const byId: Record<number, GamingPCItem> = {};
-              (pcRows || []).forEach((r: GamingPCItem) => { map[r.id] = r.name; byId[r.id] = r; });
-              setPcNamesById(map);
-              setPcById(byId);
-            } catch {}
-          } else {
-            setPcNamesById({});
-            setPcById({});
-          }
-          console.log('Dashboard: REST API query completed:', ordersData);
-          
-          // Always update state, even if component is unmounting
-          setOrders(ordersData || []);
-          setError(null);
-          setLoading(false);
-          console.log('Dashboard: State updated successfully');
-          return;
-        } catch (error) {
-          console.error('Dashboard: Simple query failed:', error);
+        if (isMounted) setError(null)
+
+        const { data: ordersData, error: ordersError } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('auth_uid', session.user.id)
+          .order('created_at', { ascending: false })
+
+        if (ordersError) {
           if (isMounted) {
-            setError(`Failed to load orders: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            setOrders([]);
-            setLoading(false);
+            setError(`Failed to load orders: ${ordersError.message}`)
+            setOrders([])
+            setLoading(false)
           }
-          return;
+          return
         }
+
+        const ids = Array.from(
+          new Set((ordersData || []).map(o => o.gamingpc_uuid).filter((v: unknown): v is number => typeof v === 'number'))
+        )
+        if (ids.length > 0) {
+          try {
+            const { data: pcRows } = await supabase
+              .from('GamingPC')
+              .select('id,name,verd,cpu,gpu,storage,motherboard,powersupply,cpucooler,ram')
+              .in('id', ids as number[])
+            const map: Record<number, string> = {}
+            const byId: Record<number, GamingPCItem> = {}
+            ;(pcRows || []).forEach((r: GamingPCItem) => { map[r.id] = r.name; byId[r.id] = r })
+            setPcNamesById(map)
+            setPcById(byId)
+          } catch {}
+        } else {
+          setPcNamesById({})
+          setPcById({})
+        }
+
+        setOrders(ordersData || [])
+        setError(null)
+        setLoading(false)
+        return
       } catch (error) {
         console.error('Dashboard: Unexpected error:', error);
         console.log('Dashboard: Error fetching orders, setting empty array');

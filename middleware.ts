@@ -1,6 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
+// Narrow cookie options type to what's needed for NextResponse cookies API.
+type CookieOptions = Partial<{
+  path: string
+  expires: Date
+  maxAge: number
+  domain: string
+  secure: boolean
+  httpOnly: boolean
+  sameSite: 'strict' | 'lax' | 'none'
+}>
+
 const PROTECTED_PATHS = [
   '/dashboard',
   '/stjornbord',
@@ -21,11 +32,11 @@ export async function middleware(req: NextRequest) {
       get(name: string) {
         return req.cookies.get(name)?.value
       },
-      set(name: string, value: string, options: Parameters<ReturnType<typeof NextResponse>['cookies']['set']>[2]) {
-        res.cookies.set({ name, value, ...options })
+      set(name: string, value: string, options?: CookieOptions) {
+        res.cookies.set({ name, value, ...(options || {}) })
       },
-      remove(name: string, options: Parameters<ReturnType<typeof NextResponse>['cookies']['set']>[2]) {
-        res.cookies.set({ name, value: '', ...options })
+      remove(name: string, options?: CookieOptions) {
+        res.cookies.set({ name, value: '', maxAge: 0, ...(options || {}) })
       },
     },
   })

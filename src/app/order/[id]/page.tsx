@@ -300,6 +300,15 @@ export default function OrderConfirmationPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ orderId: inserted.id }),
             });
+            // Fire-and-forget sending of emails (user + admin)
+            const userEmail = session?.user?.email || '';
+            if (userEmail) {
+              fetch('/api/order/send-emails', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId: inserted.id, userEmail }),
+              }).catch(() => {});
+            }
           }
         } catch {}
         setSubmitStatus('success');

@@ -237,6 +237,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (result.error) {
       console.error('AuthContext: Sign up error:', result.error);
     }
+    // Fire-and-forget welcome email if user object exists
+    try {
+      const authUid = result.data.user?.id;
+      const userEmail = result.data.user?.email;
+      if (authUid && userEmail) {
+        fetch('/api/welcome', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ authUid, email: userEmail }),
+        }).catch(() => {});
+      }
+    } catch {}
     return result;
   };
 

@@ -1,10 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Temporary hardcoded values for testing
-const supabaseUrl = 'https://aowkzhwmazgsuxuyfhgb.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvd2t6aHdtYXpnc3V4dXlmaGdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MDgyOTMsImV4cCI6MjA3NjE4NDI5M30.B-Slkijbt_fjHVpY8-Z8_O-q8P5qNgqRWbpcu1STIAY'
+// Read from environment variables (browser-safe)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string | undefined
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string | undefined
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+if (!supabaseUrl || !supabaseAnonKey) {
+  // Provide helpful diagnostics in development
+  if (typeof window !== 'undefined') {
+    // eslint-disable-next-line no-console
+    console.error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  }
+}
+
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
   auth: {
     persistSession: true,
     autoRefreshToken: true,

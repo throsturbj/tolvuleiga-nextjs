@@ -18,6 +18,7 @@ interface GamingPCRow {
   powersupply?: string;
   cpucooler?: string;
   ram?: string;
+  uppselt?: boolean;
 }
 
 export default function ProductDetailPage() {
@@ -211,9 +212,9 @@ export default function ProductDetailPage() {
             {/* Add-on toggles */}
             <div className="space-y-3">
               <p className="text-sm text-gray-700 font-medium">Aukahlutir</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3 justify-center justify-items-center">
                 {/* Skjár */}
-                <label htmlFor="toggle-skrar" className="group flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <label htmlFor="toggle-skrar" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                   <input id="toggle-skrar" type="checkbox" className="sr-only" checked={addons.skjár}
                     onChange={(e) => setAddons({ ...addons, skjár: e.target.checked })} />
                   <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
@@ -222,7 +223,7 @@ export default function ProductDetailPage() {
                   Skjár
                 </label>
                 {/* Lyklaborð */}
-                <label htmlFor="toggle-lyklabord" className="group flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <label htmlFor="toggle-lyklabord" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                   <input id="toggle-lyklabord" type="checkbox" className="sr-only" checked={addons.lyklabord}
                     onChange={(e) => setAddons({ ...addons, lyklabord: e.target.checked })} />
                   <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
@@ -231,7 +232,7 @@ export default function ProductDetailPage() {
                   Lyklaborð
                 </label>
                 {/* Mús */}
-                <label htmlFor="toggle-mus" className="group flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <label htmlFor="toggle-mus" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                   <input id="toggle-mus" type="checkbox" className="sr-only" checked={addons.mus}
                     onChange={(e) => setAddons({ ...addons, mus: e.target.checked })} />
                   <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
@@ -243,10 +244,21 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Actions */}
+            {product.uppselt ? (
+              <div className="rounded-md border border-gray-300 bg-gray-100 text-gray-700 text-sm px-3 py-2">
+                Því miður er þessi vara uppseld
+              </div>
+            ) : null}
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <button
                 onClick={handleOrderClick}
-                className="flex-1 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+                disabled={!!product.uppselt}
+                className={
+                  `flex-1 rounded-md px-4 py-2 text-sm font-medium text-white ` +
+                  (product.uppselt
+                    ? 'bg-[var(--color-accent)]/60 cursor-not-allowed'
+                    : 'bg-[var(--color-accent)] hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]')
+                }
               >
                 Leigja núna
               </button>

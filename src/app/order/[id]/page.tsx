@@ -45,6 +45,7 @@ export default function OrderConfirmationPage() {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   // Removed unused loading state
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [formData, setFormData] = useState({
     message: ''
   });
@@ -272,7 +273,7 @@ export default function OrderConfirmationPage() {
       const discountedRaw = Math.round(basePrice * (1 - rate));
       const discountedRounded = Math.ceil(discountedRaw / 10) * 10;
 
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from('orders')
         .insert([
           {
@@ -285,11 +286,22 @@ export default function OrderConfirmationPage() {
             lyklabord,
             mus,
             verd: discountedRounded,
-            GamingPC_uuid: productIdNum || null,
+            gamingpc_uuid: productIdNum || null,
           },
-        ]);
+        ])
+        .select('id')
+        .single();
 
       if (!error) {
+        try {
+          if (inserted?.id) {
+            await fetch('/api/generate-pdf', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderId: inserted.id }),
+            });
+          }
+        } catch {}
         setSubmitStatus('success');
         setFormData({ message: '' });
         // Navigate to dashboard after successful insert
@@ -483,14 +495,30 @@ export default function OrderConfirmationPage() {
                 >
                   ← Til baka
                 </button>
-                
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-[var(--color-accent)] text-white font-medium rounded-md hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Sendi pöntun...' : 'Senda pöntun'}
-                </button>
+
+                <div className="flex items-center gap-3">
+                  <label htmlFor="acceptTerms" className="flex items-center gap-2 text-sm select-none">
+                    <input
+                      id="acceptTerms"
+                      name="acceptTerms"
+                      type="checkbox"
+                      checked={acceptedTerms}
+                      onChange={(e) => setAcceptedTerms(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+                    />
+                    <span className="text-gray-700">
+                      Ég samþykki <Link href="/legal" className="text-blue-600 hover:underline">skilmála</Link>
+                    </span>
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !acceptedTerms}
+                    className="px-4 py-2 bg-[var(--color-accent)] text-white font-medium rounded-md hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? 'Sendi pöntun...' : 'Senda pöntun'}
+                  </button>
+                </div>
               </div>
             </form>
 

@@ -194,7 +194,6 @@ function UserInfoPageInner() {
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="p-8 border-b border-gray-200">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Notendaupplýsingar</h1>
-            <p className="text-gray-600">Breyta og uppfæra þínar notandaupplýsingar</p>
           </div>
 
           <div className="p-8">
@@ -203,7 +202,6 @@ function UserInfoPageInner() {
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-gray-600 text-sm mb-1">Netfang</p>
                 <p className="font-medium text-gray-900">{session?.user?.email || "Ekki skráð"}</p>
-                <p className="text-xs text-gray-500 mt-1">Ekki hægt að breyta hér.</p>
               </div>
             </div>
 

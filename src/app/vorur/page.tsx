@@ -16,6 +16,8 @@ interface GamingPCRow {
   ram: string;
   storage: string;
   gpu: string;
+  uppselt?: boolean;
+  falid?: boolean;
   created_at?: string;
 }
 
@@ -139,11 +141,6 @@ export default function VorurAdminPage() {
 
   const handleStartEdit = (row: GamingPCRow) => {
     if (!isAdmin) return;
-    if (editingId === row.id) {
-      // Save update
-      void handleUpdate(row.id);
-      return;
-    }
     setEditingId(row.id);
     setEditForm({
       name: row.name,
@@ -156,6 +153,11 @@ export default function VorurAdminPage() {
       storage: row.storage,
       gpu: row.gpu,
     });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditForm(null);
   };
 
   const handleUpdate = async (id: number) => {
@@ -179,6 +181,52 @@ export default function VorurAdminPage() {
         setRows((prev) => prev.map((r) => (r.id === id ? (data as GamingPCRow) : r)));
         setEditingId(null);
         setEditForm(null);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleToggleFalid = async (id: number, currentFalid: boolean | undefined) => {
+    if (!isAdmin) return;
+    setUpdatingId(id);
+    try {
+      const { data, error } = await supabase
+        .from("GamingPC")
+        .update({ falid: !currentFalid })
+        .eq("id", id)
+        .select("*")
+        .single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        setRows((prev) => prev.map((r) => (r.id === id ? (data as GamingPCRow) : r)));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleToggleUppselt = async (id: number, currentUppselt: boolean | undefined) => {
+    if (!isAdmin) return;
+    setUpdatingId(id);
+    try {
+      const { data, error } = await supabase
+        .from("GamingPC")
+        .update({ uppselt: !currentUppselt })
+        .eq("id", id)
+        .select("*")
+        .single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        setRows((prev) => prev.map((r) => (r.id === id ? (data as GamingPCRow) : r)));
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -241,46 +289,46 @@ export default function VorurAdminPage() {
             <table className="w-full text-sm table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600">Nafn</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600">Verð</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600">Motherboard</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600">Power Supply</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600">CPU</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600">CPU Cooler</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600">RAM</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600">Storage</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600">GPU</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600">Aðgerðir</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-12">Nafn</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-12">Verð</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Motherboard</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Power Supply</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">CPU</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">CPU Cooler</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">RAM</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Storage</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">GPU</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-40">Aðgerðir</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <td className="px-2 py-3 align-top">
-                    <input value={form.name} onChange={(e) => onChange("name", e.target.value)} placeholder="Nafn" className="border border-gray-300 rounded px-2 py-1 text-xs w-28" />
+                  <td className="px-2 py-3 align-top w-14">
+                    <input value={form.name} onChange={(e) => onChange("name", e.target.value)} placeholder="Nafn" className="border border-gray-300 rounded px-2 py-1 text-xs w-16" />
+                  </td>
+                  <td className="px-2 py-3 align-top w-12">
+                    <input value={form.verd} onChange={(e) => onChange("verd", e.target.value)} placeholder="Verð" className="border border-gray-300 rounded px-2 py-1 text-xs w-12" />
                   </td>
                   <td className="px-2 py-3 align-top">
-                    <input value={form.verd} onChange={(e) => onChange("verd", e.target.value)} placeholder="Verð" className="border border-gray-300 rounded px-2 py-1 text-xs w-24" />
+                    <input value={form.motherboard} onChange={(e) => onChange("motherboard", e.target.value)} placeholder="Motherboard" className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
                   </td>
                   <td className="px-2 py-3 align-top">
-                    <input value={form.motherboard} onChange={(e) => onChange("motherboard", e.target.value)} placeholder="Motherboard" className="border border-gray-300 rounded px-2 py-1 text-xs w-28" />
+                    <input value={form.powersupply} onChange={(e) => onChange("powersupply", e.target.value)} placeholder="Power" className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
                   </td>
                   <td className="px-2 py-3 align-top">
-                    <input value={form.powersupply} onChange={(e) => onChange("powersupply", e.target.value)} placeholder="Power" className="border border-gray-300 rounded px-2 py-1 text-xs w-24" />
+                    <input value={form.cpu} onChange={(e) => onChange("cpu", e.target.value)} placeholder="CPU" className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
                   </td>
                   <td className="px-2 py-3 align-top">
-                    <input value={form.cpu} onChange={(e) => onChange("cpu", e.target.value)} placeholder="CPU" className="border border-gray-300 rounded px-2 py-1 text-xs w-24" />
+                    <input value={form.cpucooler} onChange={(e) => onChange("cpucooler", e.target.value)} placeholder="Cooler" className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
                   </td>
                   <td className="px-2 py-3 align-top">
-                    <input value={form.cpucooler} onChange={(e) => onChange("cpucooler", e.target.value)} placeholder="Cooler" className="border border-gray-300 rounded px-2 py-1 text-xs w-24" />
+                    <input value={form.ram} onChange={(e) => onChange("ram", e.target.value)} placeholder="RAM" className="border border-gray-300 rounded px-2 py-1 text-xs w-16" />
                   </td>
                   <td className="px-2 py-3 align-top">
-                    <input value={form.ram} onChange={(e) => onChange("ram", e.target.value)} placeholder="RAM" className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
+                    <input value={form.storage} onChange={(e) => onChange("storage", e.target.value)} placeholder="Storage" className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
                   </td>
                   <td className="px-2 py-3 align-top">
-                    <input value={form.storage} onChange={(e) => onChange("storage", e.target.value)} placeholder="Storage" className="border border-gray-300 rounded px-2 py-1 text-xs w-24" />
-                  </td>
-                  <td className="px-2 py-3 align-top">
-                    <input value={form.gpu} onChange={(e) => onChange("gpu", e.target.value)} placeholder="GPU" className="border border-gray-300 rounded px-2 py-1 text-xs w-28" />
+                    <input value={form.gpu} onChange={(e) => onChange("gpu", e.target.value)} placeholder="GPU" className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
                   </td>
                   <td className="px-2 py-3 align-top">
                     <button
@@ -295,86 +343,68 @@ export default function VorurAdminPage() {
                 </tr>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50/60">
-                    <td className="px-2 py-3 align-top text-gray-800">
-                      {editingId === r.id ? (
-                        <input value={editForm?.name || ""} onChange={(e) => onChangeEdit("name", e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-xs w-28" />
-                      ) : (
-                        <div className="whitespace-normal break-words max-w-[7rem] leading-6" title={r.name}>{r.name}</div>
-                      )}
+                    <td className="px-2 py-3 align-top text-gray-800 w-16">
+                      <div className="truncate max-w-[4rem] leading-6" title={r.name}>{r.name}</div>
                     </td>
-                    <td className="px-2 py-3 align-top text-gray-800">
-                      {editingId === r.id ? (
-                        <input value={editForm?.verd || ""} onChange={(e) => onChangeEdit("verd", e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-xs w-24" />
-                      ) : (
-                        <div className="whitespace-normal break-words max-w-[5rem] leading-6" title={r.verd}>{r.verd}</div>
-                      )}
+                    <td className="px-2 py-3 align-top text-gray-800 w-16">
+                      <div className="truncate max-w-[4rem] leading-6" title={r.verd}>{r.verd}</div>
                     </td>
-                    <td className="px-2 py-3 align-top text-gray-800">
-                      {editingId === r.id ? (
-                        <input value={editForm?.motherboard || ""} onChange={(e) => onChangeEdit("motherboard", e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-xs w-28" />
-                      ) : (
-                        <div className="whitespace-normal break-words max-w-[8rem] leading-6" title={r.motherboard}>{r.motherboard}</div>
-                      )}
+                    <td className="px-2 py-3 align-top text-gray-800 w-16">
+                      <div className="truncate max-w-[4rem] leading-6" title={r.motherboard}>{r.motherboard}</div>
                     </td>
-                    <td className="px-2 py-3 align-top text-gray-800">
-                      {editingId === r.id ? (
-                        <input value={editForm?.powersupply || ""} onChange={(e) => onChangeEdit("powersupply", e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-xs w-24" />
-                      ) : (
-                        <div className="whitespace-normal break-words max-w-[7rem] leading-6" title={r.powersupply}>{r.powersupply}</div>
-                      )}
+                    <td className="px-2 py-3 align-top text-gray-800 w-16">
+                      <div className="truncate max-w-[4rem] leading-6" title={r.powersupply}>{r.powersupply}</div>
                     </td>
-                    <td className="px-2 py-3 align-top text-gray-800">
-                      {editingId === r.id ? (
-                        <input value={editForm?.cpu || ""} onChange={(e) => onChangeEdit("cpu", e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-xs w-24" />
-                      ) : (
-                        <div className="whitespace-normal break-words max-w-[6rem] leading-6" title={r.cpu}>{r.cpu}</div>
-                      )}
+                    <td className="px-2 py-3 align-top text-gray-800 w-16">
+                      <div className="truncate max-w-[4rem] leading-6" title={r.cpu}>{r.cpu}</div>
                     </td>
-                    <td className="px-2 py-3 align-top text-gray-800">
-                      {editingId === r.id ? (
-                        <input value={editForm?.cpucooler || ""} onChange={(e) => onChangeEdit("cpucooler", e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-xs w-24" />
-                      ) : (
-                        <div className="whitespace-normal break-words max-w-[7rem] leading-6" title={r.cpucooler}>{r.cpucooler}</div>
-                      )}
+                    <td className="px-2 py-3 align-top text-gray-800 w-16">
+                      <div className="truncate max-w-[4rem] leading-6" title={r.cpucooler}>{r.cpucooler}</div>
                     </td>
-                    <td className="px-2 py-3 align-top text-gray-800">
-                      {editingId === r.id ? (
-                        <input value={editForm?.ram || ""} onChange={(e) => onChangeEdit("ram", e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
-                      ) : (
-                        <div className="whitespace-normal break-words max-w-[6rem] leading-6" title={r.ram}>{r.ram}</div>
-                      )}
+                    <td className="px-2 py-3 align-top text-gray-800 w-16">
+                      <div className="truncate max-w-[4rem] leading-6" title={r.ram}>{r.ram}</div>
                     </td>
-                    <td className="px-2 py-3 align-top text-gray-800">
-                      {editingId === r.id ? (
-                        <input value={editForm?.storage || ""} onChange={(e) => onChangeEdit("storage", e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-xs w-24" />
-                      ) : (
-                        <div className="whitespace-normal break-words max-w-[7rem] leading-6" title={r.storage}>{r.storage}</div>
-                      )}
+                    <td className="px-2 py-3 align-top text-gray-800 w-16">
+                      <div className="truncate max-w-[4rem] leading-6" title={r.storage}>{r.storage}</div>
                     </td>
-                    <td className="px-2 py-3 align-top text-gray-800">
-                      {editingId === r.id ? (
-                        <input value={editForm?.gpu || ""} onChange={(e) => onChangeEdit("gpu", e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-xs w-28" />
-                      ) : (
-                        <div className="whitespace-normal break-words max-w-[8rem] leading-6" title={r.gpu}>{r.gpu}</div>
-                      )}
+                    <td className="px-2 py-3 align-top text-gray-800 w-16">
+                      <div className="truncate max-w-[4rem] leading-6" title={r.gpu}>{r.gpu}</div>
                     </td>
-                    <td className="px-4 py-3 align-top">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEdit(r)}
-                        disabled={updatingId === r.id}
-                        className="inline-flex items-center px-2.5 py-1.5 mr-2 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50"
-                      >
-                        Uppfæra
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(r.id)}
-                        disabled={deletingId === r.id}
-                        className="inline-flex items-center px-2.5 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 text-xs disabled:opacity-50"
-                      >
-                        Eyða
-                      </button>
+                    <td className="px-2 py-3 align-top">
+                      <div className="grid grid-cols-4 gap-2 w-65">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFalid(r.id, r.falid)}
+                          disabled={updatingId === r.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-blue-500 text-blue-600 hover:bg-blue-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          {r.falid ? "Sýna" : "Fela"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleUppselt(r.id, r.uppselt)}
+                          disabled={updatingId === r.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-blue-500 text-blue-600 hover:bg-blue-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          {r.uppselt ? "Til" : "Ekki til"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(r)}
+                          disabled={updatingId === r.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50 w-full"
+                        >
+                          Uppfæra
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(r.id)}
+                          disabled={deletingId === r.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          Eyða
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -390,6 +420,74 @@ export default function VorurAdminPage() {
           </div>
         </div>
       </div>
+      {editingId !== null && editForm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={handleCancelEdit} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Uppfæra vöru</h2>
+              <button type="button" onClick={handleCancelEdit} className="text-gray-500 hover:text-gray-700 text-sm">Loka</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Nafn</label>
+                  <input value={editForm.name} onChange={(e) => onChangeEdit("name", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Verð</label>
+                  <input value={editForm.verd} onChange={(e) => onChangeEdit("verd", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Motherboard</label>
+                  <textarea rows={2} value={editForm.motherboard} onChange={(e) => onChangeEdit("motherboard", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm resize-y" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Power Supply</label>
+                  <textarea rows={2} value={editForm.powersupply} onChange={(e) => onChangeEdit("powersupply", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm resize-y" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">CPU</label>
+                  <textarea rows={2} value={editForm.cpu} onChange={(e) => onChangeEdit("cpu", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm resize-y" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">CPU Cooler</label>
+                  <textarea rows={2} value={editForm.cpucooler} onChange={(e) => onChangeEdit("cpucooler", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm resize-y" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">RAM</label>
+                  <textarea rows={2} value={editForm.ram} onChange={(e) => onChangeEdit("ram", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm resize-y" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Storage</label>
+                  <textarea rows={2} value={editForm.storage} onChange={(e) => onChangeEdit("storage", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm resize-y" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">GPU</label>
+                <textarea rows={2} value={editForm.gpu} onChange={(e) => onChangeEdit("gpu", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm resize-y" />
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+              <button type="button" onClick={handleCancelEdit} className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm">Hætta við</button>
+              <button
+                type="button"
+                onClick={() => editingId !== null ? handleUpdate(editingId) : undefined}
+                disabled={updatingId === editingId}
+                className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm disabled:opacity-50"
+              >
+                Uppfæra
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

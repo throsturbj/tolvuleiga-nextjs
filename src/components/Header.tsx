@@ -49,7 +49,7 @@ export default function Header() {
 	}, [isUserMenuOpen]);
 
 	return (
-		<header className="border-b border-black/10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+		<header className="relative z-40 border-b border-black/10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
 			<a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded focus:bg-foreground focus:text-background">
 				Skip to content
 			</a>

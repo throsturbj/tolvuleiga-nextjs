@@ -18,7 +18,8 @@ interface AdminOrderRow {
   lyklabord?: boolean | null;
   mus?: boolean | null;
   verd?: number | null;
-  GamingPC_uuid?: number | null;
+  gamingpc_uuid?: number | null;
+  pdf_url?: string | null;
 }
 
 export default function AdminDashboardPage() {
@@ -33,6 +34,7 @@ export default function AdminDashboardPage() {
   const [pendingStatusById, setPendingStatusById] = useState<Record<string, string>>({});
   const [busyUpdateById, setBusyUpdateById] = useState<Record<string, boolean>>({});
   const [busyDeleteById, setBusyDeleteById] = useState<Record<string, boolean>>({});
+  const [busyOpenPdfById, setBusyOpenPdfById] = useState<Record<string, boolean>>({});
 
   const isAdmin = !!user?.isAdmin;
 
@@ -98,7 +100,7 @@ export default function AdminDashboardPage() {
             setKennitalaByUid({});
           }
           // Fetch GamingPC names
-          const pcIds = Array.from(new Set(rows.map(r => r.GamingPC_uuid).filter((v): v is number => typeof v === 'number')));
+          const pcIds = Array.from(new Set(rows.map(r => r.gamingpc_uuid).filter((v): v is number => typeof v === 'number')));
           if (pcIds.length > 0) {
             const { data: pcData } = await supabase
               .from('GamingPC')
@@ -199,6 +201,74 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleOpenPdf = async (orderId: string, url?: string | null) => {
+    if (!url) return;
+    setBusyOpenPdfById((p) => ({ ...p, [orderId]: true }));
+    try {
+      // Refresh session to ensure valid JWT (used for storage.download if needed)
+      try { await supabase.auth.refreshSession(); } catch {}
+
+      // Try to extract bucket and object path from a signed URL
+      let bucket: string | null = null;
+      let objectPath: string | null = null;
+      try {
+        const u = new URL(url);
+        const marker = '/storage/v1/object/sign/';
+        const idx = u.pathname.indexOf(marker);
+        if (idx !== -1) {
+          const after = u.pathname.slice(idx + marker.length); // e.g., "order-pdfs/path/to.pdf"
+          const parts = after.split('/');
+          bucket = parts.shift() || null;
+          objectPath = parts.length > 0 ? decodeURIComponent(parts.join('/')) : null;
+        }
+      } catch {}
+
+      if (bucket && objectPath) {
+        // Prefer server-side fresh signed URL (avoids client RLS/policy issues)
+        const apiRes = await fetch(`/api/pdf?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(objectPath)}`);
+        if (apiRes.ok) {
+          const json = await apiRes.json();
+          const signedUrl: string | undefined = json?.signedUrl;
+          if (signedUrl) {
+            window.open(signedUrl, '_blank', 'noopener,noreferrer');
+            return;
+          }
+        }
+        // Fallback: try direct download with current auth
+        const { data: file, error: dlErr } = await supabase.storage.from(bucket).download(objectPath);
+        if (!dlErr && file) {
+          const blobUrl = URL.createObjectURL(file);
+          window.open(blobUrl, '_blank', 'noopener,noreferrer');
+          return;
+        }
+        // Last resort: ask server to sign via url param
+        const apiRes2 = await fetch(`/api/pdf?url=${encodeURIComponent(url)}`);
+        if (apiRes2.ok) {
+          const json = await apiRes2.json();
+          const signedUrl2: string | undefined = json?.signedUrl;
+          if (signedUrl2) {
+            window.open(signedUrl2, '_blank', 'noopener,noreferrer');
+            return;
+          }
+        }
+        throw new Error('Gat ekki opnað PDF');
+      }
+
+      // If not a signed URL (or parsing failed), attempt direct fetch with current access token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const res = await fetch(url, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined });
+      if (!res.ok) throw new Error(`PDF fetch failed (${res.status})`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'PDF opnun mistókst');
+    } finally {
+      setBusyOpenPdfById((p) => ({ ...p, [orderId]: false }));
+    }
+  };
+
   if (authLoading || (!session?.user && typeof window !== "undefined")) {
     return (
       <div className="min-h-screen bg-gray-50 py-10">
@@ -271,7 +341,7 @@ export default function AdminDashboardPage() {
                     </td>
                     <td className="px-4 py-3 align-top text-gray-700">{o.auth_uid ? (kennitalaByUid[o.auth_uid] || '—') : '—'}</td>
                     <td className="px-4 py-3 align-top text-gray-700 min-w-[6rem] pr-3">
-                      {o.GamingPC_uuid ? (pcNamesById[o.GamingPC_uuid] || '—') : '—'}
+                      {o.gamingpc_uuid ? (pcNamesById[o.gamingpc_uuid] || '—') : '—'}
                     </td>
                     <td className="px-4 py-3 align-top text-gray-700">
                       {(() => { const p = formatPrice(o.verd); return p ? p : '—'; })()}
@@ -293,6 +363,20 @@ export default function AdminDashboardPage() {
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="flex items-center gap-2">
+                        {o.pdf_url ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPdf(o.id, o.pdf_url)}
+                            disabled={!!busyOpenPdfById[o.id]}
+                            className="inline-flex items-center text-blue-600 hover:underline disabled:opacity-50"
+                            title="Sækja reikning"
+                          >
+                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                              <path d="M14 2v6h6" />
+                            </svg>
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           disabled={!!busyUpdateById[o.id]}

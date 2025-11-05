@@ -12,6 +12,8 @@ export default function Home() {
     cpu: string;
     gpu: string;
     storage: string;
+    uppselt?: boolean;
+    falid?: boolean;
   }
 
   const [items, setItems] = useState<GamingPCItem[]>([]);
@@ -22,13 +24,15 @@ export default function Home() {
       try {
         const { data, error } = await supabase
           .from("GamingPC")
-          .select("id, name, verd, cpu, gpu, storage")
+          .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
           .order("created_at", { ascending: false });
         if (!isMounted) return;
         if (error) {
           setItems([]);
         } else {
-          setItems((data as GamingPCItem[]) || []);
+          const all = (data as GamingPCItem[]) || [];
+          // Hide items where falid is true; keep false or null/undefined
+          setItems(all.filter((pc) => !pc.falid));
         }
       } catch {
         if (isMounted) setItems([]);
@@ -109,7 +113,16 @@ export default function Home() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((pc) => (
               <div key={pc.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                <div className="aspect-video bg-gray-200" />
+                <div className="relative">
+                  <div className="aspect-video bg-gray-200" />
+                  {pc.uppselt ? (
+                    <div className="absolute bottom-0 left-0 right-0">
+                      <div className="mx-2 mb-2 rounded border border-gray-400 bg-gray-800/80 text-white text-xs font-semibold text-center py-1">
+                        Uppselt!
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
                 <div className="p-6">
                   <h3 className="text-lg font-semibold text-gray-900">{pc.name}</h3>
                   <p className="text-sm text-gray-600 mt-1">

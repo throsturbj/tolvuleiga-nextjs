@@ -22,7 +22,8 @@ interface Order {
   lyklabord?: boolean;
   mus?: boolean;
   verd?: number;
-  GamingPC_uuid?: number | null;
+  gamingpc_uuid?: number | null;
+  pdf_url?: string | null;
 }
 
 interface GamingPCItem {
@@ -48,6 +49,7 @@ export default function DashboardPage() {
   const [pcNamesById, setPcNamesById] = useState<Record<number, string>>({});
   const [pcById, setPcById] = useState<Record<number, GamingPCItem>>({});
   const [openPcId, setOpenPcId] = useState<number | null>(null);
+  const [busyOpenPdfById, setBusyOpenPdfById] = useState<Record<string, boolean>>({});
 
   // Redirect to home if signed out
   useEffect(() => {
@@ -163,7 +165,7 @@ export default function DashboardPage() {
           
           const ordersData = await response.json();
           // After fetching orders, load related GamingPC names
-          const ids = Array.from(new Set((ordersData as Order[]).map(o => o.GamingPC_uuid).filter((v: unknown): v is number => typeof v === 'number')));
+          const ids = Array.from(new Set((ordersData as Order[]).map(o => o.gamingpc_uuid).filter((v: unknown): v is number => typeof v === 'number')));
           if (ids.length > 0) {
             try {
               const { data: pcRows } = await supabase
@@ -303,6 +305,26 @@ export default function DashboardPage() {
     }
   };
 
+  const getStatusMeta = (status: string) => {
+    const accentBadge = 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30';
+    const neutralBadge = 'bg-gray-100 text-gray-800 ring-1 ring-gray-300';
+    const progress = 'from-[var(--color-accent)] to-[var(--color-accent)]';
+    switch (status) {
+      case 'Undirbúningur':
+        return { step: 0, badge: accentBadge, progress };
+      case 'Í gangi':
+        return { step: 1, badge: accentBadge, progress };
+      case 'Í vinnslu': // collapsed into the second milestone visually
+        return { step: 1, badge: accentBadge, progress };
+      case 'Lokið':
+        return { step: 2, badge: accentBadge, progress };
+      case 'Hætt við':
+        return { step: 2, badge: neutralBadge, progress };
+      default:
+        return { step: 0, badge: neutralBadge, progress };
+    }
+  };
+
   const formatPrice = (value: unknown) => {
     const n = typeof value === 'number' ? value : parseInt((value as string | undefined || '').toString().replace(/\D+/g, ''), 10);
     if (!Number.isFinite(n)) return null;
@@ -325,6 +347,73 @@ export default function DashboardPage() {
     return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('is-IS');
   };
 
+  const handleOpenPdf = async (orderId: string, url?: string | null) => {
+    if (!url) return;
+    setBusyOpenPdfById((p) => ({ ...p, [orderId]: true }));
+    try {
+      try { await supabase.auth.refreshSession(); } catch {}
+      // Try parsing bucket/path from signed URL
+      let bucket: string | null = null;
+      let objectPath: string | null = null;
+      try {
+        const u = new URL(url);
+        const marker = '/storage/v1/object/sign/';
+        const idx = u.pathname.indexOf(marker);
+        if (idx !== -1) {
+          const after = u.pathname.slice(idx + marker.length);
+          const parts = after.split('/');
+          bucket = parts.shift() || null;
+          objectPath = parts.length > 0 ? decodeURIComponent(parts.join('/')) : null;
+        }
+      } catch {}
+
+      if (bucket && objectPath) {
+        // Prefer server route to sign fresh URL
+        const apiRes = await fetch(`/api/pdf?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(objectPath)}`);
+        if (apiRes.ok) {
+          const json = await apiRes.json();
+          const signedUrl: string | undefined = json?.signedUrl;
+          if (signedUrl) {
+            window.open(signedUrl, '_blank', 'noopener,noreferrer');
+            return;
+          }
+        }
+        // Fallback to client download
+        const { data: file } = await supabase.storage.from(bucket).download(objectPath);
+        if (file) {
+          const blobUrl = URL.createObjectURL(file);
+          window.open(blobUrl, '_blank', 'noopener,noreferrer');
+          return;
+        }
+        // Last resort: sign via url param
+        const apiRes2 = await fetch(`/api/pdf?url=${encodeURIComponent(url)}`);
+        if (apiRes2.ok) {
+          const json = await apiRes2.json();
+          const signedUrl2: string | undefined = json?.signedUrl;
+          if (signedUrl2) {
+            window.open(signedUrl2, '_blank', 'noopener,noreferrer');
+            return;
+          }
+        }
+        throw new Error('Gat ekki opnað PDF');
+      }
+
+      // If not signed URL format, try direct fetch with auth header
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const res = await fetch(url, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined });
+      if (!res.ok) throw new Error(`PDF fetch failed (${res.status})`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Open PDF failed', e);
+    } finally {
+      setBusyOpenPdfById((p) => ({ ...p, [orderId]: false }));
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -337,16 +426,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">
-              Pantanir
-            </h1>
-          </div>
-
-          <div className="mb-6">
+    <div className="min-h-screen">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+        {/* Simple header */}
+        <div className="mb-6 flex items-end justify-between gap-4">
+          <div>
             {(() => {
               const fallbackName =
                 (session?.user as unknown as { user_metadata?: { full_name?: string } })?.user_metadata?.full_name ||
@@ -355,45 +439,36 @@ export default function DashboardPage() {
               const displayName = (user?.full_name && user.full_name.trim().length > 0) ? user.full_name : fallbackName;
               return (
                 <>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                    Velkomin, {displayName}
-                  </h2>
-                  <p className="text-gray-600">
-                    Hér getur þú séð stöðu þinna pantana.
-                  </p>
+                  <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">Velkomin, {displayName}</h1>
                 </>
               );
             })()}
           </div>
+          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
+            {orders.length} pantanir
+          </span>
+        </div>
 
-
-          {/* Orders Section */}
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">
-              Mínar pantanir
-            </h3>
-            
+        {/* Orders content */}
+        <div>
             {error ? (
-              <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
+              <div className="text-center py-12 rounded-2xl bg-red-50 ring-1 ring-red-200">
                 <div className="mb-4">
                   <svg className="mx-auto h-12 w-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                   </svg>
                 </div>
-                <h4 className="text-lg font-medium text-red-900 mb-2">
-                  Villa við að hlaða pöntunum
-                </h4>
-                <p className="text-red-700 mb-4">
-                  {error}
-                </p>
+                <h4 className="text-lg font-semibold text-red-900 mb-2">Villa við að hlaða pöntunum</h4>
+                <p className="text-red-700 mb-5">{error}</p>
                 <button
                   onClick={retryFetchOrders}
                   disabled={loading}
-                  className="inline-flex items-center px-3.5 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white bg-[var(--color-accent)] hover:brightness-110 disabled:opacity-50"
                 >
                   {loading ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                       Hleður...
                     </>
                   ) : (
@@ -402,83 +477,137 @@ export default function DashboardPage() {
                 </button>
               </div>
             ) : orders.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-lg">
+              <div className="relative overflow-hidden rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center">
                 <div className="mb-4">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="mx-auto h-14 w-14 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <h4 className="text-lg font-medium text-gray-900 mb-2">
-                  Engar pantanir
-                </h4>
-                <p className="text-gray-600 mb-4">
-                  Þú hefur engar pantanir í gangi.
-                </p>
-                <button
-                  onClick={() => {
-                    router.push('/');
-                    setTimeout(() => {
-                      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
-                    }, 100);
-                  }}
-                  className="inline-flex items-center px-3 py-1.5 text-sm bg-[var(--color-accent)] text-white rounded-md hover:brightness-95"
-                >
-                  Sjá vörur
-                </button>
+                <h4 className="text-xl font-bold text-gray-900">Engar pantanir ennþá</h4>
+                <p className="mt-2 text-gray-600">Byrjaðu ferðina – finndu rétta tölvuna fyrir þig.</p>
+                <div className="mt-6">
+                  <button
+                    onClick={() => {
+                      router.push('/');
+                      setTimeout(() => {
+                        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+                      }, 100);
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white bg-[var(--color-accent)] hover:brightness-110 shadow"
+                  >
+                    Sjá vörur
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {orders.map((order: Order) => {
                   const addons: string[] = [];
                   if (order.skjar) addons.push('Skjár');
                   if (order.lyklabord) addons.push('Lyklaborð');
                   if (order.mus) addons.push('Mús');
+                  const meta = getStatusMeta(order.status);
+                  const progressMap = [10, 57, 100];
+                  const progressWidth = `${progressMap[Math.min(Math.max(meta.step, 0), 2)]}%`;
 
                   return (
-                    <div key={order.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <h4 className="text-lg font-medium text-gray-900">
-                              Pöntun #{order.orderNumber || order.id.slice(-8)}
-                            </h4>
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
-                              {order.status}
-                            </span>
-                          </div>
-                          <div className="text-sm text-gray-700 mt-1">
-                            {order.GamingPC_uuid ? (
-                              <button
-                                type="button"
-                                onClick={() => setOpenPcId(order.GamingPC_uuid!)}
-                                className="inline-flex items-center px-2.5 py-1 rounded bg-[var(--color-accent)] text-white text-xs font-medium hover:brightness-95 shadow-sm"
-                              >
-                                {pcNamesById[order.GamingPC_uuid] || 'Vara'}
-                              </button>
-                            ) : 'Vara'}
-                            {(() => { const p = formatPrice(order.verd); return p ? (<span className="ml-2 text-gray-900 font-medium">{p}</span>) : null; })()}
+                    <div key={order.id} className="group relative rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow">
+                      <div className="rounded-2xl p-5 h-full flex flex-col">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-lg font-bold text-gray-900 tracking-tight">
+                                Pöntun #{order.orderNumber || order.id.slice(-8)}
+                              </h4>
+                            </div>
+                            <div className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                              {order.gamingpc_uuid ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenPcId(order.gamingpc_uuid!)}
+                                  className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium"
+                                >
+                                  {pcNamesById[order.gamingpc_uuid] || 'Vara'}
+                                </button>
+                              ) : 'Vara'}
+                              {(() => { const p = formatPrice(order.verd); return p ? (<span className="ml-1 text-gray-900 font-semibold">{p}</span>) : null; })()}
+                            </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm text-gray-600">Stofnað: {formatDate(order.created_at)}</p>
-                            {order.updated_at !== order.created_at && (
-                              <p className="text-sm text-gray-600">Uppfært: {formatDate(order.updated_at)}</p>
-                            )}
+                            <span className={`inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full ${meta.badge} shadow-sm`}>{order.status}</span>
                           </div>
                         </div>
 
-                        <div className="grid sm:grid-cols-3 gap-3 text-sm">
-                          <div className="rounded-md bg-gray-50 p-3">
-                            <p className="text-gray-500">Byrjun tímabils</p>
-                            <p className="mt-1 font-medium text-gray-900">{formatDateOnly(order.timabilFra)}</p>
+                        {/* Progress */}
+                        <div className="mt-4">
+                          <div className="relative h-3 w-full rounded-full bg-gray-200 overflow-hidden">
+                            <div className={`relative h-full bg-gradient-to-r ${meta.progress} transition-[width] duration-500 ease-out`} style={{ width: progressWidth }}>
+                              {(order.status !== 'Lokið' && order.status !== 'Hætt við') ? (
+                                <div
+                                  className="absolute inset-0 opacity-25"
+                                  style={{
+                                    backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.6) 0px, rgba(255,255,255,0.6) 10px, transparent 10px, transparent 20px)',
+                                    backgroundSize: '40px 40px',
+                                    animation: 'progressShift 1.2s linear infinite'
+                                  }}
+                                />
+                              ) : null}
+                            </div>
+                            {meta.step < 2 ? (
+                              <div
+                                className="absolute top-1/2 h-3 w-3 rounded-full bg-[var(--color-accent)] ring-2 ring-white shadow transform -translate-x-1/2 -translate-y-1/2"
+                                style={{ left: progressWidth }}
+                              />
+                            ) : null}
                           </div>
-                          <div className="rounded-md bg-gray-50 p-3">
-                            <p className="text-gray-500">Tímabil lýkur</p>
-                            <p className="mt-1 font-medium text-gray-900">{formatDateOnly(order.timabilTil)}</p>
+                          <div className="mt-2 flex justify-between text-[11px] text-gray-500">
+                            <span>Undirbúningur</span>
+                            <span>Í gangi</span>
+                            <span>Lokið</span>
                           </div>
-                          <div className="rounded-md bg-gray-50 p-3">
-                            <p className="text-gray-500">Aukahlutir</p>
-                            <p className="mt-1 font-medium text-gray-900">{addons.length ? addons.join(', ') : '—'}</p>
+                        </div>
+
+                        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs items-stretch">
+                          <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-200 h-full flex flex-col justify-between">
+                            <p className="text-gray-500 whitespace-nowrap">Byrjun tímabils</p>
+                            <p className="mt-1 font-semibold text-gray-900 text-sm">{formatDateOnly(order.timabilFra)}</p>
                           </div>
+                          <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-200 h-full flex flex-col justify-between">
+                            <p className="text-gray-500 whitespace-nowrap">Tímabil lýkur</p>
+                            <p className="mt-1 font-semibold text-gray-900 text-sm">{formatDateOnly(order.timabilTil)}</p>
+                          </div>
+                        </div>
+
+                        {/* Addons label above created line */}
+                        <div className="mt-3 text-xs md:text-sm text-gray-700 text-center">
+                          <span className="text-gray-500">Aukahlutir:</span> <span className="font-medium text-gray-900">{addons.length ? addons.join(', ') : '—'}</span>
+                        </div>
+
+                        {/* Created line between boxes and buttons */}
+                        <div className="mt-4 text-xs md:text-sm text-gray-600 text-center">Stofnað: {formatDate(order.created_at)}</div>
+
+                        <div className="mt-5 flex items-center justify-center gap-3">
+                          {order.pdf_url ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPdf(order.id, order.pdf_url)}
+                              disabled={!!busyOpenPdfById[order.id]}
+                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-white bg-[var(--color-accent)] hover:brightness-110 disabled:opacity-50"
+                            >
+                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 11v8m0 0l-3-3m3 3l3-3M5 7h14"/></svg>
+                              Sækja reikning
+                            </button>
+                          ) : null}
+                          {order.gamingpc_uuid ? (
+                            <button
+                              type="button"
+                              onClick={() => setOpenPcId(order.gamingpc_uuid!)}
+                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50"
+                            >
+                              Sjá vöru
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -486,54 +615,62 @@ export default function DashboardPage() {
                 })}
               </div>
             )}
-          </div>
         </div>
+
+        {/* Product modal */}
         {openPcId && pcById[openPcId] ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/40" onClick={() => setOpenPcId(null)} />
-            <div className="relative bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4 p-6 z-10">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6 z-10">
               <div className="flex items-start justify-between mb-4">
-                <h3 className="text-xl font-semibold text-gray-900">{pcById[openPcId].name}</h3>
+                <h3 className="text-xl font-bold text-gray-900">{pcById[openPcId].name}</h3>
                 <button onClick={() => setOpenPcId(null)} className="text-gray-500 hover:text-gray-700">✕</button>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <div className="aspect-video bg-gray-200 rounded mb-3" />
-                  <p className="text-sm text-gray-500">Mynd af vöru (pláss fyrir mynd)</p>
+                  <div className="aspect-video rounded-xl bg-gradient-to-br from-gray-200 to-gray-300 mb-3" />
+                  <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
+                    <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
+                      <p className="text-gray-500">Skjákort</p>
+                      <p className="mt-1 font-semibold text-gray-900">{pcById[openPcId].gpu || '—'}</p>
+                    </div>
+                    <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
+                      <p className="text-gray-500">Örgjörvi</p>
+                      <p className="mt-1 font-semibold text-gray-900">{pcById[openPcId].cpu || '—'}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div className="rounded border border-gray-200 p-3">
-                    <p className="text-gray-500">Skjákort</p>
-                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].gpu || '—'}</p>
-                  </div>
-                  <div className="rounded border border-gray-200 p-3">
-                    <p className="text-gray-500">Örgjörvi</p>
-                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].cpu || '—'}</p>
-                  </div>
-                  <div className="rounded border border-gray-200 p-3">
+                <div className="grid grid-cols-2 gap-3 text-sm content-start">
+                  <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
                     <p className="text-gray-500">Geymsla</p>
-                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].storage || '—'}</p>
+                    <p className="mt-1 font-semibold text-gray-900">{pcById[openPcId].storage || '—'}</p>
                   </div>
-                  <div className="rounded border border-gray-200 p-3">
+                  <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
                     <p className="text-gray-500">Móðurborð</p>
-                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].motherboard || '—'}</p>
+                    <p className="mt-1 font-semibold text-gray-900">{pcById[openPcId].motherboard || '—'}</p>
                   </div>
-                  <div className="rounded border border-gray-200 p-3">
+                  <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
                     <p className="text-gray-500">Vinnsluminni</p>
-                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].ram || '—'}</p>
+                    <p className="mt-1 font-semibold text-gray-900">{pcById[openPcId].ram || '—'}</p>
                   </div>
-                  <div className="rounded border border-gray-200 p-3">
+                  <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
                     <p className="text-gray-500">Aflgjafi</p>
-                    <p className="mt-1 font-medium text-gray-900">{pcById[openPcId].powersupply || '—'}</p>
+                    <p className="mt-1 font-semibold text-gray-900">{pcById[openPcId].powersupply || '—'}</p>
                   </div>
                 </div>
               </div>
               <div className="mt-4 text-right">
-                <button onClick={() => setOpenPcId(null)} className="inline-flex items-center px-3 py-1.5 text-sm rounded border border-gray-300 text-gray-700 hover:bg-gray-50">Loka</button>
+                <button onClick={() => setOpenPcId(null)} className="inline-flex items-center px-3 py-1.5 text-sm rounded-full ring-1 ring-gray-300 text-gray-700 hover:bg-gray-50">Loka</button>
               </div>
             </div>
           </div>
         ) : null}
+        <style jsx global>{`
+          @keyframes progressShift {
+            0% { background-position: 0 0; }
+            100% { background-position: 40px 0; }
+          }
+        `}</style>
       </div>
     </div>
   );

@@ -384,18 +384,18 @@ export default function OrderConfirmationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
+    <div className="min-h-screen bg-gray-50 py-12 pb-16 md:pb-12">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white shadow rounded-lg">
           <div className="px-4 py-5 sm:p-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-8">Staðfestu pöntunina þína</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-8 whitespace-nowrap leading-tight">Staðfestu pöntunina þína</h1>
             
             {/* Product Summary */}
             <div className="bg-gray-50 rounded-lg p-6 mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Vara</h2>
-              <div className="flex items-baseline justify-between mb-3">
-                <h3 className="text-lg font-medium text-gray-900">{product.name}</h3>
-                <p className="text-2xl font-bold text-[var(--color-secondary)]">
+              <div className="flex items-center justify-between mb-3 gap-3 md:gap-0">
+                <h3 className="text-lg font-medium text-gray-900 truncate max-w-[65%] md:max-w-none">{product.name}</h3>
+                <p className="text-2xl font-bold text-[var(--color-secondary)] whitespace-nowrap">
                   {(() => {
                     const digits = (product.verd || '').replace(/\D+/g, '');
                     const base = parseInt(digits, 10) || 0;
@@ -500,7 +500,7 @@ export default function OrderConfirmationPage() {
                 <button 
                   type="button"
                   onClick={() => router.back()} 
-                  className="text-gray-600 hover:text-gray-800 font-medium"
+                  className="inline-flex items-center whitespace-nowrap px-3 py-2 text-gray-600 hover:text-gray-800 font-medium"
                 >
                   ← Til baka
                 </button>

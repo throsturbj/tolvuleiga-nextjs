@@ -380,8 +380,8 @@ export default function DashboardPage() {
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
         {/* Simple header */}
-        <div className="mb-6 flex items-end justify-between gap-4">
-          <div>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div className="min-w-0">
             {(() => {
               const fallbackName =
                 (session?.user as unknown as { user_metadata?: { full_name?: string } })?.user_metadata?.full_name ||
@@ -390,12 +390,12 @@ export default function DashboardPage() {
               const displayName = (user?.full_name && user.full_name.trim().length > 0) ? user.full_name : fallbackName;
               return (
                 <>
-                  <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">Velkomin, {displayName}</h1>
+                  <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900 truncate">{displayName}</h1>
                 </>
               );
             })()}
           </div>
-          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30">
+          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs md:text-sm font-semibold text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30 whitespace-nowrap">
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
             {orders.length} pantanir
           </span>
@@ -439,10 +439,7 @@ export default function DashboardPage() {
                 <div className="mt-6">
                   <button
                     onClick={() => {
-                      router.push('/');
-                      setTimeout(() => {
-                        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
-                      }, 100);
+                      router.push('/#products');
                     }}
                     className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white bg-[var(--color-accent)] hover:brightness-110 shadow"
                   >

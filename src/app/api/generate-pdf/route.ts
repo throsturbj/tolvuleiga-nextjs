@@ -49,7 +49,7 @@ function formatKr(n: number | null | undefined) {
 async function streamPdfToBuffer(doc: PDFDocument): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = []
-    doc.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
+    doc.on('data', (chunk) => chunks.push(chunk))
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', (err) => reject(err))
     doc.end()

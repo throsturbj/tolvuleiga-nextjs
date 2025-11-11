@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Home() {
   interface GamingPCItem {
@@ -17,30 +18,37 @@ export default function Home() {
   }
 
   const [items, setItems] = useState<GamingPCItem[]>([]);
+  const { loading: authLoading, session } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
+    // Wait for auth to initialize so RLS reads (if any) see the right session
+    if (authLoading) return;
     const fetchItems = async () => {
       try {
         const { data, error } = await supabase
           .from("GamingPC")
           .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
-          .order("created_at", { ascending: false });
+          .order("id", { ascending: false });
         if (!isMounted) return;
         if (error) {
+          console.error('Home: Error fetching products', error);
           setItems([]);
         } else {
           const all = (data as GamingPCItem[]) || [];
-          // Hide items where falid is true; keep false or null/undefined
           setItems(all.filter((pc) => !pc.falid));
         }
-      } catch {
-        if (isMounted) setItems([]);
+      } catch (e) {
+        if (isMounted) {
+          console.error('Home: Unexpected error fetching products', e);
+          setItems([]);
+        }
       }
     };
     fetchItems();
     return () => { isMounted = false; };
-  }, []);
+    // Re-run when auth state finishes initializing or when user identity changes
+  }, [authLoading, session?.user?.id, session?.access_token]);
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -135,7 +143,16 @@ export default function Home() {
                   <p className="text-sm text-gray-600 mt-1">
                     {pc.gpu} · {pc.cpu} · {pc.storage}
                   </p>
-                  <p className="text-xl font-bold text-[var(--color-secondary)] mt-2">{pc.verd}/mánuði</p>
+                  <p className="text-xl font-bold text-[var(--color-secondary)] mt-2">
+                    {(() => {
+                      const digits = (pc.verd || '').toString().replace(/\D+/g, '');
+                      const base = parseInt(digits, 10) || 0;
+                      const raw = Math.round(base * 0.88); // 12% off total price
+                      const rounded = Math.ceil(raw / 10) * 10;
+                      const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                      return `Frá ${formatted} kr/mánuði`;
+                    })()}
+                  </p>
                   <Link
                     href={`/product/${pc.id}`}
                     className="mt-4 inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"

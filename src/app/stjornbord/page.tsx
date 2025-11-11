@@ -184,24 +184,34 @@ export default function AdminDashboardPage() {
     if (!confirmDelete) return;
     setBusyDeleteById((p) => ({ ...p, [orderId]: true }));
     try {
-      const { error } = await supabase
-        .from("orders")
-        .delete()
-        .eq("id", orderId);
-      if (!error) {
+      // Call server endpoint to delete order and associated PDF from storage
+      const res = await fetch('/api/order/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      if (res.ok) {
         setOrders((prev) => prev.filter((o) => o.id !== orderId));
         setPendingStatusById((prev) => {
           const copy = { ...prev };
           delete copy[orderId];
           return copy;
         });
+      } else {
+        const json = await res.json().catch(() => null) as { error?: string } | null;
+        setError(json?.error || 'Gat ekki eytt pöntun');
       }
     } finally {
       setBusyDeleteById((p) => ({ ...p, [orderId]: false }));
     }
   };
 
-  const handleOpenPdf = async (orderId: string, url?: string | null) => {
+  const handleOpenPdf = async (orderId: string, url?: string | null, orderNumber?: string | null) => {
+    // Prefer clean URL if we have an orderNumber
+    if (orderNumber && typeof window !== 'undefined') {
+      window.open(`/${encodeURIComponent(orderNumber)}/pdf`, '_blank', 'noopener,noreferrer');
+      return;
+    }
     if (!url) return;
     setBusyOpenPdfById((p) => ({ ...p, [orderId]: true }));
     try {
@@ -363,10 +373,10 @@ export default function AdminDashboardPage() {
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="flex items-center gap-2">
-                        {o.pdf_url ? (
+                        {o.pdf_url || o.orderNumber ? (
                           <button
                             type="button"
-                            onClick={() => handleOpenPdf(o.id, o.pdf_url)}
+                            onClick={() => handleOpenPdf(o.id, o.pdf_url, o.orderNumber)}
                             disabled={!!busyOpenPdfById[o.id]}
                             className="inline-flex items-center text-blue-600 hover:underline disabled:opacity-50"
                             title="Sækja reikning"

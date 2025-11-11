@@ -299,7 +299,11 @@ export default function DashboardPage() {
     return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('is-IS');
   };
 
-  const handleOpenPdf = async (orderId: string, url?: string | null) => {
+  const handleOpenPdf = async (orderId: string, url?: string | null, orderNumber?: string | null) => {
+    if (orderNumber && typeof window !== 'undefined') {
+      window.open(`/${encodeURIComponent(orderNumber)}/pdf`, '_blank', 'noopener,noreferrer');
+      return;
+    }
     if (!url) return;
     setBusyOpenPdfById((p) => ({ ...p, [orderId]: true }));
     try {
@@ -536,10 +540,10 @@ export default function DashboardPage() {
                         <div className="mt-4 text-xs md:text-sm text-gray-600 text-center">Stofnað: {formatDate(order.created_at)}</div>
 
                         <div className="mt-5 flex items-center justify-center gap-3">
-                          {order.pdf_url ? (
+                          {order.pdf_url || order.orderNumber ? (
                             <button
                               type="button"
-                              onClick={() => handleOpenPdf(order.id, order.pdf_url)}
+                              onClick={() => handleOpenPdf(order.id, order.pdf_url, order.orderNumber)}
                               disabled={!!busyOpenPdfById[order.id]}
                               className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-white bg-[var(--color-accent)] hover:brightness-110 disabled:opacity-50"
                             >

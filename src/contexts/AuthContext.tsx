@@ -49,10 +49,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Get initial session - properly await it
     const getInitialSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        let { data: { session }, error } = await supabase.auth.getSession();
         
         if (!isMounted) return;
-        
+
+        // If the session exists but is expired (or about to), refresh it before proceeding
+        try {
+          const nowSeconds = Math.floor(Date.now() / 1000);
+          const expiresAt = (session as { expires_at?: number } | null)?.expires_at;
+          if (session?.user && typeof expiresAt === 'number' && expiresAt <= nowSeconds + 5) {
+            const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+            if (refreshError) {
+              console.error('AuthContext: Error refreshing expired session on init:', refreshError);
+            } else {
+              session = refreshed.session;
+            }
+          }
+        } catch (refreshCheckErr) {
+          console.error('AuthContext: Failed checking/refreshing session expiry on init:', refreshCheckErr);
+        }
+
         setSession(session);
         // Keep a lightweight client-visible auth flag for middleware UX redirects
         try {
@@ -155,59 +171,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserProfile = useCallback(async (authUid: string) => {
     try {
-      
-      // Check if we already have this user profile to prevent unnecessary fetches
+      // Avoid unnecessary refetches of the same user
       if (user && user.auth_uid === authUid) {
         setLoading(false);
         return;
       }
-      
-      // Check if we have a valid session first
+
+      // Ensure we have a valid session before querying the profile
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         setUser(null);
         setLoading(false);
         return;
       }
-      
-      // Use Supabase client instead of direct fetch
-      
-      const { data: profileData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('auth_uid', authUid)
-        .single();
-      
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // No rows returned - profile doesn't exist
-          // Don't set a user object if there's no profile - let them complete their profile first
+
+      // Add a small retry to smooth over occasional transient failures
+      let attempt = 0;
+      let lastError: unknown = null;
+      while (attempt < 2) {
+        try {
+          const { data: profileData, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('auth_uid', authUid)
+            .single();
+
+          if (error) {
+            // PGRST116 = no rows; don't retry in that case
+            if ((error as { code?: string }).code === 'PGRST116') {
+              setUser(null);
+              setLoading(false);
+              return;
+            }
+            lastError = error;
+            attempt += 1;
+            if (attempt < 2) {
+              await new Promise((r) => setTimeout(r, 350));
+              continue;
+            }
+            console.error('AuthContext: Supabase error fetching profile:', error);
+            setUser(null);
+            setLoading(false);
+            return;
+          }
+
+          if (profileData) {
+            const email = session?.user?.email || '';
+            const userWithEmail = { ...profileData, email };
+            setUser(userWithEmail);
+            setLoading(false);
+            return;
+          }
+
+          // No data returned
           setUser(null);
           setLoading(false);
-        } else {
-          console.error('AuthContext: Unexpected Supabase error:', error);
+          return;
+        } catch (innerErr) {
+          lastError = innerErr;
+          attempt += 1;
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 350));
+            continue;
+          }
+          console.error('AuthContext: Error fetching user profile (final):', innerErr);
           setUser(null);
           setLoading(false);
+          return;
         }
-      } else if (profileData) {
-        // Profile exists
-        // Get email from current session
-        const email = session?.user?.email || '';
-
-        // Combine profile data with email
-        const userWithEmail = {
-          ...profileData,
-          email: email
-        };
-
-        setUser(userWithEmail);
-        setLoading(false);
-      } else {
-        // Profile doesn't exist
-        setUser(null);
-        setLoading(false);
       }
-      
+
+      if (lastError) {
+        console.error('AuthContext: Failed to fetch profile after retries:', lastError);
+      }
     } catch (error) {
       console.error('AuthContext: Error fetching user profile:', error);
       setUser(null);

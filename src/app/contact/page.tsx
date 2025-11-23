@@ -3,12 +3,20 @@
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import Button from "@/components/ui/Button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function ContactPage() {
 	const [form, setForm] = useState({ name: "", email: "", message: "" });
 	const [status, setStatus] = useState<"idle" | "loading" | "success" | "error" | "ratelimited">("idle");
 	const [error, setError] = useState<string | null>(null);
+	const { user } = useAuth();
+
+	useEffect(() => {
+		if (user?.email && !form.email) {
+			setForm((f) => ({ ...f, email: user.email || "" }));
+		}
+	}, [user?.email, form.email]);
 
 	const onSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();

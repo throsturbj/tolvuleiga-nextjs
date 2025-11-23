@@ -12,6 +12,7 @@ export type OrderRow = {
 	timabilTil?: string | null
 	verd?: number | null
 	gamingpc_uuid?: number | null
+	gamingconsole_uuid?: string | null
 	created_at?: string | null
 }
 
@@ -37,11 +38,18 @@ export type PcRow = {
 	ram?: string | null
 }
 
-export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderRow; user: UserRow | null; pc: PcRow | null }> {
+export type ConsoleRow = {
+	id: string
+	nafn?: string | null
+	geymsluplass?: string | null
+	tengi?: string | null
+}
+
+export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderRow; user: UserRow | null; pc: PcRow | null; console: ConsoleRow | null }> {
 	const supabase = getServerSupabase()
 	const { data: order, error: orderErr } = await supabase
 		.from('orders')
-		.select('id, orderNumber, auth_uid, timabilFra, timabilTil, verd, gamingpc_uuid, created_at')
+		.select('id, orderNumber, auth_uid, timabilFra, timabilTil, verd, gamingpc_uuid, gamingconsole_uuid, created_at')
 		.eq('id', orderId)
 		.single<OrderRow>()
 	if (orderErr || !order) throw new Error('Order not found')
@@ -66,7 +74,17 @@ export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderR
 		pc = pcRow ?? null
 	}
 
-	return { order, user, pc }
+	let console: ConsoleRow | null = null
+	if (order.gamingconsole_uuid) {
+		const { data: cRow } = await supabase
+			.from('gamingconsoles')
+			.select('id, nafn, geymsluplass, tengi')
+			.eq('id', order.gamingconsole_uuid)
+			.single<ConsoleRow>()
+		console = cRow ?? null
+	}
+
+	return { order, user, pc, console }
 }
 
 function formatKr(n: number | null | undefined) {
@@ -125,14 +143,20 @@ export async function generateOrderPdfBuffer(orderId: string): Promise<{ buffer:
 
 	doc.fontSize(14).fillColor('#000').text('Vara', { underline: true }).moveDown(0.5)
 	doc.fontSize(12).fillColor('#444')
-	doc.text(`Heiti: ${bundle.pc?.name || '—'}`)
-	doc.text(`Skjákort: ${bundle.pc?.gpu || '—'}`)
-	doc.text(`Örgjörvi: ${bundle.pc?.cpu || '—'}`)
-	doc.text(`Geymsla: ${bundle.pc?.storage || '—'}`)
-	doc.text(`Móðurborð: ${bundle.pc?.motherboard || '—'}`)
-	doc.text(`Vinnsluminni: ${bundle.pc?.ram || '—'}`)
-	doc.text(`Aflgjafi: ${bundle.pc?.powersupply || '—'}`)
-	doc.text(`Kæling: ${bundle.pc?.cpucooler || '—'}`)
+	if (bundle.pc) {
+		doc.text(`Heiti: ${bundle.pc?.name || '—'}`)
+		doc.text(`Skjákort: ${bundle.pc?.gpu || '—'}`)
+		doc.text(`Örgjörvi: ${bundle.pc?.cpu || '—'}`)
+		doc.text(`Geymsla: ${bundle.pc?.storage || '—'}`)
+		doc.text(`Móðurborð: ${bundle.pc?.motherboard || '—'}`)
+		doc.text(`Vinnsluminni: ${bundle.pc?.ram || '—'}`)
+		doc.text(`Aflgjafi: ${bundle.pc?.powersupply || '—'}`)
+		doc.text(`Kæling: ${bundle.pc?.cpucooler || '—'}`)
+	} else if (bundle.console) {
+		doc.text(`Heiti: ${bundle.console.nafn || '—'}`)
+		doc.text(`Geymslupláss: ${bundle.console.geymsluplass || '—'}`)
+		doc.text(`Tengi: ${bundle.console.tengi || '—'}`)
+	}
 	doc.moveDown()
 
 	doc.fontSize(14).fillColor('#000').text('Leigutímabil', { underline: true }).moveDown(0.5)
@@ -153,7 +177,7 @@ export async function generateOrderPdfBuffer(orderId: string): Promise<{ buffer:
 }
 
 export function buildAdminOrderText(meta: Awaited<ReturnType<typeof fetchOrderBundle>>): string {
-	const { order, user, pc } = meta
+	const { order, user, pc, console } = meta
 	return [
 		'Ný pöntun fyrir Tölvuleigu',
 		'',
@@ -168,14 +192,22 @@ export function buildAdminOrderText(meta: Awaited<ReturnType<typeof fetchOrderBu
 		`Borg/Póstnúmer: ${user?.city || '—'} ${user?.postal_code || ''}`,
 		'',
 		'Vara:',
-		`Heiti: ${pc?.name || '—'}`,
-		`Skjákort: ${pc?.gpu || '—'}`,
-		`Örgjörvi: ${pc?.cpu || '—'}`,
-		`Geymsla: ${pc?.storage || '—'}`,
-		`Móðurborð: ${pc?.motherboard || '—'}`,
-		`Vinnsluminni: ${pc?.ram || '—'}`,
-		`Aflgjafi: ${pc?.powersupply || '—'}`,
-		`Kæling: ${pc?.cpucooler || '—'}`,
+		pc
+			? [
+				`Heiti: ${pc?.name || '—'}`,
+				`Skjákort: ${pc?.gpu || '—'}`,
+				`Örgjörvi: ${pc?.cpu || '—'}`,
+				`Geymsla: ${pc?.storage || '—'}`,
+				`Móðurborð: ${pc?.motherboard || '—'}`,
+				`Vinnsluminni: ${pc?.ram || '—'}`,
+				`Aflgjafi: ${pc?.powersupply || '—'}`,
+				`Kæling: ${pc?.cpucooler || '—'}`,
+			].join('\n')
+			: [
+				`Heiti: ${console?.nafn || '—'}`,
+				`Geymslupláss: ${console?.geymsluplass || '—'}`,
+				`Tengi: ${console?.tengi || '—'}`,
+			].join('\n'),
 		'',
 		'Leigutímabil:',
 		`Frá: ${order.timabilFra ? new Date(order.timabilFra).toLocaleDateString('is-IS') : '—'}`,

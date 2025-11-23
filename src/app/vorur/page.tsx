@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,6 +30,7 @@ interface ScreenRow {
   upplausn: string;
   skjataekni: string;
   endurnyjunartidni: string;
+  verd?: string;
   gamingPC_id: number;
   falid?: boolean | null;
   uppselt?: boolean | null;
@@ -44,10 +45,18 @@ interface KeyboardRow {
   framleidandi: string;
   staerd: string;
   tengimoguleiki: string;
+  verd?: string;
   created_at?: string | null;
 }
 
 type NewKeyboardRow = Omit<KeyboardRow, "id" | "created_at">;
+
+interface ImageItem {
+  id: string;
+  file: File;
+  previewUrl: string;
+  originalName: string;
+}
 
 export default function VorurAdminPage() {
   const { user, session, loading: authLoading } = useAuth();
@@ -62,7 +71,7 @@ export default function VorurAdminPage() {
   const [editForm, setEditForm] = useState<NewRow | null>(null);
 
   // Screens state
-  const [activeTab, setActiveTab] = useState<"gaming" | "screens" | "keyboards">("gaming");
+  const [activeTab, setActiveTab] = useState<"gaming" | "screens" | "keyboards" | "mouses" | "consoles">("gaming");
   const [screens, setScreens] = useState<ScreenRow[]>([]);
   const [screensLoading, setScreensLoading] = useState<boolean>(false);
   const [screenCreating, setScreenCreating] = useState<boolean>(false);
@@ -75,6 +84,7 @@ export default function VorurAdminPage() {
     upplausn: "",
     skjataekni: "",
     endurnyjunartidni: "",
+    verd: "",
     gamingPC_id: 0,
   });
   const [screenEditForm, setScreenEditForm] = useState<NewScreenRow | null>(null);
@@ -92,7 +102,7 @@ export default function VorurAdminPage() {
   const [keyboardDeletingId, setKeyboardDeletingId] = useState<string | null>(null);
   const [keyboardUpdatingId, setKeyboardUpdatingId] = useState<string | null>(null);
   const [keyboardEditingId, setKeyboardEditingId] = useState<string | null>(null);
-  const [keyboardForm, setKeyboardForm] = useState<NewKeyboardRow>({ nafn: "", framleidandi: "", staerd: "", tengimoguleiki: "" });
+  const [keyboardForm, setKeyboardForm] = useState<NewKeyboardRow>({ nafn: "", framleidandi: "", staerd: "", tengimoguleiki: "", verd: "" });
   const [keyboardEditForm, setKeyboardEditForm] = useState<NewKeyboardRow | null>(null);
   const [keyboardIdToPcIds, setKeyboardIdToPcIds] = useState<Record<string, number[]>>({});
   const [keyboardFormPcIds, setKeyboardFormPcIds] = useState<number[]>([]);
@@ -101,6 +111,45 @@ export default function VorurAdminPage() {
   const [editKbOpen, setEditKbOpen] = useState<boolean>(false);
   const [createKbMenuPos, setCreateKbMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [editKbMenuPos, setEditKbMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  // Mouses state
+  interface MouseRow {
+    id: string | number;
+    nafn: string;
+    framleidandi: string;
+    fjolditakk: string;
+    toltakka: string;
+    tengimoguleiki: string;
+    verd?: string;
+    created_at?: string | null;
+  }
+  type NewMouseRow = Omit<MouseRow, "id" | "created_at">;
+  const [mouses, setMouses] = useState<MouseRow[]>([]);
+  const [mousesLoading, setMousesLoading] = useState<boolean>(false);
+  const [mouseCreating, setMouseCreating] = useState<boolean>(false);
+  const [mouseDeletingId, setMouseDeletingId] = useState<string | number | null>(null);
+  const [mouseUpdatingId, setMouseUpdatingId] = useState<string | number | null>(null);
+  const [mouseEditingId, setMouseEditingId] = useState<string | number | null>(null);
+  const [mouseForm, setMouseForm] = useState<NewMouseRow>({ nafn: "", framleidandi: "", fjolditakk: "", toltakka: "", tengimoguleiki: "", verd: "" });
+  const [mouseEditForm, setMouseEditForm] = useState<NewMouseRow | null>(null);
+  const [mouseIdToPcIds, setMouseIdToPcIds] = useState<Record<string, number[]>>({});
+  const [mouseFormPcIds, setMouseFormPcIds] = useState<number[]>([]);
+  const [mouseEditPcIds, setMouseEditPcIds] = useState<number[]>([]);
+  const [createMsOpen, setCreateMsOpen] = useState<boolean>(false);
+  const [editMsOpen, setEditMsOpen] = useState<boolean>(false);
+  const [createMsMenuPos, setCreateMsMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [editMsMenuPos, setEditMsMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // Images modal state
+  const [imagesEditingPcId, setImagesEditingPcId] = useState<number | null>(null);
+  const [imagesEditingScreenId, setImagesEditingScreenId] = useState<string | null>(null);
+  const [imagesEditingKeyboardId, setImagesEditingKeyboardId] = useState<string | null>(null);
+  const [imagesEditingMouseId, setImagesEditingMouseId] = useState<string | number | null>(null);
+  const [imagesEditingConsoleId, setImagesEditingConsoleId] = useState<string | null>(null);
+  const [imagesItems, setImagesItems] = useState<ImageItem[]>([]);
+  const [imagesBusy, setImagesBusy] = useState<boolean>(false);
+  const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [form, setForm] = useState<NewRow>({
     name: "",
@@ -246,6 +295,52 @@ export default function VorurAdminPage() {
     fetchKeyboards();
   }, [activeTab, session?.user, isAdmin]);
 
+  // Load mouses when switching to mouses tab
+  useEffect(() => {
+    const fetchMouses = async () => {
+      if (activeTab !== "mouses") return;
+      if (!session?.user || !isAdmin) return;
+      setMousesLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from("mouses")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (error) {
+          setError(error.message);
+          setMouses([]);
+        } else {
+          const list = (data as MouseRow[]) ?? [];
+          setMouses(list);
+          const ids = list.map((m) => m.id);
+          if (ids.length > 0) {
+            const { data: links } = await supabase
+              .from("mouse_gamingpcs")
+              .select("mouse_id,gamingpc_id")
+              .in("mouse_id", ids as any[]);
+            const map: Record<string, number[]> = {};
+            (links || []).forEach((l: { mouse_id: string | number; gamingpc_id: number }) => {
+              const key = String(l.mouse_id);
+              if (!map[key]) map[key] = [];
+              map[key].push(l.gamingpc_id);
+            });
+            setMouseIdToPcIds(map);
+          } else {
+            setMouseIdToPcIds({});
+          }
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setError(message);
+        setMouses([]);
+      } finally {
+        setMousesLoading(false);
+      }
+    };
+    fetchMouses();
+  }, [activeTab, session?.user, isAdmin]);
+
   const onChange = (field: keyof NewRow, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -293,12 +388,14 @@ export default function VorurAdminPage() {
     setEditPcOpen(true);
   };
   useEffect(() => {
-    if (!createPcOpen && !editPcOpen && !createKbOpen && !editKbOpen) return;
+    if (!createPcOpen && !editPcOpen && !createKbOpen && !editKbOpen && !createMsOpen && !editMsOpen) return;
     const handler = () => {
       setCreatePcOpen(false);
       setEditPcOpen(false);
       setCreateKbOpen(false);
       setEditKbOpen(false);
+      setCreateMsOpen(false);
+      setEditMsOpen(false);
     };
     window.addEventListener('scroll', handler, true);
     window.addEventListener('resize', handler, true);
@@ -306,8 +403,565 @@ export default function VorurAdminPage() {
       window.removeEventListener('scroll', handler, true);
       window.removeEventListener('resize', handler, true);
     };
-  }, [createPcOpen, editPcOpen, createKbOpen, editKbOpen]);
+  }, [createPcOpen, editPcOpen, createKbOpen, editKbOpen, createMsOpen, editMsOpen]);
 
+  const sanitizeFileName = (name: string) => {
+    return name
+      .normalize("NFKD")
+      .replace(/[^\w.\-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase();
+  };
+  const padIndex = (i: number) => String(i).padStart(3, "0");
+  const openImagesModal = async (pcId: number) => {
+    setImagesEditingPcId(pcId);
+    setImagesBusy(true);
+    try {
+      // Use server route to list and generate signed download URLs (works with private buckets)
+      const res = await fetch("/api/images/list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pcId }),
+      });
+      if (!res.ok) {
+        setImagesItems([]);
+        return;
+      }
+      const j = await res.json();
+      const files: { name: string; path: string; signedUrl: string }[] = j?.files || [];
+      if (!files || files.length === 0) {
+        setImagesItems([]);
+        return;
+      }
+      // Fetch blobs from signed URLs in parallel for preview + local re-save
+      const items: ImageItem[] = await Promise.all(
+        files.map(async (f, idx) => {
+          const blob = await fetch(f.signedUrl).then((r) => r.blob());
+          const baseName = f.name.replace(/^\d{3}-/, "");
+          const file = new File([blob], baseName, { type: blob.type || "image/*" });
+          const url = URL.createObjectURL(blob);
+          return {
+            id: `${f.path}`,
+            file,
+            previewUrl: url,
+            originalName: baseName,
+          };
+        })
+      );
+      // Order is already by numeric prefix from the server listing; keep as-is.
+      setImagesItems(items);
+    } catch {
+      setImagesItems([]);
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+  const openScreenImagesModal = async (screenId: string) => {
+    setImagesEditingScreenId(screenId);
+    setImagesBusy(true);
+    try {
+      const res = await fetch("/api/images/list-generic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bucket: "screens", folder: screenId }),
+      });
+      if (!res.ok) {
+        setImagesItems([]);
+        return;
+      }
+      const j = await res.json();
+      const files: { name: string; path: string; signedUrl: string }[] = j?.files || [];
+      if (!files || files.length === 0) {
+        setImagesItems([]);
+        return;
+      }
+      const items: ImageItem[] = await Promise.all(
+        files.map(async (f) => {
+          const blob = await fetch(f.signedUrl).then((r) => r.blob());
+          const baseName = f.name.replace(/^\d{3}-/, "");
+          const file = new File([blob], baseName, { type: blob.type || "image/*" });
+          const url = URL.createObjectURL(blob);
+          return {
+            id: `${f.path}`,
+            file,
+            previewUrl: url,
+            originalName: baseName,
+          };
+        })
+      );
+      setImagesItems(items);
+    } catch {
+      setImagesItems([]);
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+  const openKeyboardImagesModal = async (keyboardId: string) => {
+    setImagesEditingKeyboardId(keyboardId);
+    setImagesBusy(true);
+    try {
+      const res = await fetch("/api/images/list-generic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bucket: "keyboards", folder: keyboardId }),
+      });
+      if (!res.ok) {
+        setImagesItems([]);
+        return;
+      }
+      const j = await res.json();
+      const files: { name: string; path: string; signedUrl: string }[] = j?.files || [];
+      if (!files || files.length === 0) {
+        setImagesItems([]);
+        return;
+      }
+      const items: ImageItem[] = await Promise.all(
+        files.map(async (f) => {
+          const blob = await fetch(f.signedUrl).then((r) => r.blob());
+          const baseName = f.name.replace(/^\d{3}-/, "");
+          const file = new File([blob], baseName, { type: blob.type || "image/*" });
+          const url = URL.createObjectURL(blob);
+          return {
+            id: `${f.path}`,
+            file,
+            previewUrl: url,
+            originalName: baseName,
+          };
+        })
+      );
+      setImagesItems(items);
+    } catch {
+      setImagesItems([]);
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+  const openMouseImagesModal = async (mouseId: string | number) => {
+    setImagesEditingMouseId(mouseId);
+    setImagesBusy(true);
+    try {
+      const res = await fetch("/api/images/list-generic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bucket: "mouses", folder: String(mouseId) }),
+      });
+      if (!res.ok) {
+        setImagesItems([]);
+        return;
+      }
+      const j = await res.json();
+      const files: { name: string; path: string; signedUrl: string }[] = j?.files || [];
+      if (!files || files.length === 0) {
+        setImagesItems([]);
+        return;
+      }
+      const items: ImageItem[] = await Promise.all(
+        files.map(async (f) => {
+          const blob = await fetch(f.signedUrl).then((r) => r.blob());
+          const baseName = f.name.replace(/^\d{3}-/, "");
+          const file = new File([blob], baseName, { type: blob.type || "image/*" });
+          const url = URL.createObjectURL(blob);
+          return {
+            id: `${f.path}`,
+            file,
+            previewUrl: url,
+            originalName: baseName,
+          };
+        })
+      );
+      setImagesItems(items);
+    } catch {
+      setImagesItems([]);
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+  const openConsoleImagesModal = async (consoleId: string) => {
+    setImagesEditingConsoleId(consoleId);
+    setImagesBusy(true);
+    try {
+      const res = await fetch("/api/images/list-generic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bucket: "consoles", folder: consoleId }),
+      });
+      if (!res.ok) {
+        setImagesItems([]);
+        return;
+      }
+      const j = await res.json();
+      const files: { name: string; path: string; signedUrl: string }[] = j?.files || [];
+      if (!files || files.length === 0) {
+        setImagesItems([]);
+        return;
+      }
+      const items: ImageItem[] = await Promise.all(
+        files.map(async (f) => {
+          const blob = await fetch(f.signedUrl).then((r) => r.blob());
+          const baseName = f.name.replace(/^\d{3}-/, "");
+          const file = new File([blob], baseName, { type: blob.type || "image/*" });
+          const url = URL.createObjectURL(blob);
+          return {
+            id: `${f.path}`,
+            file,
+            previewUrl: url,
+            originalName: baseName,
+          };
+        })
+      );
+      setImagesItems(items);
+    } catch {
+      setImagesItems([]);
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+  const closeImagesModal = () => {
+    // Revoke any object URLs
+    imagesItems.forEach((it) => {
+      try { URL.revokeObjectURL(it.previewUrl); } catch {}
+    });
+    setImagesItems([]);
+    setImagesEditingPcId(null);
+    setImagesEditingScreenId(null);
+    setImagesEditingKeyboardId(null);
+    setImagesEditingMouseId(null);
+    setImagesEditingConsoleId(null);
+    setDragFromIndex(null);
+    setImagesBusy(false);
+  };
+  const addFiles = (fileList: FileList | File[]) => {
+    const next: ImageItem[] = [];
+    Array.from(fileList).forEach((f, idx) => {
+      if (!f.type || !f.type.startsWith("image/")) return;
+      const url = URL.createObjectURL(f);
+      next.push({
+        id: `local-${Date.now()}-${idx}-${Math.random().toString(36).slice(2)}`,
+        file: f,
+        previewUrl: url,
+        originalName: f.name,
+      });
+    });
+    if (next.length > 0) {
+      setImagesItems((prev) => [...prev, ...next]);
+    }
+  };
+  const onChooseFiles = () => {
+    fileInputRef.current?.click();
+  };
+  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      addFiles(files);
+      e.currentTarget.value = "";
+    }
+  };
+  const onDropFiles = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const dt = e.dataTransfer;
+    if (dt?.files && dt.files.length > 0) {
+      addFiles(dt.files);
+    }
+  };
+  const onDragStartItem = (index: number) => (e: React.DragEvent<HTMLDivElement>) => {
+    setDragFromIndex(index);
+    e.dataTransfer.setData("text/plain", String(index));
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const onDragOverItem = (index: number) => (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const onDragEnterItem = (index: number) => (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragOverIndex !== index) setDragOverIndex(index);
+  };
+  const onDragEndItem = () => {
+    setDragFromIndex(null);
+    setDragOverIndex(null);
+  };
+  const onDropOnItem = (index: number) => (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const fromStr = e.dataTransfer.getData("text/plain");
+    const from = Number(fromStr);
+    if (!Number.isFinite(from)) return;
+    if (from === index) {
+      setDragFromIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    setImagesItems((prev) => {
+      const copy = [...prev];
+      const [moved] = copy.splice(from, 1);
+      const insertAt = index > from ? index : index;
+      copy.splice(insertAt, 0, moved);
+      return copy;
+    });
+    setDragFromIndex(null);
+    setDragOverIndex(null);
+  };
+  const removeImageAt = (index: number) => {
+    setImagesItems((prev) => {
+      const copy = [...prev];
+      const removed = copy.splice(index, 1);
+      removed.forEach((it) => {
+        try { URL.revokeObjectURL(it.previewUrl); } catch {}
+      });
+      return copy;
+    });
+  };
+  const handleSaveImages = async () => {
+    if (!isAdmin) return;
+    setImagesBusy(true);
+    const isGaming = imagesEditingPcId !== null;
+    const isScreen = !isGaming && imagesEditingScreenId !== null;
+    const isKeyboard = !isGaming && !isScreen && imagesEditingKeyboardId !== null;
+    const isMouse = !isGaming && !isScreen && !isKeyboard && imagesEditingMouseId !== null;
+    const isConsole = !isGaming && !isScreen && !isKeyboard && !isMouse && imagesEditingConsoleId !== null;
+    const pcId = imagesEditingPcId as number | null;
+    const folder = imagesEditingScreenId as string | null;
+    const bucket = isGaming ? "gamingpcimages" : isScreen ? "screens" : isKeyboard ? "keyboards" : isMouse ? "mouses" : isConsole ? "consoles" : "";
+    const genericFolder = isScreen ? imagesEditingScreenId : isKeyboard ? imagesEditingKeyboardId : isMouse ? String(imagesEditingMouseId) : isConsole ? imagesEditingConsoleId : null;
+    try {
+      // Clean folder server-side (service role) to avoid policy issues
+      if (isGaming) {
+        await fetch("/api/images/clean-folder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pcId }),
+        }).then(async (r) => {
+          if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            throw new Error(j?.error || "Tókst ekki að hreinsa möppu");
+          }
+        });
+      } else if ((isScreen || isKeyboard || isMouse || isConsole) && genericFolder) {
+        await fetch("/api/images/clean-folder-generic", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bucket, folder: genericFolder }),
+        }).then(async (r) => {
+          if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            throw new Error(j?.error || "Tókst ekki að hreinsa möppu");
+          }
+        });
+      } else {
+        throw new Error("Óstudd myndategund");
+      }
+      // Prepare ordered names and get signed upload tokens in one request
+      const orderedNames = imagesItems.map((item, i) => {
+        const safeName = sanitizeFileName(item.originalName.replace(/^\d{3}-/, ""));
+        return `${padIndex(i)}-${safeName}`;
+      });
+      const signRes = await fetch(isGaming ? "/api/images/signed-upload" : "/api/images/signed-upload-generic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: isGaming ? JSON.stringify({ pcId, fileNames: orderedNames }) : JSON.stringify({ bucket, folder: genericFolder, fileNames: orderedNames }),
+      });
+      if (!signRes.ok) {
+        const j = await signRes.json().catch(() => ({}));
+        throw new Error(j?.error || "Tókst ekki að útbúa undirritaðar slóðir");
+      }
+      const signJson = await signRes.json();
+      const entries: { path: string; token: string }[] = signJson?.entries || [];
+      if (!entries || entries.length !== imagesItems.length) {
+        throw new Error("Ósamræmi í undirrituðum slóðum");
+      }
+      // Upload in order using signed URLs
+      for (let i = 0; i < imagesItems.length; i++) {
+        const item = imagesItems[i];
+        const { path, token } = entries[i];
+        const { error: upErr } = await supabase.storage.from(bucket).uploadToSignedUrl(path, token, item.file, {
+          contentType: item.file.type || "application/octet-stream",
+        });
+        if (upErr) {
+          throw new Error(upErr.message || "Upphleðsla tókst ekki");
+        }
+      }
+      closeImagesModal();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Villa við að vista myndir";
+      setError(message);
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+
+  // Consoles
+  interface ConsoleRow {
+    id: string;
+    nafn: string;
+    verd: string;
+    geymsluplass: string;
+    numberofextracontrollers: string;
+    verdextracontrollers: string;
+    tengi: string;
+    inserted_at?: string | null;
+  }
+  type NewConsoleRow = Omit<ConsoleRow, "id" | "inserted_at">;
+  const [consoles, setConsoles] = useState<ConsoleRow[]>([]);
+  const [consolesLoading, setConsolesLoading] = useState<boolean>(false);
+  const [consoleCreating, setConsoleCreating] = useState<boolean>(false);
+  const [consoleDeletingId, setConsoleDeletingId] = useState<string | null>(null);
+  const [consoleUpdatingId, setConsoleUpdatingId] = useState<string | null>(null);
+  const [consoleEditingId, setConsoleEditingId] = useState<string | null>(null);
+  const [consoleForm, setConsoleForm] = useState<NewConsoleRow>({
+    nafn: "",
+    verd: "",
+    geymsluplass: "",
+    numberofextracontrollers: "",
+    verdextracontrollers: "",
+    tengi: "",
+  });
+  const [consoleEditForm, setConsoleEditForm] = useState<NewConsoleRow | null>(null);
+
+  useEffect(() => {
+    const fetchConsoles = async () => {
+      if (activeTab !== "consoles") return;
+      if (!session?.user || !isAdmin) return;
+      setConsolesLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from("gamingconsoles")
+          .select("*")
+          .order("inserted_at", { ascending: false });
+        if (error) {
+          setError(error.message);
+          setConsoles([]);
+        } else {
+          setConsoles(((data as ConsoleRow[]) ?? []));
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setError(message);
+        setConsoles([]);
+      } finally {
+        setConsolesLoading(false);
+      }
+    };
+    fetchConsoles();
+  }, [activeTab, session?.user, isAdmin]);
+
+  const onChangeConsole = (field: keyof NewConsoleRow, value: string) => {
+    setConsoleForm((prev) => ({ ...prev, [field]: value }));
+  };
+  const onChangeConsoleEdit = (field: keyof NewConsoleRow, value: string) => {
+    setConsoleEditForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+  const validateConsole = (r: NewConsoleRow): string[] => {
+    const errs: string[] = [];
+    if (!r.nafn.trim()) errs.push("Nafn vantar");
+    if (!r.verd.trim()) errs.push("Verð vantar");
+    if (!r.geymsluplass.trim()) errs.push("Geymslupláss vantar");
+    if (!r.numberofextracontrollers.trim()) errs.push("Fjöldi auka stýringa vantar");
+    if (!r.verdextracontrollers.trim()) errs.push("Verð auka stýringa vantar");
+    if (!r.tengi.trim()) errs.push("Tengi vantar");
+    return errs;
+  };
+  const handleCreateConsole = async () => {
+    if (!isAdmin) return;
+    const errs = validateConsole(consoleForm);
+    if (errs.length > 0) {
+      setError(errs.join(" · "));
+      return;
+    }
+    setConsoleCreating(true);
+    setError(null);
+    try {
+      const { data, error } = await supabase.from("gamingconsoles").insert([consoleForm]).select("*").single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        const created = data as ConsoleRow;
+        setConsoles((prev) => [created, ...prev]);
+        setConsoleForm({
+          nafn: "",
+          verd: "",
+          geymsluplass: "",
+          numberofextracontrollers: "",
+          verdextracontrollers: "",
+          tengi: "",
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setConsoleCreating(false);
+    }
+  };
+  const handleStartConsoleEdit = (row: ConsoleRow) => {
+    if (!isAdmin) return;
+    setConsoleEditingId(row.id);
+    setConsoleEditForm({
+      nafn: row.nafn,
+      verd: row.verd,
+      geymsluplass: row.geymsluplass,
+      numberofextracontrollers: row.numberofextracontrollers,
+      verdextracontrollers: row.verdextracontrollers,
+      tengi: row.tengi,
+    });
+  };
+  const handleCancelConsoleEdit = () => {
+    setConsoleEditingId(null);
+    setConsoleEditForm(null);
+  };
+  const handleUpdateConsole = async (id: string) => {
+    if (!isAdmin || !consoleEditForm) return;
+    const errs = validateConsole(consoleEditForm);
+    if (errs.length > 0) {
+      setError(errs.join(" · "));
+      return;
+    }
+    setConsoleUpdatingId(id);
+    try {
+      const { data, error } = await supabase
+        .from("gamingconsoles")
+        .update(consoleEditForm)
+        .eq("id", id)
+        .select("*")
+        .single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        const updated = data as ConsoleRow;
+        setConsoles((prev) => prev.map((c) => (c.id === id ? updated : c)));
+        setConsoleEditingId(null);
+        setConsoleEditForm(null);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setConsoleUpdatingId(null);
+    }
+  };
+  const handleDeleteConsole = async (id: string) => {
+    if (!isAdmin) return;
+    const ok = typeof window !== "undefined" ? window.confirm("Eyða þessari leikjatölvu?") : false;
+    if (!ok) return;
+    setConsoleDeletingId(id);
+    try {
+      const { error } = await supabase.from("gamingconsoles").delete().eq("id", id);
+      if (!error) {
+        setConsoles((prev) => prev.filter((c) => c.id !== id));
+      } else {
+        setError(error.message);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setConsoleDeletingId(null);
+    }
+  };
   const onChangeKeyboard = (field: keyof NewKeyboardRow, value: string) => {
     setKeyboardForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -329,6 +983,29 @@ export default function VorurAdminPage() {
     const r = el.getBoundingClientRect();
     setEditKbMenuPos({ top: r.bottom, left: r.left, width: r.width });
     setEditKbOpen(true);
+  };
+  // Mouses dropdown controls
+  const onChangeMouse = (field: keyof NewMouseRow, value: string) => {
+    setMouseForm((prev) => ({ ...prev, [field]: value }));
+  };
+  const onChangeMouseEdit = (field: keyof NewMouseRow, value: string) => {
+    setMouseEditForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+  const toggleCreateMsPc = (pcId: number) => {
+    setMouseFormPcIds((prev) => (prev.includes(pcId) ? prev.filter((id) => id !== pcId) : [...prev, pcId]));
+  };
+  const toggleEditMsPc = (pcId: number) => {
+    setMouseEditPcIds((prev) => (prev.includes(pcId) ? prev.filter((id) => id !== pcId) : [...prev, pcId]));
+  };
+  const openCreateMsMenu = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setCreateMsMenuPos({ top: r.bottom, left: r.left, width: r.width });
+    setCreateMsOpen(true);
+  };
+  const openEditMsMenu = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setEditMsMenuPos({ top: r.bottom, left: r.left, width: r.width });
+    setEditMsOpen(true);
   };
 
   const validate = (r: NewRow): string[] => {
@@ -400,6 +1077,7 @@ export default function VorurAdminPage() {
         upplausn: screenForm.upplausn,
         skjataekni: screenForm.skjataekni,
         endurnyjunartidni: screenForm.endurnyjunartidni,
+        verd: screenForm.verd || "",
       };
       const { data, error } = await supabase.from("screens").insert([insertPayload]).select("*").single();
       if (error) {
@@ -419,6 +1097,7 @@ export default function VorurAdminPage() {
           upplausn: "",
           skjataekni: "",
           endurnyjunartidni: "",
+          verd: "",
           gamingPC_id: 0,
         });
         setScreenFormPcIds([]);
@@ -461,6 +1140,7 @@ export default function VorurAdminPage() {
       upplausn: row.upplausn,
       skjataekni: row.skjataekni,
       endurnyjunartidni: row.endurnyjunartidni,
+      verd: row.verd || "",
       gamingPC_id: row.gamingPC_id,
     });
     const selected = screenIdToPcIds[row.id] || [];
@@ -518,6 +1198,7 @@ export default function VorurAdminPage() {
         upplausn: screenEditForm.upplausn,
         skjataekni: screenEditForm.skjataekni,
         endurnyjunartidni: screenEditForm.endurnyjunartidni,
+        verd: screenEditForm.verd || "",
       };
       const { data, error } = await supabase
         .from("screens")
@@ -564,6 +1245,15 @@ export default function VorurAdminPage() {
     if (!r.tengimoguleiki.trim()) errs.push("Tengimöguleiki vantar");
     return errs;
   };
+  const validateMouse = (r: NewMouseRow): string[] => {
+    const errs: string[] = [];
+    if (!r.nafn.trim()) errs.push("Nafn vantar");
+    if (!r.framleidandi.trim()) errs.push("Framleiðandi vantar");
+    if (!r.fjolditakk.trim()) errs.push("Fjöldi takka vantar");
+    if (!r.toltakka.trim()) errs.push("Tölutakka vantar");
+    if (!r.tengimoguleiki.trim()) errs.push("Tengimöguleiki vantar");
+    return errs;
+  };
 
   const handleCreateKeyboard = async () => {
     if (!isAdmin) return;
@@ -587,7 +1277,7 @@ export default function VorurAdminPage() {
         }
         setKeyboards((prev) => [created, ...prev]);
         setKeyboardIdToPcIds((prev) => ({ ...prev, [created.id]: [...keyboardFormPcIds] }));
-        setKeyboardForm({ nafn: "", framleidandi: "", staerd: "", tengimoguleiki: "" });
+        setKeyboardForm({ nafn: "", framleidandi: "", staerd: "", tengimoguleiki: "", verd: "" });
         setKeyboardFormPcIds([]);
       }
     } catch (err) {
@@ -598,10 +1288,134 @@ export default function VorurAdminPage() {
     }
   };
 
+  // Mouses CRUD
+  const handleCreateMouse = async () => {
+    if (!isAdmin) return;
+    const errs = validateMouse(mouseForm);
+    if (mouseFormPcIds.length === 0) errs.push("Veldu að minnsta kosti eina tölvu");
+    if (errs.length > 0) {
+      setError(errs.join(" · "));
+      return;
+    }
+    setMouseCreating(true);
+    setError(null);
+    try {
+      const { data, error } = await supabase.from("mouses").insert([mouseForm]).select("*").single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        const created = data as MouseRow;
+        if (mouseFormPcIds.length > 0) {
+          const rowsToInsert = mouseFormPcIds.map((pcId) => ({ mouse_id: (created as any).id, gamingpc_id: pcId }));
+          await supabase.from("mouse_gamingpcs").insert(rowsToInsert);
+        }
+        setMouses((prev) => [created, ...prev]);
+        setMouseIdToPcIds((prev) => ({ ...prev, [String((created as any).id)]: [...mouseFormPcIds] }));
+        setMouseForm({ nafn: "", framleidandi: "", fjolditakk: "", toltakka: "", tengimoguleiki: "" });
+        setMouseFormPcIds([]);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setMouseCreating(false);
+    }
+  };
+
+  const handleStartMouseEdit = (row: MouseRow) => {
+    if (!isAdmin) return;
+    setMouseEditingId(row.id);
+    setMouseEditForm({
+      nafn: row.nafn,
+      framleidandi: row.framleidandi,
+      fjolditakk: row.fjolditakk,
+      toltakka: row.toltakka,
+      tengimoguleiki: row.tengimoguleiki,
+      verd: row.verd || "",
+    });
+    const selected = mouseIdToPcIds[String(row.id)] || [];
+    setMouseEditPcIds(selected);
+  };
+
+  const handleCancelMouseEdit = () => {
+    setMouseEditingId(null);
+    setMouseEditForm(null);
+  };
+
+  const handleUpdateMouse = async (id: string | number) => {
+    if (!isAdmin || !mouseEditForm) return;
+    const errs = validateMouse(mouseEditForm);
+    if ((mouseEditPcIds || []).length === 0) errs.push("Veldu að minnsta kosti eina tölvu");
+    if (errs.length > 0) {
+      setError(errs.join(" · "));
+      return;
+    }
+    setMouseUpdatingId(id);
+    try {
+      const { data, error } = await supabase
+        .from("mouses")
+        .update(mouseEditForm)
+        .eq("id", id)
+        .select("*")
+        .single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        const updated = data as MouseRow;
+        setMouses((prev) => prev.map((m) => (String(m.id) === String(id) ? updated : m)));
+        const existing = mouseIdToPcIds[String(id)] || [];
+        const next = mouseEditPcIds || [];
+        const toAdd = next.filter((x) => !existing.includes(x));
+        const toRemove = existing.filter((x) => !next.includes(x));
+        if (toRemove.length > 0) {
+          await supabase.from("mouse_gamingpcs").delete().eq("mouse_id", id as any).in("gamingpc_id", toRemove);
+        }
+        if (toAdd.length > 0) {
+          const rowsToInsert = toAdd.map((pcId) => ({ mouse_id: id as any, gamingpc_id: pcId }));
+          await supabase.from("mouse_gamingpcs").insert(rowsToInsert);
+        }
+        setMouseIdToPcIds((prev) => ({ ...prev, [String(id)]: [...next] }));
+        setMouseEditingId(null);
+        setMouseEditForm(null);
+        setMouseEditPcIds([]);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setMouseUpdatingId(null);
+    }
+  };
+
+  const handleDeleteMouse = async (id: string | number) => {
+    if (!isAdmin) return;
+    const ok = typeof window !== "undefined" ? window.confirm("Eyða þessari mús?") : false;
+    if (!ok) return;
+    setMouseDeletingId(id);
+    try {
+      const { error } = await supabase.from("mouses").delete().eq("id", id);
+      if (!error) {
+        setMouses((prev) => prev.filter((m) => String(m.id) !== String(id)));
+        setMouseIdToPcIds((prev) => {
+          const copy = { ...prev };
+          delete copy[String(id)];
+          return copy;
+        });
+      } else {
+        setError(error.message);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setMouseDeletingId(null);
+    }
+  };
+
   const handleStartKeyboardEdit = (row: KeyboardRow) => {
     if (!isAdmin) return;
     setKeyboardEditingId(row.id);
-    setKeyboardEditForm({ nafn: row.nafn, framleidandi: row.framleidandi, staerd: row.staerd, tengimoguleiki: row.tengimoguleiki });
+    setKeyboardEditForm({ nafn: row.nafn, framleidandi: row.framleidandi, staerd: row.staerd, tengimoguleiki: row.tengimoguleiki, verd: row.verd || "" });
     const selected = keyboardIdToPcIds[row.id] || [];
     setKeyboardEditPcIds(selected);
   };
@@ -862,6 +1676,22 @@ export default function VorurAdminPage() {
               >
                 Keyboards
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("consoles")}
+                className={`px-3 py-1.5 text-sm rounded-t ${activeTab === "consoles" ? "bg-white border border-b-transparent border-gray-200 font-medium" : "text-gray-600 hover:text-gray-800"}`}
+                aria-current={activeTab === "consoles" ? "page" : undefined}
+              >
+                Consoles
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("mouses")}
+                className={`px-3 py-1.5 text-sm rounded-t ${activeTab === "mouses" ? "bg-white border border-b-transparent border-gray-200 font-medium" : "text-gray-600 hover:text-gray-800"}`}
+                aria-current={activeTab === "mouses" ? "page" : undefined}
+              >
+                Mouses
+              </button>
             </div>
             <div className="flex items-center justify-between py-2">
               <div className="text-sm text-gray-600">
@@ -869,7 +1699,11 @@ export default function VorurAdminPage() {
                   ? (loading ? "Sæki gögn…" : `${rows.length} vörur`)
                   : activeTab === "screens"
                     ? (screensLoading ? "Sæki gögn…" : `${screens.length} skjáir`)
-                    : (keyboardsLoading ? "Sæki gögn…" : `${keyboards.length} lyklaborð`)}
+                    : activeTab === "keyboards"
+                      ? (keyboardsLoading ? "Sæki gögn…" : `${keyboards.length} lyklaborð`)
+                      : activeTab === "consoles"
+                        ? (consolesLoading ? "Sæki gögn…" : `${consoles.length} consoles`)
+                        : (mousesLoading ? "Sæki gögn…" : `${mouses.length} mýs`)}
               </div>
             </div>
           </div>
@@ -962,7 +1796,7 @@ export default function VorurAdminPage() {
                       <div className="truncate max-w-[4rem] leading-6" title={r.gpu}>{r.gpu}</div>
                     </td>
                     <td className="px-2 py-3 align-top">
-                      <div className="grid grid-cols-4 gap-2 w-66">
+                      <div className="grid grid-cols-5 gap-2 w-85">
                         <button
                           type="button"
                           onClick={() => handleToggleFalid(r.id, r.falid)}
@@ -995,6 +1829,13 @@ export default function VorurAdminPage() {
                         >
                           Eyða
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => openImagesModal(r.id)}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-purple-500 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          Myndir
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -1017,6 +1858,7 @@ export default function VorurAdminPage() {
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Upplausn</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Skjátækni</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Endurnýjunartíðni</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Verð</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">GamingPC</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-70">Aðgerðir</th>
                 </tr>
@@ -1037,6 +1879,9 @@ export default function VorurAdminPage() {
                   </td>
                   <td className="px-2 py-3 align-top">
                     <input value={screenForm.endurnyjunartidni} onChange={(e) => onChangeScreen("endurnyjunartidni", e.target.value)} placeholder="t.d. 144Hz" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={screenForm.verd || ""} onChange={(e) => onChangeScreen("verd", e.target.value)} placeholder="Verð" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
                   </td>
                   <td className="px-2 py-3 align-top w-16">
                     <div className="relative inline-block">
@@ -1118,6 +1963,9 @@ export default function VorurAdminPage() {
                       <div className="truncate leading-6" title={r.endurnyjunartidni}>{r.endurnyjunartidni}</div>
                     </td>
                     <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={r.verd || ""}>{r.verd || ""}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
                       <div className="truncate leading-6">
                         {(() => {
                           const ids = screenIdToPcIds[r.id] || [];
@@ -1133,7 +1981,7 @@ export default function VorurAdminPage() {
                       </div>
                     </td>
                     <td className="px-2 py-3 align-top">
-                      <div className="grid grid-cols-4 gap-2 w-64">
+                      <div className="grid grid-cols-3 gap-2 w-64">
                         <button
                           type="button"
                           onClick={() => handleStartScreenEdit(r)}
@@ -1141,6 +1989,14 @@ export default function VorurAdminPage() {
                           className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50 w-full"
                         >
                           Uppfæra
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openScreenImagesModal(r.id)}
+                          disabled={screenUpdatingId === r.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-purple-500 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          Myndir
                         </button>
                         <button
                           type="button"
@@ -1156,14 +2012,14 @@ export default function VorurAdminPage() {
                 ))}
                 {!screensLoading && screens.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
                       Engir skjáir fundust.
                     </td>
                   </tr>
                 ) : null}
               </tbody>
             </table>
-            ) : (
+            ) : activeTab === "keyboards" ? (
             <table className="w-full text-sm table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -1171,6 +2027,7 @@ export default function VorurAdminPage() {
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-24">Framleiðandi</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Stærð</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-28">Tengimöguleiki</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Verð</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-24">GamingPC</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-66">Aðgerðir</th>
                 </tr>
@@ -1188,6 +2045,9 @@ export default function VorurAdminPage() {
                   </td>
                   <td className="px-2 py-3 align-top">
                     <input value={keyboardForm.tengimoguleiki} onChange={(e) => onChangeKeyboard("tengimoguleiki", e.target.value)} placeholder="USB / Bluetooth" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={keyboardForm.verd || ""} onChange={(e) => onChangeKeyboard("verd", e.target.value)} placeholder="Verð" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
                   </td>
                   <td className="px-2 py-3 align-top">
                     <div className="relative inline-block">
@@ -1266,6 +2126,9 @@ export default function VorurAdminPage() {
                       <div className="truncate leading-6" title={k.tengimoguleiki}>{k.tengimoguleiki}</div>
                     </td>
                     <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={k.verd || ""}>{k.verd || ""}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
                       <div className="truncate leading-6">
                         {(() => {
                           const ids = keyboardIdToPcIds[k.id] || [];
@@ -1292,6 +2155,14 @@ export default function VorurAdminPage() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => openKeyboardImagesModal(k.id)}
+                          disabled={keyboardUpdatingId === k.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-purple-500 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          Myndir
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleDeleteKeyboard(k.id)}
                           disabled={keyboardDeletingId === k.id}
                           className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 text-xs disabled:opacity-50 w-full"
@@ -1304,8 +2175,281 @@ export default function VorurAdminPage() {
                 ))}
                 {!keyboardsLoading && keyboards.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
                       Engin lyklaborð fundust.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+            ) : activeTab === "consoles" ? (
+            <table className="w-full text-sm table-fixed">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-24">Nafn</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Verð</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-24">Geymslupláss</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-28">Auka stýringar (fjöldi)</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-28">Verð auka stýringa</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Tengi</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-48">Aðgerðir</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <td className="px-2 py-3 align-top">
+                    <input value={consoleForm.nafn} onChange={(e) => onChangeConsole("nafn", e.target.value)} placeholder="Nafn" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={consoleForm.verd} onChange={(e) => onChangeConsole("verd", e.target.value)} placeholder="Verð" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={consoleForm.geymsluplass} onChange={(e) => onChangeConsole("geymsluplass", e.target.value)} placeholder="t.d. 1TB" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={consoleForm.numberofextracontrollers} onChange={(e) => onChangeConsole("numberofextracontrollers", e.target.value)} placeholder="t.d. 1" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={consoleForm.verdextracontrollers} onChange={(e) => onChangeConsole("verdextracontrollers", e.target.value)} placeholder="t.d. 2.990 kr" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={consoleForm.tengi} onChange={(e) => onChangeConsole("tengi", e.target.value)} placeholder="t.d. HDMI, USB" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <button
+                      type="button"
+                      disabled={consoleCreating}
+                      onClick={handleCreateConsole}
+                      className="inline-flex items-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50"
+                    >
+                      Bæta við
+                    </button>
+                  </td>
+                </tr>
+                {consoles.map((c) => (
+                  <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50/60">
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={c.nafn}>{c.nafn}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={c.verd}>{c.verd}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={c.geymsluplass}>{c.geymsluplass}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={c.numberofextracontrollers}>{c.numberofextracontrollers}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={c.verdextracontrollers}>{c.verdextracontrollers}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={c.tengi}>{c.tengi}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top">
+                      <div className="grid grid-cols-3 gap-2 w-64">
+                        <button
+                          type="button"
+                          onClick={() => handleStartConsoleEdit(c)}
+                          disabled={consoleUpdatingId === c.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50 w-full"
+                        >
+                          Uppfæra
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openConsoleImagesModal(c.id)}
+                          disabled={consoleUpdatingId === c.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-purple-500 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          Myndir
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteConsole(c.id)}
+                          disabled={consoleDeletingId === c.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          Eyða
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!consolesLoading && consoles.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
+                      Engar leikjatölvur fundust.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+            ) : (
+            <table className="w-full text-sm table-fixed">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-28">Nafn</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-28">Framleiðandi</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Fjöldi takka</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Tölutakka</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-28">Tengimöguleiki</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Verð</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-24">GamingPC</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-66">Aðgerðir</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <td className="px-2 py-3 align-top">
+                    <input value={mouseForm.nafn} onChange={(e) => onChangeMouse("nafn", e.target.value)} placeholder="Heiti" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={mouseForm.framleidandi} onChange={(e) => onChangeMouse("framleidandi", e.target.value)} placeholder="Framleiðandi" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={mouseForm.fjolditakk} onChange={(e) => onChangeMouse("fjolditakk", e.target.value)} placeholder="t.d. 5" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={mouseForm.toltakka} onChange={(e) => onChangeMouse("toltakka", e.target.value)} placeholder="t.d. Já/Nei" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={mouseForm.tengimoguleiki} onChange={(e) => onChangeMouse("tengimoguleiki", e.target.value)} placeholder="USB / Bluetooth" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={mouseForm.verd || ""} onChange={(e) => onChangeMouse("verd", e.target.value)} placeholder="Verð" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <div className="relative inline-block">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          if (createMsOpen) {
+                            setCreateMsOpen(false);
+                          } else {
+                            openCreateMsMenu(e.currentTarget as HTMLElement);
+                          }
+                        }}
+                        className="inline-flex items-center px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 text-xs"
+                      >
+                        {mouseFormPcIds.length > 0
+                          ? `${mouseFormPcIds
+                              .map((id) => rows.find((p) => p.id === id)?.name || `#${id}`)
+                              .filter(Boolean)
+                              .slice(0, 2)
+                              .join(", ")}${mouseFormPcIds.length > 2 ? ` +${mouseFormPcIds.length - 2}` : ""}`
+                          : "Veldu tölvur"}
+                        <svg className="ml-2 h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z"/></svg>
+                      </button>
+                      {createMsOpen && createMsMenuPos ? (
+                        <div
+                          className="fixed z-50 bg-white border border-gray-200 rounded shadow-md"
+                          style={{ top: createMsMenuPos.top, left: createMsMenuPos.left, minWidth: createMsMenuPos.width, width: Math.max(createMsMenuPos.width, 224) }}
+                        >
+                          <div className="max-h-60 overflow-auto p-1">
+                            {rows.map((pc) => {
+                              const checked = mouseFormPcIds.includes(pc.id);
+                              return (
+                                <label key={pc.id} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer select-none text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleCreateMsPc(pc.id)}
+                                    className="h-3 w-3"
+                                  />
+                                  <span className="truncate">{pc.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 px-2 py-1 border-t border-gray-200">
+                            <button type="button" onClick={() => setMouseFormPcIds([])} className="text-xs text-gray-600 hover:underline">Hreinsa</button>
+                            <button type="button" onClick={() => setCreateMsOpen(false)} className="text-xs text-[var(--color-accent)] hover:underline">Loka</button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <button
+                      type="button"
+                      disabled={mouseCreating}
+                      onClick={handleCreateMouse}
+                      className="inline-flex items-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50"
+                    >
+                      Bæta við
+                    </button>
+                  </td>
+                </tr>
+                {mouses.map((m) => (
+                  <tr key={String(m.id)} className="border-b border-gray-100 hover:bg-gray-50/60">
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={m.nafn}>{m.nafn}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={m.framleidandi}>{m.framleidandi}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={m.fjolditakk}>{m.fjolditakk}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={m.toltakka}>{m.toltakka}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={m.tengimoguleiki}>{m.tengimoguleiki}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={m.verd || ""}>{m.verd || ""}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6">
+                        {(() => {
+                          const ids = mouseIdToPcIds[String(m.id)] || [];
+                          if (ids.length === 0) return "—";
+                          const names = ids
+                            .map((id) => {
+                              const pc = rows.find((p) => p.id === id);
+                              return pc ? pc.name : `#${id}`;
+                            })
+                            .filter(Boolean);
+                          return names.join(", ");
+                        })()}
+                      </div>
+                    </td>
+                    <td className="px-2 py-3 align-top">
+                      <div className="grid grid-cols-3 gap-2 w-66">
+                        <button
+                          type="button"
+                          onClick={() => handleStartMouseEdit(m)}
+                          disabled={mouseUpdatingId === m.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50 w-full"
+                        >
+                          Uppfæra
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openMouseImagesModal(m.id)}
+                          disabled={mouseUpdatingId === m.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-purple-500 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          Myndir
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMouse(m.id)}
+                          disabled={mouseDeletingId === m.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          Eyða
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!mousesLoading && mouses.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
+                      Engar mýs fundust.
                     </td>
                   </tr>
                 ) : null}
@@ -1412,6 +2556,10 @@ export default function VorurAdminPage() {
                   <input value={screenEditForm.skjataekni} onChange={(e) => onChangeScreenEdit("skjataekni", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
                 </div>
               </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Verð</label>
+                <input value={screenEditForm.verd || ""} onChange={(e) => onChangeScreenEdit("verd", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">Endurnýjunartíðni</label>
@@ -1514,6 +2662,10 @@ export default function VorurAdminPage() {
                   <input value={keyboardEditForm.tengimoguleiki} onChange={(e) => onChangeKeyboardEdit("tengimoguleiki", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
                 </div>
               </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Verð</label>
+                <input value={keyboardEditForm.verd || ""} onChange={(e) => onChangeKeyboardEdit("verd", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+              </div>
               <div className="relative">
                 <label className="block text-xs text-gray-600 mb-1">Tengdar tölvur</label>
                 <button
@@ -1576,6 +2728,299 @@ export default function VorurAdminPage() {
                 className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm disabled:opacity-50"
               >
                 Uppfæra
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {mouseEditingId !== null && mouseEditForm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={handleCancelMouseEdit} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Uppfæra mús</h2>
+              <button type="button" onClick={handleCancelMouseEdit} className="text-gray-500 hover:text-gray-700 text-sm">Loka</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Heiti</label>
+                  <input value={mouseEditForm.nafn} onChange={(e) => onChangeMouseEdit("nafn", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Framleiðandi</label>
+                  <input value={mouseEditForm.framleidandi} onChange={(e) => onChangeMouseEdit("framleidandi", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Fjöldi takka</label>
+                  <input value={mouseEditForm.fjolditakk} onChange={(e) => onChangeMouseEdit("fjolditakk", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Tölutakka</label>
+                  <input value={mouseEditForm.toltakka} onChange={(e) => onChangeMouseEdit("toltakka", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Tengimöguleiki</label>
+                <input value={mouseEditForm.tengimoguleiki} onChange={(e) => onChangeMouseEdit("tengimoguleiki", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Verð</label>
+                <input value={mouseEditForm.verd || ""} onChange={(e) => onChangeMouseEdit("verd", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="relative">
+                <label className="block text-xs text-gray-600 mb-1">Tengdar tölvur</label>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    if (editMsOpen) {
+                      setEditMsOpen(false);
+                    } else {
+                      openEditMsMenu(e.currentTarget as HTMLElement);
+                    }
+                  }}
+                  className="inline-flex items-center w-full justify-between px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 text-sm"
+                >
+                  <span className="truncate">
+                    {mouseEditPcIds.length > 0
+                      ? mouseEditPcIds
+                          .map((id) => rows.find((p) => p.id === id)?.name || `#${id}`)
+                          .filter(Boolean)
+                          .slice(0, 3)
+                          .join(", ") + (mouseEditPcIds.length > 3 ? ` +${mouseEditPcIds.length - 3}` : "")
+                      : "Veldu tölvur"}
+                  </span>
+                  <svg className="ml-2 h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z"/></svg>
+                </button>
+                {editMsOpen && editMsMenuPos ? (
+                  <div
+                    className="fixed z-50 bg-white border border-gray-200 rounded shadow-md"
+                    style={{ top: editMsMenuPos.top, left: editMsMenuPos.left, minWidth: editMsMenuPos.width, width: editMsMenuPos.width }}
+                  >
+                    <div className="max-h-60 overflow-auto p-1">
+                      {rows.map((pc) => {
+                        const checked = mouseEditPcIds.includes(pc.id);
+                        return (
+                          <label key={pc.id} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer select-none text-sm">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleEditMsPc(pc.id)}
+                              className="h-3 w-3"
+                            />
+                            <span className="truncate">{pc.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between gap-2 px-2 py-1 border-t border-gray-200">
+                      <button type="button" onClick={() => setMouseEditPcIds([])} className="text-xs text-gray-600 hover:underline">Hreinsa</button>
+                      <button type="button" onClick={() => setEditMsOpen(false)} className="text-xs text-[var(--color-accent)] hover:underline">Loka</button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+              <button type="button" onClick={handleCancelMouseEdit} className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm">Hætta við</button>
+              <button
+                type="button"
+                onClick={() => mouseEditingId !== null ? handleUpdateMouse(mouseEditingId) : undefined}
+                disabled={mouseUpdatingId === mouseEditingId}
+                className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm disabled:opacity-50"
+              >
+                Uppfæra
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {consoleEditingId !== null && consoleEditForm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={handleCancelConsoleEdit} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Uppfæra console</h2>
+              <button type="button" onClick={handleCancelConsoleEdit} className="text-gray-500 hover:text-gray-700 text-sm">Loka</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Nafn</label>
+                  <input value={consoleEditForm.nafn} onChange={(e) => onChangeConsoleEdit("nafn", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Verð</label>
+                  <input value={consoleEditForm.verd} onChange={(e) => onChangeConsoleEdit("verd", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Geymslupláss</label>
+                  <input value={consoleEditForm.geymsluplass} onChange={(e) => onChangeConsoleEdit("geymsluplass", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Auka stýringar (fjöldi)</label>
+                  <input value={consoleEditForm.numberofextracontrollers} onChange={(e) => onChangeConsoleEdit("numberofextracontrollers", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Verð auka stýringa</label>
+                  <input value={consoleEditForm.verdextracontrollers} onChange={(e) => onChangeConsoleEdit("verdextracontrollers", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Tengi</label>
+                  <input value={consoleEditForm.tengi} onChange={(e) => onChangeConsoleEdit("tengi", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+              <button type="button" onClick={handleCancelConsoleEdit} className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm">Hætta við</button>
+              <button
+                type="button"
+                onClick={() => consoleEditingId !== null ? handleUpdateConsole(consoleEditingId) : undefined}
+                disabled={consoleUpdatingId === consoleEditingId}
+                className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm disabled:opacity-50"
+              >
+                Uppfæra
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {(imagesEditingPcId !== null || imagesEditingScreenId !== null || imagesEditingKeyboardId !== null || imagesEditingMouseId !== null || imagesEditingConsoleId !== null) ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={imagesBusy ? undefined : closeImagesModal} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-base font-semibold">
+                {imagesEditingPcId !== null
+                  ? `Myndir fyrir tölvu #${imagesEditingPcId}`
+                  : imagesEditingScreenId !== null
+                    ? `Myndir fyrir skjá ${imagesEditingScreenId}`
+                    : imagesEditingKeyboardId !== null
+                      ? `Myndir fyrir lyklaborð ${imagesEditingKeyboardId}`
+                      : imagesEditingMouseId !== null
+                        ? `Myndir fyrir mús ${imagesEditingMouseId}`
+                        : imagesEditingConsoleId !== null
+                          ? `Myndir fyrir console ${imagesEditingConsoleId}`
+                      : 'Myndir'}
+              </h2>
+              <button type="button" onClick={imagesBusy ? undefined : closeImagesModal} className="text-gray-500 hover:text-gray-700 text-sm">Loka</button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+                onDrop={(e) => {
+                  // Support both adding external files and reordering to the end when dropping on empty area
+                  const fromStr = e.dataTransfer.getData("text/plain");
+                  if (fromStr) {
+                    e.preventDefault();
+                    const from = Number(fromStr);
+                    if (Number.isFinite(from)) {
+                      setImagesItems((prev) => {
+                        const copy = [...prev];
+                        const [moved] = copy.splice(from, 1);
+                        copy.push(moved);
+                        return copy;
+                      });
+                      return;
+                    }
+                  }
+                  onDropFiles(e);
+                }}
+                className="border-2 border-dashed border-gray-300 rounded-md p-4 min-h-[8rem] bg-gray-50"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm text-gray-600">Dragðu myndir hingað eða veldu skrár</div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={onFileInputChange}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={onChooseFiles}
+                      className="inline-flex items-center px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 text-xs"
+                    >
+                      Velja mynd
+                    </button>
+                  </div>
+                </div>
+                {imagesItems.length === 0 ? (
+                  <div className="text-xs text-gray-500">Engar myndir valdar enn.</div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {imagesItems.map((it, idx) => (
+                      <div
+                        key={it.id}
+                        className={`relative group rounded border bg-white overflow-hidden ${dragOverIndex === idx ? "ring-2 ring-purple-500 border-purple-500" : "border-gray-200"}`}
+                        onDragEnter={onDragEnterItem(idx)}
+                        onDragOver={onDragOverItem(idx)}
+                        onDrop={onDropOnItem(idx)}
+                        title={it.originalName}
+                      >
+                        <div className="absolute top-1 left-1 z-10">
+                          <button
+                            type="button"
+                            draggable
+                            onDragStart={onDragStartItem(idx) as any}
+                            onDragEnd={onDragEndItem}
+                            className="inline-flex items-center justify-center h-5 w-5 rounded bg-white/90 text-gray-700 hover:bg-white cursor-grab active:cursor-grabbing"
+                            title="Draga til að raða"
+                          >
+                            <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <circle cx="5" cy="6" r="1.5"></circle>
+                              <circle cx="10" cy="6" r="1.5"></circle>
+                              <circle cx="15" cy="6" r="1.5"></circle>
+                              <circle cx="5" cy="11" r="1.5"></circle>
+                              <circle cx="10" cy="11" r="1.5"></circle>
+                              <circle cx="15" cy="11" r="1.5"></circle>
+                            </svg>
+                          </button>
+                        </div>
+                        <img src={it.previewUrl} alt="" className="w-full h-28 object-cover select-none pointer-events-none" />
+                        <div className="absolute top-1 left-1 text-[10px] bg-black/60 text-white rounded px-1 py-0.5">{idx + 1}</div>
+                        <button
+                          type="button"
+                          onClick={() => removeImageAt(idx)}
+                          className="absolute top-1 right-1 text-[10px] bg-white/90 text-gray-700 rounded px-1 py-0.5 opacity-0 group-hover:opacity-100"
+                          title="Fjarlægja"
+                        >
+                          X
+                        </button>
+                        <div className="p-1">
+                          <div className="truncate text-[11px] text-gray-700">{it.originalName}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={imagesBusy ? undefined : closeImagesModal}
+                className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm disabled:opacity-50"
+                disabled={imagesBusy}
+              >
+                Hætta við
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveImages}
+                disabled={imagesBusy || imagesItems.length === 0}
+                className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm disabled:opacity-50"
+              >
+                {imagesBusy ? "Vistast…" : "Vista"}
               </button>
             </div>
           </div>

@@ -21,8 +21,10 @@ interface Order {
   skjar?: boolean;
   lyklabord?: boolean;
   mus?: boolean;
+  trygging?: boolean;
   verd?: number;
   gamingpc_uuid?: number | null;
+  gamingconsole_uuid?: string | null;
   pdf_url?: string | null;
 }
 
@@ -48,8 +50,10 @@ export default function DashboardPage() {
   const fetchedUserRef = useRef<string | null>(null);
   const [pcNamesById, setPcNamesById] = useState<Record<number, string>>({});
   const [pcById, setPcById] = useState<Record<number, GamingPCItem>>({});
+  const [consoleNamesById, setConsoleNamesById] = useState<Record<string, string>>({});
   const [openPcId, setOpenPcId] = useState<number | null>(null);
   const [busyOpenPdfById, setBusyOpenPdfById] = useState<Record<string, boolean>>({});
+  const [pcFirstImages, setPcFirstImages] = useState<Record<number, { path: string; signedUrl: string } | null>>({});
 
   // Redirect to home if signed out
   useEffect(() => {
@@ -145,6 +149,9 @@ export default function DashboardPage() {
         const ids = Array.from(
           new Set((ordersData || []).map(o => o.gamingpc_uuid).filter((v: unknown): v is number => typeof v === 'number'))
         )
+        const consoleIds = Array.from(
+          new Set((ordersData || []).map(o => o.gamingconsole_uuid).filter((v: unknown): v is string => typeof v === 'string' && v.length > 0))
+        )
         if (ids.length > 0) {
           try {
             const { data: pcRows } = await supabase
@@ -160,6 +167,22 @@ export default function DashboardPage() {
         } else {
           setPcNamesById({})
           setPcById({})
+        }
+
+        if (consoleIds.length > 0) {
+          try {
+            const { data: cRows } = await supabase
+              .from('gamingconsoles')
+              .select('id, nafn')
+              .in('id', consoleIds as string[])
+            const cmap: Record<string, string> = {}
+            ;(cRows || []).forEach((r: { id: string; nafn: string }) => { cmap[r.id] = r.nafn })
+            setConsoleNamesById(cmap)
+          } catch {
+            setConsoleNamesById({})
+          }
+        } else {
+          setConsoleNamesById({})
         }
 
         setOrders(ordersData || [])
@@ -256,6 +279,54 @@ export default function DashboardPage() {
   };
 
   // Removed legacy getStatusColor (no longer used)
+
+  // Fetch first image per product to show in modal
+  useEffect(() => {
+    const ids = Array.from(
+      new Set((orders || []).map(o => o.gamingpc_uuid).filter((v: unknown): v is number => typeof v === 'number'))
+    );
+    const missing = ids.filter((id) => pcFirstImages[id] === undefined);
+    if (missing.length === 0) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/images/first', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pcIds: missing })
+        });
+        if (!alive) return;
+        if (res.ok) {
+          const j = await res.json();
+          const results: Record<number, { path: string; signedUrl: string } | null> = j?.results || {};
+          setPcFirstImages((prev) => {
+            const next = { ...prev };
+            ids.forEach((id) => {
+              if (results && Object.prototype.hasOwnProperty.call(results, id)) {
+                next[id] = results[id as unknown as keyof typeof results] || null;
+              } else if (next[id] === undefined) {
+                next[id] = null;
+              }
+            });
+            return next;
+          });
+        } else {
+          setPcFirstImages((prev) => {
+            const next = { ...prev };
+            missing.forEach((id) => { if (next[id] === undefined) next[id] = null; });
+            return next;
+          });
+        }
+      } catch {
+        setPcFirstImages((prev) => {
+          const next = { ...prev };
+          missing.forEach((id) => { if (next[id] === undefined) next[id] = null; });
+          return next;
+        });
+      }
+    })();
+    return () => { alive = false; };
+  }, [orders, pcFirstImages]);
 
   const getStatusMeta = (status: string) => {
     const accentBadge = 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30';
@@ -464,8 +535,9 @@ export default function DashboardPage() {
                   const progressWidth = `${progressMap[Math.min(Math.max(meta.step, 0), 2)]}%`;
 
                   return (
-                    <div key={order.id} className="group relative rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-                      <div className="rounded-2xl p-5 h-full flex flex-col">
+                    <div key={order.id} className="relative">
+                      <div className={`group relative rounded-2xl border bg-white shadow-sm hover:shadow-md transition-shadow ${order.trygging ? 'border-green-500' : 'border-gray-200'}`}>
+                        <div className="rounded-2xl p-5 h-full flex flex-col">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className="flex items-center gap-2">
@@ -481,6 +553,14 @@ export default function DashboardPage() {
                                   className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium"
                                 >
                                   {pcNamesById[order.gamingpc_uuid] || 'Vara'}
+                                </button>
+                              ) : order.gamingconsole_uuid ? (
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/console/${order.gamingconsole_uuid}`)}
+                                  className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium"
+                                >
+                                  {consoleNamesById[order.gamingconsole_uuid] || 'Vara'}
                                 </button>
                               ) : 'Vara'}
                               {(() => { const p = formatPrice(order.verd); return p ? (<span className="ml-1 text-gray-900 font-semibold">{p}</span>) : null; })()}
@@ -562,6 +642,14 @@ export default function DashboardPage() {
                           ) : null}
                         </div>
                       </div>
+                      </div>
+                      {order.trygging ? (
+                        <div className="mt-2 mb-1 text-center">
+                          <span className="inline-block text-[10px] md:text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-green-500/30">
+                            Pöntun trygð
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -580,7 +668,19 @@ export default function DashboardPage() {
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <div className="aspect-video rounded-xl bg-gradient-to-br from-gray-200 to-gray-300 mb-3" />
+                  <div className="aspect-video rounded-xl overflow-hidden mb-3">
+                    {pcFirstImages[openPcId]?.signedUrl ? (
+                      <img
+                        src={pcFirstImages[openPcId]!.signedUrl}
+                        alt={pcById[openPcId].name}
+                        className="w-full h-full object-cover"
+                        loading="eager"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300" />
+                    )}
+                  </div>
                   <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
                     <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
                       <p className="text-gray-500">Skjákort</p>

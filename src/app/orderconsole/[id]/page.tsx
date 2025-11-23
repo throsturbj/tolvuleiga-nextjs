@@ -3,21 +3,17 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-//
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 
-interface GamingPCRow {
-  id: number;
-  name: string;
+interface ConsoleRow {
+  id: string;
+  nafn: string;
   verd: string;
-  cpu: string;
-  gpu: string;
-  storage: string;
-  motherboard?: string | null;
-  powersupply?: string | null;
-  cpucooler?: string | null;
-  ram?: string | null;
+  geymsluplass: string;
+  numberofextracontrollers?: string | null;
+  verdextracontrollers?: string | null;
+  tengi: string;
 }
 
 interface UserProfile {
@@ -32,27 +28,23 @@ interface UserProfile {
   ibudnumber?: string;
 }
 
-export default function OrderConfirmationPage() {
+export default function OrderConsolePage() {
   const params = useParams();
   const router = useRouter();
   const { user, loading: authLoading, session } = useAuth();
-  const productIdParam = params.id as string;
-  const productIdNum = Number(productIdParam);
-  const [product, setProduct] = useState<GamingPCRow | null>(null);
-  const [productLoading, setProductLoading] = useState<boolean>(true);
+  const consoleIdParam = params.id as string;
+  const [consoleItem, setConsoleItem] = useState<ConsoleRow | null>(null);
+  const [itemLoading, setItemLoading] = useState<boolean>(true);
 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  // Removed unused loading state
   const [profileError, setProfileError] = useState<string | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [formData, setFormData] = useState({
-    message: ''
-  });
+  const [formData, setFormData] = useState({ message: '' });
   const loadedForUidRef = useRef<string | null>(null);
 
-  // Selection passed from product page
+  // Selection passed from console page
   const [selection, setSelection] = useState<{ months: number; addons?: { skjár?: boolean; lyklaborð?: boolean; mus?: boolean }; insured?: boolean; finalPrice?: number } | null>(null);
   const [confirmNoInsurance, setConfirmNoInsurance] = useState(false);
 
@@ -60,7 +52,6 @@ export default function OrderConfirmationPage() {
     const d = new Date(date);
     const day = d.getDate();
     d.setMonth(d.getMonth() + months);
-    // handle month overflow (e.g., Jan 31 + 1 month)
     if (d.getDate() < day) {
       d.setDate(0);
     }
@@ -93,66 +84,52 @@ export default function OrderConfirmationPage() {
     }
   }, []);
 
-  // Fetch selected product from DB
+  // Fetch selected console from DB
   useEffect(() => {
     let isMounted = true;
-    const fetchProduct = async () => {
-      if (!productIdNum || Number.isNaN(productIdNum)) {
-        setProduct(null);
-        setProductLoading(false);
+    const fetchConsole = async () => {
+      if (!consoleIdParam) {
+        setConsoleItem(null);
+        setItemLoading(false);
         return;
       }
       try {
         const { data, error } = await supabase
-          .from('GamingPC')
-          .select('id,name,verd,cpu,gpu,storage,motherboard,powersupply,cpucooler,ram')
-          .eq('id', productIdNum)
+          .from('gamingconsoles')
+          .select('id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi')
+          .eq('id', consoleIdParam)
           .single();
         if (!isMounted) return;
         if (error) {
-          setProduct(null);
+          setConsoleItem(null);
         } else {
-          setProduct(data as GamingPCRow);
+          setConsoleItem(data as ConsoleRow);
         }
       } catch {
-        setProduct(null);
+        setConsoleItem(null);
       } finally {
-        if (isMounted) setProductLoading(false);
+        if (isMounted) setItemLoading(false);
       }
     };
-    fetchProduct();
+    fetchConsole();
     return () => { isMounted = false; };
-  }, [productIdNum]);
+  }, [consoleIdParam]);
 
-  // Fetch user profile: prefer AuthContext user; otherwise load from Supabase; redirect if no session
+  // Fetch user profile similar to product order page
   useEffect(() => {
-    // If auth is still loading, wait
-    if (authLoading) {
-      return;
-    }
-
-    // If no session, redirect
+    if (authLoading) return;
     if (!session?.user) {
-      router.push(`/auth?redirect=/order/${productIdParam}`);
+      router.push(`/auth?redirect=/orderconsole/${encodeURIComponent(consoleIdParam)}`);
       return;
     }
-
     const uid = session.user.id;
-
-    // If we already loaded profile for this UID and have one, skip
-    if (loadedForUidRef.current === uid && userProfile) {
-      return;
-    }
-
-    // If AuthContext provided a user profile, use it immediately
+    if (loadedForUidRef.current === uid && userProfile) return;
     if (user) {
       loadedForUidRef.current = uid;
-      setUserProfile(user);
+      setUserProfile(user as unknown as UserProfile);
       setProfileError(null);
       return;
     }
-
-    // Otherwise fetch from Supabase
     const loadProfile = async () => {
       try {
         setProfileError(null);
@@ -161,46 +138,24 @@ export default function OrderConfirmationPage() {
           .select('*')
           .eq('auth_uid', uid)
           .single();
-
         if (error) {
-          if ((error as { code?: string }).code === 'PGRST116') {
-            const basicProfile: UserProfile = {
-              id: uid,
-              auth_uid: uid,
-              full_name: '',
-              kennitala: '',
-              phone: '',
-              address: '',
-              city: '',
-              postal_code: '',
-              ibudnumber: ''
-            };
-            loadedForUidRef.current = uid;
-            setUserProfile(basicProfile);
-            return;
-          }
           throw error;
         }
-
         loadedForUidRef.current = uid;
         setUserProfile(profile as UserProfile);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
-        console.error('Order: Error loading profile:', {
-          message,
-        });
+        console.error('OrderConsole: Error loading profile:', { message });
         setProfileError('Tókst ekki að sækja notandaupplýsingar');
       }
     };
-
     loadProfile();
-  }, [authLoading, session, user, productIdParam, router, userProfile]);
+  }, [authLoading, session, user, consoleIdParam, router, userProfile]);
 
   // Refresh profile on return from profile page
   useEffect(() => {
     const uid = session?.user?.id;
     if (!uid) return;
-
     const maybeRefresh = async () => {
       try {
         if (typeof window === 'undefined') return;
@@ -218,8 +173,6 @@ export default function OrderConfirmationPage() {
         }
       } catch {}
     };
-
-    // Check immediately and also on focus/visibility
     maybeRefresh();
     const onFocus = () => { maybeRefresh(); };
     window.addEventListener('focus', onFocus);
@@ -230,25 +183,6 @@ export default function OrderConfirmationPage() {
     };
   }, [session?.user?.id]);
 
-  // Build an effective profile to show while DB profile is loading or missing
-  const effectiveProfile: UserProfile | null = (() => {
-    if (!session?.user) return null;
-    if (userProfile) return userProfile;
-    if (user) return user as unknown as UserProfile;
-    const meta = (session.user as { user_metadata?: Record<string, unknown> }).user_metadata || {};
-    return {
-      id: session.user.id,
-      auth_uid: session.user.id,
-      full_name: typeof meta.full_name === 'string' ? meta.full_name : '',
-      kennitala: typeof meta.kennitala === 'string' ? meta.kennitala : '',
-      phone: typeof meta.phone === 'string' ? meta.phone : '',
-      address: typeof meta.address === 'string' ? meta.address : '',
-      city: typeof meta.city === 'string' ? meta.city : '',
-      postal_code: typeof meta.postal_code === 'string' ? meta.postal_code : '',
-      ibudnumber: typeof meta.ibudnumber === 'string' ? meta.ibudnumber : '',
-    };
-  })();
-
   const doSubmit = async () => {
     setIsSubmitting(true);
     setSubmitStatus('idle');
@@ -256,7 +190,6 @@ export default function OrderConfirmationPage() {
       const now = new Date();
       const months = selection?.months ?? 3;
       const to = addMonths(now, months);
-
       const a = (selection?.addons ?? {}) as Record<string, boolean>;
       const skjar = !!(a['skjár'] || a['skjar']);
       const lyklabord = !!(a['lyklaborð'] || a['lyklabord']);
@@ -270,10 +203,11 @@ export default function OrderConfirmationPage() {
         return out;
       };
       const orderNumber = generateOrderNumber();
-      // Use finalPrice from product page if available; fallback to discounted product price
+
+      // Use finalPrice from console page if available; fallback to discounted console price
       let finalMonthlyPrice = selection?.finalPrice;
       if (!(typeof finalMonthlyPrice === 'number' && Number.isFinite(finalMonthlyPrice) && finalMonthlyPrice > 0)) {
-        const baseDigits = (product?.verd || '').toString().replace(/\D+/g, '');
+        const baseDigits = (consoleItem?.verd || '').toString().replace(/\D+/g, '');
         const basePrice = parseInt(baseDigits, 10) || 0;
         const rate = months === 1 ? 0 : months === 3 ? 0.04 : months === 6 ? 0.08 : 0.12;
         const discountedRaw = Math.round(basePrice * (1 - rate));
@@ -294,7 +228,8 @@ export default function OrderConfirmationPage() {
             mus,
             trygging,
             verd: finalMonthlyPrice,
-            gamingpc_uuid: productIdNum || null,
+            gamingpc_uuid: null,
+            gamingconsole_uuid: consoleIdParam,
           },
         ])
         .select('id')
@@ -308,7 +243,6 @@ export default function OrderConfirmationPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ orderId: inserted.id }),
             });
-            // Fire-and-forget sending of emails (user + admin)
             const userEmail = session?.user?.email || '';
             if (userEmail) {
               fetch('/api/order/send-emails', {
@@ -321,13 +255,12 @@ export default function OrderConfirmationPage() {
         } catch {}
         setSubmitStatus('success');
         setFormData({ message: '' });
-        // Navigate to dashboard after successful insert
         router.push('/dashboard');
       } else {
         setSubmitStatus('error');
       }
     } catch (error) {
-      console.error('Error submitting order:', error);
+      console.error('Error submitting console order:', error);
       setSubmitStatus('error');
     } finally {
       setIsSubmitting(false);
@@ -343,7 +276,7 @@ export default function OrderConfirmationPage() {
     await doSubmit();
   };
 
-  if (productLoading) {
+  if (itemLoading) {
     return (
       <div className="min-h-screen bg-gray-50 py-12">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -353,13 +286,13 @@ export default function OrderConfirmationPage() {
     );
   }
 
-  if (!product) {
+  if (!consoleItem) {
     return (
       <div className="min-h-screen bg-gray-50 py-12">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-900">Vörur fannst ekki</h1>
-            <p className="mt-4 text-gray-600">Þessi vara er ekki til.</p>
+            <h1 className="text-3xl font-bold text-gray-900">Vara fannst ekki</h1>
+            <p className="mt-4 text-gray-600">Þessi leikjatölva er ekki til.</p>
             <button onClick={() => router.back()} type="button" className="mt-6 inline-flex items-center px-3.5 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[var(--color-accent)] hover:brightness-95">
               Fara til baka í vörulista
             </button>
@@ -373,7 +306,7 @@ export default function OrderConfirmationPage() {
     return (
       <div className="min-h-screen bg-gray-50 py-12">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center">
+          <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">
               Hleður...
@@ -388,12 +321,12 @@ export default function OrderConfirmationPage() {
     return (
       <div className="min-h-screen bg-gray-50 py-12">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center">
+          <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900">Villa kom upp</h1>
             <p className="mt-4 text-gray-600">{profileError}</p>
             <button onClick={() => router.back()} type="button" className="mt-6 inline-flex items-center px-3.5 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[var(--color-accent)] hover:brightness-95">
               Fara til baka í vörulista
-          </button>
+            </button>
           </div>
         </div>
       </div>
@@ -412,15 +345,14 @@ export default function OrderConfirmationPage() {
             <div className="bg-gray-50 rounded-lg p-6 mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Vara</h2>
               <div className="flex items-center justify-between mb-3 gap-3 md:gap-0">
-                <h3 className="text-lg font-medium text-gray-900 truncate max-w-[65%] md:max-w-none">{product.name}</h3>
+                <h3 className="text-lg font-medium text-gray-900 truncate max-w-[65%] md:max-w-none">{consoleItem.nafn}</h3>
                 <p className="text-2xl font-bold text-[var(--color-secondary)] whitespace-nowrap">
                   {(() => {
                     const selFinal = selection?.finalPrice;
                     if (typeof selFinal === 'number' && Number.isFinite(selFinal) && selFinal > 0) {
                       return `${selFinal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr/mánuði`;
                     }
-                    // Fallback to simple discounted price if final not provided
-                    const digits = (product.verd || '').replace(/\D+/g, '');
+                    const digits = (consoleItem.verd || '').replace(/\D+/g, '');
                     const base = parseInt(digits, 10) || 0;
                     const m = selection?.months ?? 1;
                     const rate = m === 1 ? 0 : m === 3 ? 0.04 : m === 6 ? 0.08 : 0.12;
@@ -431,49 +363,44 @@ export default function OrderConfirmationPage() {
                 </p>
               </div>
               <div className="space-y-1 text-sm text-gray-700">
-                <p><span className="font-medium">Skjákort:</span> {product.gpu || '—'}</p>
-                <p><span className="font-medium">Örgjörvi:</span> {product.cpu || '—'}</p>
-                <p><span className="font-medium">Geymsla:</span> {product.storage || '—'}</p>
-                <p><span className="font-medium">Móðurborð:</span> {product.motherboard || '—'}</p>
-                <p><span className="font-medium">Vinnsluminni:</span> {product.ram || '—'}</p>
-                <p><span className="font-medium">Aflgjafi:</span> {product.powersupply || '—'}</p>
-                <p><span className="font-medium">Kæling:</span> {product.cpucooler || '—'}</p>
+                <p><span className="font-medium">Geymslupláss:</span> {consoleItem.geymsluplass || '—'}</p>
+                <p><span className="font-medium">Tengi:</span> {consoleItem.tengi || '—'}</p>
               </div>
             </div>
 
             {/* User Profile */}
-            {effectiveProfile && (
+            {userProfile && (
               <div className="bg-gray-50 rounded-lg p-6 mb-8">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Notendaupplýsingar</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">
-                      <span className="font-medium">Nafn:</span> {effectiveProfile.full_name || 'Ekki skráð'}
+                      <span className="font-medium">Nafn:</span> {userProfile.full_name || 'Ekki skráð'}
                     </p>
                     <p className="text-sm text-gray-600">
-                      <span className="font-medium">Kennitala:</span> {effectiveProfile.kennitala || 'Ekki skráð'}
+                      <span className="font-medium">Kennitala:</span> {userProfile.kennitala || 'Ekki skráð'}
                     </p>
                     <p className="text-sm text-gray-600">
-                      <span className="font-medium">Sími:</span> {effectiveProfile.phone || 'Ekki skráð'}
+                      <span className="font-medium">Sími:</span> {userProfile.phone || 'Ekki skráð'}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">
-                      <span className="font-medium">Heimilisfang:</span> {effectiveProfile.address || 'Ekki skráð'}
+                      <span className="font-medium">Heimilisfang:</span> {userProfile.address || 'Ekki skráð'}
                     </p>
                     <p className="text-sm text-gray-600">
-                      <span className="font-medium">Borg/Póstnúmer:</span> {effectiveProfile.city || 'Ekki skráð'} {effectiveProfile.postal_code || ''}
+                      <span className="font-medium">Borg/Póstnúmer:</span> {userProfile.city || 'Ekki skráð'} {userProfile.postal_code || ''}
                     </p>
-                    {effectiveProfile.ibudnumber ? (
+                    {userProfile.ibudnumber ? (
                       <p className="text-sm text-gray-600">
-                        <span className="font-medium">Íbúðarnúmer:</span> {effectiveProfile.ibudnumber}
+                        <span className="font-medium">Íbúðarnúmer:</span> {userProfile.ibudnumber}
                       </p>
                     ) : null}
                   </div>
                 </div>
                 <div className="mt-4">
                   <Link
-                    href={`/notendaupplysingar?from=order`} 
+                    href={`/notendaupplysingar?from=orderconsole`} 
                     className="text-[var(--color-secondary)] hover:opacity-80 text-sm font-medium"
                   >
                     Uppfæra notendaupplýsingar →
@@ -623,7 +550,7 @@ export default function OrderConfirmationPage() {
             <button
               type="button"
               onClick={() => setConfirmNoInsurance(false)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
             >
               Loka
             </button>
@@ -641,3 +568,5 @@ export default function OrderConfirmationPage() {
     </>
   );
 }
+
+

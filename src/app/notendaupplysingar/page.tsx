@@ -14,6 +14,7 @@ interface UserProfile {
   city: string;
   postal_code: string;
   kennitala?: string;
+  ibudnumber?: string;
 }
 
 function UserInfoPageInner() {
@@ -22,10 +23,12 @@ function UserInfoPageInner() {
   const searchParams = useSearchParams();
 
   const [, setProfile] = useState<UserProfile | null>(null);
+  const [email, setEmail] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [emailNotice, setEmailNotice] = useState<string | null>(null);
 
   const uid = session?.user?.id || null;
   const fromOrder = searchParams.get("from") === "order";
@@ -37,7 +40,14 @@ function UserInfoPageInner() {
     address: "",
     city: "",
     postal_code: "",
+    ibudnumber: "",
   });
+
+  // Initialize email field from auth session
+  useEffect(() => {
+    const currentEmail = session?.user?.email || "";
+    setEmail((prev) => (prev ? prev : currentEmail));
+  }, [session?.user?.email]);
 
   useEffect(() => {
     if (!uid) {
@@ -75,6 +85,7 @@ function UserInfoPageInner() {
                 address: "",
                 city: "",
                 postal_code: "",
+                ibudnumber: "",
               })
               .select()
               .single();
@@ -88,6 +99,7 @@ function UserInfoPageInner() {
                 address: created.address || "",
                 city: created.city || "",
                 postal_code: created.postal_code || "",
+                ibudnumber: created.ibudnumber || "",
               });
             }
           } else {
@@ -103,6 +115,7 @@ function UserInfoPageInner() {
               address: data.address || "",
               city: data.city || "",
               postal_code: data.postal_code || "",
+              ibudnumber: data.ibudnumber || "",
             });
           }
         }
@@ -133,9 +146,27 @@ function UserInfoPageInner() {
     if (!uid) return;
     setSaving(true);
     setError(null);
+    setEmailNotice(null);
     setSuccess(false);
 
     try {
+      // 1) Update auth email if changed
+      const currentEmail = session?.user?.email || "";
+      const trimmedEmail = (email || "").trim();
+      if (trimmedEmail && trimmedEmail !== currentEmail) {
+        const { data, error: emailErr } = await supabase.auth.updateUser({ email: trimmedEmail });
+        if (emailErr) {
+          throw new Error(emailErr.message || "Tókst ekki að uppfæra netfang");
+        }
+        // Supabase may require email confirmation depending on project settings
+        if (data?.user?.email !== trimmedEmail) {
+          setEmailNotice("Við sendum staðfestingartölvupóst. Vinsamlegast staðfestu netfangsbreytinguna.");
+        } else {
+          setEmailNotice("Netfang hefur verið uppfært.");
+        }
+      }
+
+      // 2) Update profile fields in 'users' table
       const { error } = await supabase
         .from("users")
         .update(formData)
@@ -197,17 +228,7 @@ function UserInfoPageInner() {
           </div>
 
           <div className="p-8">
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Tölvupóstur</h2>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-600 text-sm mb-1">Netfang</p>
-                <p className="font-medium text-gray-900">{session?.user?.email || "Ekki skráð"}</p>
-              </div>
-            </div>
-
             <form onSubmit={onSubmit}>
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">Upplýsingar sem hægt er að breyta</h2>
-
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
                   <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-2">Fullt nafn *</label>
@@ -246,8 +267,23 @@ function UserInfoPageInner() {
                     placeholder="Sláðu inn símanúmer"
                   />
                 </div>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">Netfang</label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Sláðu inn netfang"
+                  />
+                  {emailNotice && (
+                    <p className="mt-2 text-sm text-blue-700">{emailNotice}</p>
+                  )}
+                </div>
 
-                <div className="sm:col-span-2">
+                <div>
                   <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">Heimilisfang</label>
                   <input
                     id="address"
@@ -256,6 +292,18 @@ function UserInfoPageInner() {
                     onChange={onChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Sláðu inn heimilisfang"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="ibudnumber" className="block text-sm font-medium text-gray-700 mb-2">Íbúðarnúmer (ef á við)</label>
+                  <input
+                    id="ibudnumber"
+                    name="ibudnumber"
+                    value={formData.ibudnumber}
+                    onChange={onChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
+                    placeholder="Sláðu inn íbúðarnúmer (ef á við)"
                   />
                 </div>
 

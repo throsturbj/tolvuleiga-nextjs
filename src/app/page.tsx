@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -15,10 +16,24 @@ export default function Home() {
     storage: string;
     uppselt?: boolean;
     falid?: boolean;
+    imageUrl?: string;
+  }
+
+  interface GamingConsoleItem {
+    id: string;
+    nafn: string;
+    verd: string;
+    geymsluplass: string;
+    numberofextracontrollers: string;
+    verdextracontrollers: string;
+    tengi: string;
+    imageUrl?: string | null;
   }
 
   const [items, setItems] = useState<GamingPCItem[]>([]);
+  const [consoles, setConsoles] = useState<GamingConsoleItem[]>([]);
   const { loading: authLoading, session } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     let isMounted = true;
@@ -36,7 +51,33 @@ export default function Home() {
           setItems([]);
         } else {
           const all = (data as GamingPCItem[]) || [];
-          setItems(all.filter((pc) => !pc.falid));
+          const visible = all.filter((pc) => !pc.falid);
+          // Batch fetch first images for visible PCs
+          try {
+            const ids = visible.map((p) => p.id);
+            if (ids.length > 0) {
+              const res = await fetch("/api/images/first", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pcIds: ids }),
+              });
+              if (res.ok) {
+                const j = await res.json();
+                const map: Record<number, { path: string; signedUrl: string } | null> = j?.results || {};
+                const merged = visible.map((p) => ({
+                  ...p,
+                  imageUrl: map[p.id]?.signedUrl,
+                }));
+                setItems(merged);
+              } else {
+                setItems(visible);
+              }
+            } else {
+              setItems(visible);
+            }
+          } catch {
+            setItems(visible);
+          }
         }
       } catch (e) {
         if (isMounted) {
@@ -48,6 +89,58 @@ export default function Home() {
     fetchItems();
     return () => { isMounted = false; };
     // Re-run when auth state finishes initializing or when user identity changes
+  }, [authLoading, session?.user?.id, session?.access_token]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (authLoading) return;
+    const fetchConsoles = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("gamingconsoles")
+          .select("id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi")
+          .order("inserted_at", { ascending: false });
+        if (!isMounted) return;
+        if (error) {
+          console.error('Home: Error fetching consoles', error);
+          setConsoles([]);
+        } else {
+          const all = (data as GamingConsoleItem[]) || [];
+          if (all.length === 0) {
+            setConsoles([]);
+            return;
+          }
+          try {
+            const ids = all.map((c) => c.id);
+            const res = await fetch("/api/images/first-generic", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ bucket: "consoles", folders: ids }),
+            });
+            if (res.ok) {
+              const j = await res.json();
+              const map: Record<string, { path: string; signedUrl: string } | null> = j?.results || {};
+              const merged = all.map((c) => ({
+                ...c,
+                imageUrl: map[c.id]?.signedUrl || null,
+              }));
+              setConsoles(merged);
+            } else {
+              setConsoles(all);
+            }
+          } catch {
+            setConsoles(all);
+          }
+        }
+      } catch (e) {
+        if (isMounted) {
+          console.error('Home: Unexpected error fetching consoles', e);
+          setConsoles([]);
+        }
+      }
+    };
+    fetchConsoles();
+    return () => { isMounted = false; };
   }, [authLoading, session?.user?.id, session?.access_token]);
   return (
     <div className="min-h-screen">
@@ -127,9 +220,33 @@ export default function Home() {
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((pc) => (
-              <div key={pc.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                <div className="relative">
-                  <div className="aspect-video bg-gray-200" />
+              <div
+                key={pc.id}
+                className="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer"
+                role="link"
+                tabIndex={0}
+                onClick={() => router.push(`/product/${pc.id}`)}
+                onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/product/${pc.id}`); }}
+              >
+                <div className="relative aspect-video overflow-hidden bg-gray-200">
+                  {pc.imageUrl ? (
+                    <>
+                      <img
+                        src={pc.imageUrl}
+                        alt={pc.name}
+                        className="absolute inset-0 h-full w-full object-contain transition-transform duration-300 ease-out group-hover:scale-[1.02]"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                      <svg className="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5l3.75-3h10.5L21 7.5v9l-3.75 3H6.75L3 16.5v-9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 14.25l4.5-4.5 6 6 2.25-2.25L21 16.5" />
+                      </svg>
+                    </div>
+                  )}
                   {pc.uppselt ? (
                     <div className="absolute bottom-0 left-0 right-0">
                       <div className="mx-2 mb-2 rounded border border-gray-400 bg-gray-800/80 text-white text-xs font-semibold text-center py-1">
@@ -156,6 +273,61 @@ export default function Home() {
                   <Link
                     href={`/product/${pc.id}`}
                     className="mt-4 inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Sjá nánar
+                  </Link>
+                </div>
+              </div>
+            ))}
+            {consoles.map((c) => (
+              <div
+                key={c.id}
+                className="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer"
+                role="link"
+                tabIndex={0}
+                onClick={() => router.push(`/console/${c.id}`)}
+                onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/console/${c.id}`); }}
+              >
+                <div className="relative aspect-video overflow-hidden bg-gray-200">
+                  {c.imageUrl ? (
+                    <>
+                      <img
+                        src={c.imageUrl}
+                        alt={c.nafn}
+                        className="absolute inset-0 h-full w-full object-contain transition-transform duration-300 ease-out group-hover:scale-[1.02]"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                      <svg className="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5l3.75-3h10.5L21 7.5v9l-3.75 3H6.75L3 16.5v-9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 14.25l4.5-4.5 6 6 2.25-2.25L21 16.5" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                <div className="p-6">
+                  <h3 className="text-lg font-semibold text-gray-900">{c.nafn}</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {c.geymsluplass} · {c.tengi}
+                  </p>
+                  <p className="text-xl font-bold text-[var(--color-secondary)] mt-2">
+                    {(() => {
+                      const digits = (c.verd || '').toString().replace(/\D+/g, '');
+                      const base = parseInt(digits, 10) || 0;
+                      const raw = Math.round(base * 0.88); // 12% off total price
+                      const rounded = Math.ceil(raw / 10) * 10;
+                      const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                      return `Frá ${formatted} kr/mánuði`;
+                    })()}
+                  </p>
+                  <Link
+                    href={`/console/${c.id}`}
+                    className="mt-4 inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     Sjá nánar
                   </Link>

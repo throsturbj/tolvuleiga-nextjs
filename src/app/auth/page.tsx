@@ -22,6 +22,7 @@ function AuthPageInner() {
     kennitala: '',
     phone: '',
     address: '',
+    ibudnumber: '',
     city: '',
     postal_code: ''
   });
@@ -89,6 +90,7 @@ function AuthPageInner() {
         kennitala: formData.kennitala,
         phone: formData.phone,
         address: formData.address,
+        ibudnumber: formData.ibudnumber,
         city: formData.city,
         postal_code: formData.postal_code,
       });
@@ -109,6 +111,7 @@ function AuthPageInner() {
             kennitala: formData.kennitala,
             phone: formData.phone,
             address: formData.address,
+            ibudnumber: formData.ibudnumber,
             city: formData.city,
             postal_code: formData.postal_code
           });
@@ -303,19 +306,35 @@ function AuthPageInner() {
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="signup-address" className="block text-sm font-medium text-gray-700 mb-1">
-                    Heimilisfang *
-                  </label>
-                  <input
-                    type="text"
-                    id="signup-address"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="signup-address" className="block text-sm font-medium text-gray-700 mb-1">
+                      Heimilisfang *
+                    </label>
+                    <input
+                      type="text"
+                      id="signup-address"
+                      name="address"
+                      value={formData.address}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)]"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="signup-ibudnumber" className="block text-sm font-medium text-gray-700 mb-1">
+                      Íbúðarnúmer (ef á við)
+                    </label>
+                    <input
+                      type="text"
+                      id="signup-ibudnumber"
+                      name="ibudnumber"
+                      value={formData.ibudnumber}
+                      onChange={handleInputChange}
+                      placeholder="Íbúðarnúmer (valfrjálst)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] focus:border-[var(--color-secondary)] placeholder-gray-400"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

@@ -12,8 +12,8 @@ export async function POST(req: NextRequest) {
     const admin = getServerSupabase()
     const { data: list } = await admin.storage.from(bucket).list(String(pcId), { limit: 100, offset: 0 })
     const toRemove = (list || [])
-      .filter((f: any) => f && !String(f.name || '').endsWith('/'))
-      .map((f: any) => `${pcId}/${f.name}`)
+      .filter((f) => f && !String((f as { name?: string }).name || '').endsWith('/'))
+      .map((f) => `${pcId}/${(f as { name: string }).name}`)
     if (toRemove.length > 0) {
       await admin.storage.from(bucket).remove(toRemove).catch(() => undefined)
     }

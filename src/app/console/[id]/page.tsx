@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type React from "react";
@@ -117,24 +117,30 @@ export default function ConsoleDetailPage() {
           supabase.from("keyboard_gamingconsoles").select("keyboard_id").eq("console_id", consoleId),
           supabase.from("mouse_gamingconsoles").select("mouse_id").eq("console_id", consoleId),
         ] as const);
-        const sLinks = sRes?.data ?? [];
-        const kLinks = kRes?.data ?? [];
-        const mLinks = mRes?.data ?? [];
+        type ScreenLink = { screen_id: string };
+        type KeyboardLink = { keyboard_id: string };
+        type MouseLink = { mouse_id: string | number };
+        const sLinks = (sRes?.data as ScreenLink[] | null) ?? [];
+        const kLinks = (kRes?.data as KeyboardLink[] | null) ?? [];
+        const mLinks = (mRes?.data as MouseLink[] | null) ?? [];
         if (!alive) return;
-        const screenIds = Array.isArray(sLinks) ? (sLinks as any[]).map(x => x.screen_id) : [];
-        const keyboardIds = Array.isArray(kLinks) ? (kLinks as any[]).map(x => x.keyboard_id) : [];
-        const mouseIds = Array.isArray(mLinks) ? (mLinks as any[]).map(x => x.mouse_id) : [];
+        const screenIds = Array.isArray(sLinks) ? sLinks.map(x => x.screen_id) : [];
+        const keyboardIds = Array.isArray(kLinks) ? kLinks.map(x => x.keyboard_id) : [];
+        const mouseIds = Array.isArray(mLinks) ? mLinks.map(x => x.mouse_id) : [];
         const [{ data: sRows }, { data: kRows }, { data: mRows }] = await Promise.all([
-          screenIds.length > 0 ? supabase.from("screens").select("id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni, verd").in("id", screenIds) : Promise.resolve({ data: [] } as any),
-          keyboardIds.length > 0 ? supabase.from("keyboards").select("id, nafn, framleidandi, staerd, tengimoguleiki, verd").in("id", keyboardIds) : Promise.resolve({ data: [] } as any),
-          mouseIds.length > 0 ? supabase.from("mouses").select("id, nafn, framleidandi, fjolditakk, toltakka, tengimoguleiki, verd").in("id", mouseIds as any[]) : Promise.resolve({ data: [] } as any),
+          screenIds.length > 0 ? supabase.from("screens").select("id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni, verd").in("id", screenIds) : Promise.resolve({ data: [] as ScreenItem[] } as unknown as { data: ScreenItem[] }),
+          keyboardIds.length > 0 ? supabase.from("keyboards").select("id, nafn, framleidandi, staerd, tengimoguleiki, verd").in("id", keyboardIds) : Promise.resolve({ data: [] as KeyboardItem[] } as unknown as { data: KeyboardItem[] }),
+          mouseIds.length > 0 ? supabase.from("mouses").select("id, nafn, framleidandi, fjolditakk, toltakka, tengimoguleiki, verd").in("id", mouseIds as (string | number)[]) : Promise.resolve({ data: [] as MouseItem[] } as unknown as { data: MouseItem[] }),
         ] as const);
-        setScreens(((sRows as any) || []) as ScreenItem[]);
-        setKeyboards(((kRows as any) || []) as KeyboardItem[]);
-        setMouses(((mRows as any) || []) as MouseItem[]);
-        setSelectedScreenId((((sRows as any) || [])[0]?.id as string) ?? null);
-        setSelectedKeyboardId((((kRows as any) || [])[0]?.id as string) ?? null);
-        setSelectedMouseId((((mRows as any) || [])[0]?.id as string | number) ?? null);
+        const sList = ((sRows as unknown) || []) as ScreenItem[];
+        const kList = ((kRows as unknown) || []) as KeyboardItem[];
+        const mList = ((mRows as unknown) || []) as MouseItem[];
+        setScreens(sList);
+        setKeyboards(kList);
+        setMouses(mList);
+        setSelectedScreenId((sList[0]?.id as string) ?? null);
+        setSelectedKeyboardId((kList[0]?.id as string) ?? null);
+        setSelectedMouseId((mList[0]?.id as string | number) ?? null);
       } catch {
         if (!alive) return;
         setScreens([]); setKeyboards([]); setMouses([]);
@@ -573,7 +579,7 @@ export default function ConsoleDetailPage() {
                       setModalLoading(true);
                       try {
                         const bucket = modalType === 'screen' ? 'screens' : modalType === 'keyboard' ? 'keyboards' : 'mouses';
-                        const folder = String((acc as any).id);
+                        const folder = String((acc as ScreenItem).id ?? (acc as KeyboardItem).id ?? (acc as MouseItem).id);
                         const res = await fetch('/api/images/list-generic', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -595,9 +601,9 @@ export default function ConsoleDetailPage() {
                     if (modalType === 'keyboard') setSelectedKeyboardId((acc as KeyboardItem).id);
                     if (modalType === 'mouse') setSelectedMouseId((acc as MouseItem).id);
                   };
-                  const price = parsePrice((acc as any).verd).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                  const price = parsePrice((acc as ScreenItem).verd ?? (acc as KeyboardItem).verd ?? (acc as MouseItem).verd).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
                   return (
-                    <button key={String((acc as any).id)} type="button" onClick={onClick}
+                    <button key={String((acc as ScreenItem).id ?? (acc as KeyboardItem).id ?? (acc as MouseItem).id)} type="button" onClick={onClick}
                       className={`w-full text-left border rounded px-3 py-2 text-sm ${active ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/40' : 'border-gray-200 hover:border-gray-300'} cursor-pointer`}>
                       <div className="flex items-center justify-between">
                         <div className="font-medium text-gray-900 truncate">

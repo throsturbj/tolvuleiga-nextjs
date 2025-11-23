@@ -206,7 +206,7 @@ export default function ProductDetailPage() {
           const { data: msRows } = await supabase
             .from("mouses")
             .select("id, nafn, framleidandi, fjolditakk, toltakka, tengimoguleiki, verd")
-            .in("id", msIds as any[]);
+            .in("id", msIds as (string | number)[]);
           if (alive) {
             const list = (msRows || []) as unknown as MouseItem[];
             setMouses(list);
@@ -630,7 +630,7 @@ export default function ProductDetailPage() {
                       setModalLoading(true);
                       try {
                         const bucket = modalType === 'screen' ? 'screens' : modalType === 'keyboard' ? 'keyboards' : 'mouses';
-                        const folder = String((item as any).id);
+                        const folder = String((item as ScreenItem).id ?? (item as KeyboardItem).id ?? (item as MouseItem).id);
                         const res = await fetch('/api/images/list-generic', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -653,9 +653,9 @@ export default function ProductDetailPage() {
                     if (modalType === 'keyboard') setSelectedKeyboardId((item as KeyboardItem).id);
                     if (modalType === 'mouse') setSelectedMouseId((item as MouseItem).id);
                   };
-                  const price = parsePrice((item as any).verd).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                  const price = parsePrice((item as ScreenItem).verd ?? (item as KeyboardItem).verd ?? (item as MouseItem).verd).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
                   return (
-                    <button key={String((item as any).id)} type="button" onClick={onClick}
+                    <button key={String((item as ScreenItem).id ?? (item as KeyboardItem).id ?? (item as MouseItem).id)} type="button" onClick={onClick}
                       className={`w-full text-left border rounded px-3 py-2 text-sm ${active ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/40' : 'border-gray-200 hover:border-gray-300'} cursor-pointer`}>
                       <div className="flex items-center justify-between">
                         <div className="font-medium text-gray-900 truncate">

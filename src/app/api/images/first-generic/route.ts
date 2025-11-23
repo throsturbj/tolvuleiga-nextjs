@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}))
     const bucket = String(body?.bucket || '')
     const foldersRaw = Array.isArray(body?.folders) ? body.folders : []
-    const folders = foldersRaw.map((x: any) => String(x || '')).filter((s: string) => s && !s.includes('..') && s !== '/')
+    const folders = foldersRaw.map((x) => String((x as string) || '')).filter((s: string) => s && !s.includes('..') && s !== '/')
     if (!ALLOWED_BUCKETS.has(bucket)) {
       return NextResponse.json({ ok: false, error: 'Invalid bucket' }, { status: 400 })
     }
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         results[folder] = null
         continue
       }
-      const files = (list || []).filter((f: any) => f && !String(f.name || '').endsWith('/'))
+      const files = (list || []).filter((f) => f && !String((f as { name?: string }).name || '').endsWith('/'))
       if (!files || files.length === 0) {
         results[folder] = null
         continue

@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
-    const files = (list || []).filter((f: any) => f && !String(f.name || '').endsWith('/'))
+    const files = (list || []).filter((f) => f && !String((f as { name?: string }).name || '').endsWith('/'))
     const results: { name: string; path: string; signedUrl: string }[] = []
     for (const f of files) {
       const path = `${pcId}/${f.name}`

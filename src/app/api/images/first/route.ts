@@ -5,7 +5,9 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
     const pcIdsRaw = Array.isArray(body?.pcIds) ? body.pcIds : []
-    const pcIds = pcIdsRaw.map((x: any) => Number(x)).filter((n: any) => Number.isFinite(n) && n > 0)
+    const pcIds = pcIdsRaw
+      .map((x) => Number(x as number | string))
+      .filter((n): n is number => Number.isFinite(n) && n > 0)
     if (pcIds.length === 0) {
       return NextResponse.json({ ok: true, results: {} })
     }
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
         results[id] = null
         continue
       }
-      const files = (list || []).filter((f: any) => f && !String(f.name || '').endsWith('/'))
+      const files = (list || []).filter((f) => f && !String((f as { name?: string }).name || '').endsWith('/'))
       if (!files || files.length === 0) {
         results[id] = null
         continue

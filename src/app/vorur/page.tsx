@@ -318,7 +318,7 @@ export default function VorurAdminPage() {
             const { data: links } = await supabase
               .from("mouse_gamingpcs")
               .select("mouse_id,gamingpc_id")
-              .in("mouse_id", ids as any[]);
+              .in("mouse_id", ids as (string | number)[]);
             const map: Record<string, number[]> = {};
             (links || []).forEach((l: { mouse_id: string | number; gamingpc_id: number }) => {
               const key = String(l.mouse_id);
@@ -679,6 +679,11 @@ export default function VorurAdminPage() {
     e.preventDefault();
     e.stopPropagation();
     if (dragOverIndex !== index) setDragOverIndex(index);
+  };
+  const onDragStartItemBtn = (index: number) => (e: React.DragEvent<HTMLButtonElement>) => {
+    setDragFromIndex(index);
+    e.dataTransfer.setData("text/plain", String(index));
+    e.dataTransfer.effectAllowed = "move";
   };
   const onDragEndItem = () => {
     setDragFromIndex(null);
@@ -1306,11 +1311,11 @@ export default function VorurAdminPage() {
       } else if (data) {
         const created = data as MouseRow;
         if (mouseFormPcIds.length > 0) {
-          const rowsToInsert = mouseFormPcIds.map((pcId) => ({ mouse_id: (created as any).id, gamingpc_id: pcId }));
+          const rowsToInsert = mouseFormPcIds.map((pcId) => ({ mouse_id: created.id, gamingpc_id: pcId }));
           await supabase.from("mouse_gamingpcs").insert(rowsToInsert);
         }
         setMouses((prev) => [created, ...prev]);
-        setMouseIdToPcIds((prev) => ({ ...prev, [String((created as any).id)]: [...mouseFormPcIds] }));
+        setMouseIdToPcIds((prev) => ({ ...prev, [String(created.id)]: [...mouseFormPcIds] }));
         setMouseForm({ nafn: "", framleidandi: "", fjolditakk: "", toltakka: "", tengimoguleiki: "" });
         setMouseFormPcIds([]);
       }
@@ -1368,10 +1373,10 @@ export default function VorurAdminPage() {
         const toAdd = next.filter((x) => !existing.includes(x));
         const toRemove = existing.filter((x) => !next.includes(x));
         if (toRemove.length > 0) {
-          await supabase.from("mouse_gamingpcs").delete().eq("mouse_id", id as any).in("gamingpc_id", toRemove);
+          await supabase.from("mouse_gamingpcs").delete().eq("mouse_id", id).in("gamingpc_id", toRemove);
         }
         if (toAdd.length > 0) {
-          const rowsToInsert = toAdd.map((pcId) => ({ mouse_id: id as any, gamingpc_id: pcId }));
+          const rowsToInsert = toAdd.map((pcId) => ({ mouse_id: id, gamingpc_id: pcId }));
           await supabase.from("mouse_gamingpcs").insert(rowsToInsert);
         }
         setMouseIdToPcIds((prev) => ({ ...prev, [String(id)]: [...next] }));
@@ -2971,7 +2976,7 @@ export default function VorurAdminPage() {
                           <button
                             type="button"
                             draggable
-                            onDragStart={onDragStartItem(idx) as any}
+                            onDragStart={onDragStartItemBtn(idx)}
                             onDragEnd={onDragEndItem}
                             className="inline-flex items-center justify-center h-5 w-5 rounded bg-white/90 text-gray-700 hover:bg-white cursor-grab active:cursor-grabbing"
                             title="Draga til að raða"

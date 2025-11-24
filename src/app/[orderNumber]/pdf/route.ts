@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, ctx: RouteParams) {
       const { data: fileData, error: dlErr } = await admin.storage.from(bucket).download(existingPath)
       if (!dlErr && fileData) {
         const ab = await fileData.arrayBuffer()
-        return new NextResponse(Buffer.from(ab), {
+        return new NextResponse(new Uint8Array(ab), {
           headers: {
             'Content-Type': 'application/pdf',
             'Content-Disposition': `inline; filename="${filename}"`,
@@ -59,7 +59,7 @@ export async function GET(_req: NextRequest, ctx: RouteParams) {
       } catch {}
     })()
 
-    return new NextResponse(buffer, {
+    return new NextResponse(buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${filename}"`,

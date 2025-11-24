@@ -4,9 +4,9 @@ import { getServerSupabase } from '@/lib/supabase-server'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
-    const pcIdsRaw = Array.isArray(body?.pcIds) ? body.pcIds : []
+    const pcIdsRaw: unknown[] = Array.isArray(body?.pcIds) ? (body.pcIds as unknown[]) : []
     const pcIds = pcIdsRaw
-      .map((x) => Number(x as number | string))
+      .map((x: unknown) => Number(x as number | string))
       .filter((n): n is number => Number.isFinite(n) && n > 0)
     if (pcIds.length === 0) {
       return NextResponse.json({ ok: true, results: {} })

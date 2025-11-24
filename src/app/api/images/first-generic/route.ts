@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase-server'
 
-const ALLOWED_BUCKETS = new Set(['screens', 'keyboards', 'mouses', 'consoles'])
+const ALLOWED_BUCKETS: Set<string> = new Set(['screens', 'keyboards', 'mouses', 'consoles'])
 
 export async function POST(req: NextRequest) {
   try {
     const body: unknown = await req.json().catch(() => ({}))
 
     // Extract bucket (must be a string)
-    const bucket =
-      typeof body === 'object' &&
-      body !== null &&
-      typeof (body as Record<string, unknown>).bucket === 'string'
-        ? (body as Record<string, unknown>).bucket
-        : ''
+    let bucket = ''
+    if (typeof body === 'object' && body !== null) {
+      const b = (body as Record<string, unknown>).bucket
+      if (typeof b === 'string') {
+        bucket = b
+      }
+    }
 
     // Extract folders as unknown[]
     const foldersRaw: unknown[] =

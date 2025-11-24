@@ -48,10 +48,11 @@ export async function GET(_req: NextRequest, ctx: RouteParams) {
     }
 
     // Fallback: generate on the fly and (best-effort) cache it to storage
-    const arrayBuffer =
-  buffer instanceof Uint8Array
-    ? buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
-    : buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+    const { buffer } = await generateOrderPdfBuffer(orderRow.id)
+    const arrayBuffer = buffer.buffer.slice(
+  buffer.byteOffset,
+  buffer.byteOffset + buffer.byteLength
+)
 
     // Upload asynchronously; response should not wait for this
     ;(async () => {

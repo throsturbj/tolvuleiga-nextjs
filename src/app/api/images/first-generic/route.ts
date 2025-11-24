@@ -7,26 +7,36 @@ export async function POST(req: NextRequest) {
   try {
     const body: unknown = await req.json().catch(() => ({}))
 
-    // Ensure we safely extract known fields from unknown JSON
-    const bucket = typeof (body as any)?.bucket === 'string' ? (body as any).bucket : ''
-    const foldersRaw: unknown[] = Array.isArray((body as any)?.folders)
-      ? (body as any).folders
-      : []
+    // Extract bucket (must be a string)
+    const bucket =
+      typeof body === 'object' &&
+      body !== null &&
+      typeof (body as Record<string, unknown>).bucket === 'string'
+        ? (body as Record<string, unknown>).bucket
+        : ''
 
-    // Convert elements into strings safely and sanitize
+    // Extract folders as unknown[]
+    const foldersRaw: unknown[] =
+      typeof body === 'object' &&
+      body !== null &&
+      Array.isArray((body as Record<string, unknown>).folders)
+        ? ((body as Record<string, unknown>).folders as unknown[])
+        : []
+
+    // Convert to sanitized string[]
     const folders = foldersRaw
       .map((x: unknown) => String(x ?? ''))
-      .filter((s: string) => s && !s.includes('..') && s !== '/')
+      .filter((s) => s && !s.includes('..') && s !== '/')
 
     // Validate bucket
     if (!ALLOWED_BUCKETS.has(bucket)) {
       return NextResponse.json({ ok: false, error: 'Invalid bucket' }, { status: 400 })
     }
 
+    // Validate folder count
     if (folders.length === 0) {
       return NextResponse.json({ ok: true, results: {} })
     }
-
     if (folders.length > 100) {
       return NextResponse.json({ ok: false, error: 'Too many folders' }, { status: 400 })
     }
@@ -46,12 +56,20 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      const files = (list || []).filter((f: unknown) => {
-        const name = typeof (f as any)?.name === 'string' ? (f as any).name : ''
-        return name && !name.endsWith('/')
+      // Filter valid file objects
+      const files = (list ?? []).filter((f: unknown) => {
+        if (
+          typeof f === 'object' &&
+          f !== null &&
+          typeof (f as Record<string, unknown>).name === 'string'
+        ) {
+          const name = (f as Record<string, unknown>).name as string
+          return !name.endsWith('/')
+        }
+        return false
       })
 
-      if (!files.length) {
+      if (files.length === 0) {
         results[folder] = null
         continue
       }
@@ -72,7 +90,6 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, results })
-
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unexpected error'
     return NextResponse.json({ ok: false, error: message }, { status: 500 })

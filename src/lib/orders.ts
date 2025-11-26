@@ -14,6 +14,11 @@ export type OrderRow = {
 	gamingpc_uuid?: number | null
 	gamingconsole_uuid?: string | null
 	created_at?: string | null
+	skjar?: boolean | null
+	lyklabord?: boolean | null
+	mus?: boolean | null
+	trygging?: boolean | null
+	numberofextracon?: number | null
 }
 
 export type UserRow = {
@@ -49,7 +54,7 @@ export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderR
 	const supabase = getServerSupabase()
 	const { data: order, error: orderErr } = await supabase
 		.from('orders')
-		.select('id, orderNumber, auth_uid, timabilFra, timabilTil, verd, gamingpc_uuid, gamingconsole_uuid, created_at')
+		.select('id, orderNumber, auth_uid, timabilFra, timabilTil, verd, gamingpc_uuid, gamingconsole_uuid, created_at, skjar, lyklabord, mus, trygging, numberofextracon')
 		.eq('id', orderId)
 		.single<OrderRow>()
 	if (orderErr || !order) throw new Error('Order not found')
@@ -87,9 +92,11 @@ export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderR
 	return { order, user, pc, console }
 }
 
-function formatKr(n: number | null | undefined) {
-	if (!n || !Number.isFinite(n)) return '—'
-	return `${n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} kr`
+function formatKr(value: number | string | null | undefined) {
+	if (value === null || value === undefined) return '—'
+	const n = typeof value === 'string' ? Number(value.replace(/\s/g, '').replace(',', '.')) : value
+	if (!Number.isFinite(n)) return '—'
+	return `${String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} kr`
 }
 
 async function streamPdfToBuffer(doc: PDFDocument): Promise<Buffer> {
@@ -121,6 +128,15 @@ async function loadBodyFont(): Promise<Buffer> {
 
 export async function generateOrderPdfBuffer(orderId: string): Promise<{ buffer: Buffer; filename: string; meta: Awaited<ReturnType<typeof fetchOrderBundle>> }> {
 	const bundle = await fetchOrderBundle(orderId)
+	// Fetch email from auth users using service role
+	let authEmail: string | null = null
+	if (bundle.order.auth_uid) {
+		try {
+			const admin = getServerSupabase()
+			const { data } = await admin.auth.admin.getUserById(bundle.order.auth_uid)
+			authEmail = data?.user?.email ?? null
+		} catch {}
+	}
 	const doc = new PDFDocument({ size: 'A4', margin: 50 })
 	;(doc as unknown as { fontkit: typeof fontkit }).fontkit = fontkit
 	const buf = await loadBodyFont()
@@ -136,6 +152,7 @@ export async function generateOrderPdfBuffer(orderId: string): Promise<{ buffer:
 	doc.fontSize(12).fillColor('#444')
 	doc.text(`Nafn: ${bundle.user?.full_name || '—'}`)
 	doc.text(`Kennitala: ${bundle.user?.kennitala || '—'}`)
+	doc.text(`Netfang: ${authEmail || '—'}`)
 	doc.text(`Sími: ${bundle.user?.phone || '—'}`)
 	doc.text(`Heimilisfang: ${bundle.user?.address || '—'}`)
 	doc.text(`Borg/Póstnúmer: ${bundle.user?.city || '—'} ${bundle.user?.postal_code || ''}`)
@@ -165,6 +182,34 @@ export async function generateOrderPdfBuffer(orderId: string): Promise<{ buffer:
 	doc.text(`Til: ${bundle.order.timabilTil ? new Date(bundle.order.timabilTil).toLocaleDateString('is-IS') : '—'}`)
 	doc.moveDown()
 
+	// Trygging
+	doc.fontSize(14).fillColor('#000').text('Trygging', { underline: true }).moveDown(0.5)
+	doc.fontSize(12).fillColor('#444')
+	doc.text(`${bundle.order.trygging ? 'Já' : 'Nei'}`)
+	doc.moveDown()
+
+	// Aukahlutir
+	{
+		const addons: string[] = []
+		if (bundle.order.skjar) addons.push('Skjár')
+		if (bundle.order.lyklabord) addons.push('Lyklaborð')
+		if (bundle.order.mus) addons.push('Mús')
+		const extra = (typeof bundle.order.numberofextracon === 'number' && bundle.order.numberofextracon > 0)
+			? `Auka fjarstýringar: ${bundle.order.numberofextracon}`
+			: null
+		if (addons.length > 0 || extra) {
+			doc.fontSize(14).fillColor('#000').text('Aukahlutir', { underline: true }).moveDown(0.5)
+			doc.fontSize(12).fillColor('#444')
+			if (addons.length > 0) {
+				doc.text(addons.join(', '))
+			}
+			if (extra) {
+				doc.text(extra)
+			}
+			doc.moveDown()
+		}
+	}
+
 	doc.fontSize(14).fillColor('#000').text('Verð', { underline: true }).moveDown(0.5)
 	doc.fontSize(16).fillColor('#1f2937').text(`${formatKr(bundle.order.verd ?? null)}/mánuði`)
 	doc.moveDown(2)
@@ -176,9 +221,9 @@ export async function generateOrderPdfBuffer(orderId: string): Promise<{ buffer:
 	return { buffer, filename, meta: bundle }
 }
 
-export function buildAdminOrderText(meta: Awaited<ReturnType<typeof fetchOrderBundle>>): string {
+export function buildAdminOrderText(meta: Awaited<ReturnType<typeof fetchOrderBundle>>, userEmail?: string | null, message?: string | null): string {
 	const { order, user, pc, console } = meta
-	return [
+	const parts = [
 		'Ný pöntun fyrir Tölvuleigu',
 		'',
 		`Pöntunarnúmer: ${order.orderNumber ?? order.id}`,
@@ -187,6 +232,7 @@ export function buildAdminOrderText(meta: Awaited<ReturnType<typeof fetchOrderBu
 		'Viðskiptavinur:',
 		`Nafn: ${user?.full_name || '—'}`,
 		`Kennitala: ${user?.kennitala || '—'}`,
+		`Netfang: ${userEmail || '—'}`,
 		`Sími: ${user?.phone || '—'}`,
 		`Heimilisfang: ${user?.address || '—'}`,
 		`Borg/Póstnúmer: ${user?.city || '—'} ${user?.postal_code || ''}`,
@@ -213,8 +259,31 @@ export function buildAdminOrderText(meta: Awaited<ReturnType<typeof fetchOrderBu
 		`Frá: ${order.timabilFra ? new Date(order.timabilFra).toLocaleDateString('is-IS') : '—'}`,
 		`Til: ${order.timabilTil ? new Date(order.timabilTil).toLocaleDateString('is-IS') : '—'}`,
 		'',
-		`Verð: ${formatKr(order.verd ?? null)}/mánuði`,
-	].join('\n')
+		`Trygging: ${order.trygging ? 'Já' : 'Nei'}`,
+		'',
+		(() => {
+			const addons: string[] = []
+			if (order.skjar) addons.push('Skjár')
+			if (order.lyklabord) addons.push('Lyklaborð')
+			if (order.mus) addons.push('Mús')
+			const extra = (typeof order.numberofextracon === 'number' && order.numberofextracon > 0) ? `Auka fjarstýringar: ${order.numberofextracon}` : null
+			if (addons.length === 0 && !extra) return 'Aukahlutir: —'
+			return `Aukahlutir: ${[addons.length ? addons.join(', ') : null, extra].filter(Boolean).join(' · ')}`
+		})(),
+	] as string[]
+
+	// Include optional customer message
+	const trimmed = (message ?? '').trim()
+	if (trimmed.length > 0) {
+		parts.push('')
+		parts.push('Skilaboð frá viðskiptavini:')
+		parts.push(trimmed)
+	}
+
+	parts.push('')
+	parts.push(`Verð: ${formatKr(order.verd ?? null)}/mánuði`)
+
+	return parts.join('\n')
 }
 
 

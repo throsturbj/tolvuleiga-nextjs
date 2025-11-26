@@ -113,7 +113,7 @@ export default function ConsoleDetailPage() {
     (async () => {
       try {
         const [sRes, kRes, mRes] = await Promise.all([
-          supabase.from("screen_gamingconsoles").select("screen_id").eq("console_id", consoleId),
+          supabase.from("screen_gamingconsoles").select("screen_id").eq("gamingconsole_id", consoleId),
           supabase.from("keyboard_gamingconsoles").select("keyboard_id").eq("console_id", consoleId),
           supabase.from("mouse_gamingconsoles").select("mouse_id").eq("console_id", consoleId),
         ] as const);
@@ -148,7 +148,7 @@ export default function ConsoleDetailPage() {
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [consoleId]);
 
   const parsePrice = (s: string | null | undefined) => {
     const digits = String(s || "").replace(/\D+/g, "");
@@ -397,7 +397,7 @@ export default function ConsoleDetailPage() {
             {(screens.length + keyboards.length + mouses.length > 0) || (extraControllersMax > 0) ? (
             <div className="space-y-3">
               <p className="text-sm text-gray-700 font-medium">Aukahlutir</p>
-              <div className="grid grid-cols-3 gap-3 justify-center justify-items-center">
+              <div className="grid grid-cols-3 gap-3 justify-center justify-items-center items-end">
                 {extraControllersMax > 0 ? (
                   <div className="col-span-3 sm:col-span-1 flex flex-col items-center gap-2">
                     <div className="text-sm text-gray-700">Auka fjarðstýringar</div>
@@ -428,7 +428,7 @@ export default function ConsoleDetailPage() {
                   </div>
                 ) : null}
                 {screens.length > 0 ? (
-                  <div className="flex flex-col items-center gap-1">
+                  <div className="flex flex-col items-center gap-1 self-end">
                     <label htmlFor="toggle-skrar" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                       <input id="toggle-skrar" type="checkbox" className="sr-only" checked={addons.skjár}
                         onChange={(e) => setAddons({ ...addons, skjár: e.target.checked })} />
@@ -443,7 +443,7 @@ export default function ConsoleDetailPage() {
                   </div>
                 ) : null}
                 {keyboards.length > 0 ? (
-                  <div className="flex flex-col items-center gap-1">
+                  <div className="flex flex-col items-center gap-1 self-end">
                     <label htmlFor="toggle-lyklabord" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                       <input id="toggle-lyklabord" type="checkbox" className="sr-only" checked={addons.lyklabord}
                         onChange={(e) => setAddons({ ...addons, lyklabord: e.target.checked })} />
@@ -458,7 +458,7 @@ export default function ConsoleDetailPage() {
                   </div>
                 ) : null}
                 {mouses.length > 0 ? (
-                  <div className="flex flex-col items-center gap-1">
+                  <div className="flex flex-col items-center gap-1 self-end">
                     <label htmlFor="toggle-mus" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                       <input id="toggle-mus" type="checkbox" className="sr-only" checked={addons.mus}
                         onChange={(e) => setAddons({ ...addons, mus: e.target.checked })} />
@@ -516,6 +516,7 @@ export default function ConsoleDetailPage() {
                         },
                         insured,
                         finalPrice,
+                        extraControllers: extraControllersClamped,
                         selected: {
                           screenId: selectedScreenId,
                           keyboardId: selectedKeyboardId,

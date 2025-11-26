@@ -43,9 +43,21 @@ Leigusali áskilur sér rétt til að loka aðgangi að búnaði eða endurkalla
 			<p className="text-black/70 dark:text-white/70">11. Lög og varnarþing</p>
 			<p className="text-black/70 dark:text-white/70">Samningur þessi fellur undir íslensk lög.
 			Rísi ágreiningur vegna leigusamnings eða skilmála skal hann rekin fyrir Héraðsdómi Reykjavíkur, nema annað sé ákveðið með samkomulagi.</p>
-
+			<p className="text-black/70 dark:text-white/70">12. Seinkunargjald</p>
+			<p className="text-black/70 dark:text-white/70">Ef búnaði er ekki skilað á umsömdum skiladegi áskilur leigusali sér rétt til að innheimta seinkunargjald að upphæð 2.500 kr. fyrir hvern dag sem liður frá samningsbundnum skiladegi og þar til búnaður er skilaður. Seinkunargjald kemur til viðbótar við venjulega leigu.</p>
+			<p className="text-black/70 dark:text-white/70">13. Uppsagnarákvæði</p>
+			<p className="text-black/70 dark:text-white/70">Ef leigjandi er með áskriftarleigu og óskar eftir að segja henni upp, gildir tveggja mánaða uppsagnarfrestur frá og með næstu mánaðamótum. Samningnum verður ekki slitið á leigutíma nema með skriflegu samþykki báða aðila.</p>
+			<p className="text-black/70 dark:text-white/70">14. Óheimil notkun á tölvubúnaði</p>
+			<p className="text-black/70 dark:text-white/70">Uppsetning ólöglegs hugbúnaðar - Þar á meðal óleyfileg afrit, sprakkar, “crack” forrit eða hugbúnaður sem brýtur höfundarrétt. 
+															Niðurhal eða dreifing ólöglegs efnis T.d. höfundarréttarvarið efni, klámfengið efni sem brýtur lög, eða annað ólöglegt stafrænt efni. 
+															Uppsetning spilliforrita eða áhættusamra forrita - Þar með talið forrit sem geta valdið tjóni á kerfinu, neti eða búnaði. 
+															Breytingar á hugbúnaði eða stýrikerfi án leyfir - Óheimilt er að fjarlægja stýrikerfi, framkvæma “factory reset”, eða breyta kerfisstillingum sem hafa áhrif á virkni tölvunnar. 
+															Netaðgangur í ólögmætum tilgangi T.d. tölvuinnbrot, skönnun á netkerfum, dreifing árása (DDoS), svikastarfsemi eða önnur refsinæm nethegðun. 
+															Lán eða framleiga búnaðar til þriðja aðila - Búnaður skal eingöngu nota af skráðum leigutaka nema annað sé samþykkt skriflega af leigusala. 
+															Líkamleg misnotkun búnaðar - T.d. högg, raki, vökvi, yfirhitun eða önnur meðferð sem telst ekki eðlileg notkun. 
+															Fjarlæging merkimiða, raðnúmera eða öryggiseininga - Allt slíkt er bannað. 
+															Öryggisráðstafanir - Leigutaki skal ekki afvirkja vírusvörn, eldveggi eða aðrar öryggisvarnir sem leigusali setur upp. 
+															Viðurlög við brotum – Innheimta kostnað vegna viðgerða, enduruppsetningar eða tjóns. Innheimta búnað tafarlaust. Segja upp leigusamningi samkvæmt skilmálum. Vísa máli til viðeigandi stjórnvalda ef lögbrot eiga sér stað. </p>
 		</section>
 	);
 }
-
-

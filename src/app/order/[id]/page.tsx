@@ -29,7 +29,7 @@ interface UserProfile {
   city: string;
   postal_code: string;
   kennitala?: string;
-  ibudnumber?: string;
+  ibudnumer?: string;
 }
 
 export default function OrderConfirmationPage() {
@@ -173,7 +173,7 @@ export default function OrderConfirmationPage() {
               address: '',
               city: '',
               postal_code: '',
-              ibudnumber: ''
+              ibudnumer: ''
             };
             loadedForUidRef.current = uid;
             setUserProfile(basicProfile);
@@ -245,7 +245,7 @@ export default function OrderConfirmationPage() {
       address: typeof meta.address === 'string' ? meta.address : '',
       city: typeof meta.city === 'string' ? meta.city : '',
       postal_code: typeof meta.postal_code === 'string' ? meta.postal_code : '',
-      ibudnumber: typeof meta.ibudnumber === 'string' ? meta.ibudnumber : '',
+      ibudnumer: typeof meta.ibudnumber === 'string' ? meta.ibudnumber : '',
     };
   })();
 
@@ -314,7 +314,7 @@ export default function OrderConfirmationPage() {
               fetch('/api/order/send-emails', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderId: inserted.id, userEmail }),
+                body: JSON.stringify({ orderId: inserted.id, userEmail, message: formData.message?.trim() || undefined }),
               }).catch(() => {});
             }
           }
@@ -464,9 +464,9 @@ export default function OrderConfirmationPage() {
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Borg/Póstnúmer:</span> {effectiveProfile.city || 'Ekki skráð'} {effectiveProfile.postal_code || ''}
                     </p>
-                    {effectiveProfile.ibudnumber ? (
+                    {effectiveProfile.ibudnumer ? (
                       <p className="text-sm text-gray-600">
-                        <span className="font-medium">Íbúðarnúmer:</span> {effectiveProfile.ibudnumber}
+                        <span className="font-medium">Íbúðarnúmer:</span> {effectiveProfile.ibudnumer}
                       </p>
                     ) : null}
                   </div>

@@ -191,7 +191,7 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
                 </svg>
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Auðveltar uppfærslur</h3>
+              <h3 className="mt-4 text-lg font-semibold text-gray-900">Auðveldar uppfærslur</h3>
               <p className="mt-2 text-gray-600">Auðvelt er að uppfæra íhluti samkvæmt samningi, svo tölvan þín heldur alltaf í við nýjustu tækni.</p>
             </div>
             <div className="text-center">
@@ -215,7 +215,7 @@ export default function Home() {
               Tölvur
             </h2>
             <p className="mt-4 text-lg text-gray-600">
-              Finndu tölvu sem passar þér best.
+              Finndu tölvu sem hentar þér best.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

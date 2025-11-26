@@ -92,7 +92,16 @@ export async function sendOrderEmails(args: {
 	await sendMail({
 		to: args.userEmail,
 		subject: 'Pöntunarstaðfesting',
-		text: 'Takk fyrir pöntunina! Við höfum bætt PDF staðfestingu við í viðhengi.',
+		text: `Kæri viðskiptavinur,
+
+Takk kærlega fyrir að panta hjá okkur tölvu. Við munum strax byrja að setja hana saman fyrir þig.
+
+Í millitíðinni þarft þú að greiða reikning sem við munum senda þér í heimabankann. Greiðslan mun staðfesta ferlið hjá okkur.
+
+Í viðhengi máttu sjá pöntunarstaðfestinguna þína.
+
+Kær kveðja,
+Tölvuleiga`,
 		attachments: args.pdfAttachment ? [
 			{ filename: args.pdfAttachment.filename, content: args.pdfAttachment.content, contentType: 'application/pdf' },
 		] : undefined,

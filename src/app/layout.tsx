@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Tölvuleiga",
-  description: "Find and rent quality properties with ease.",
+  description: "Leigja tölvubúnað, spila og skila.",
   icons: {
     icon: [
       { url: "/img/logo.png", sizes: "16x16", type: "image/png" },

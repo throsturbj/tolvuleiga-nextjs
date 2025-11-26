@@ -25,6 +25,7 @@ interface Order {
   verd?: number;
   gamingpc_uuid?: number | null;
   gamingconsole_uuid?: string | null;
+  numberofextracon?: number | null;
   pdf_url?: string | null;
 }
 
@@ -54,6 +55,63 @@ export default function DashboardPage() {
   const [openPcId, setOpenPcId] = useState<number | null>(null);
   const [busyOpenPdfById, setBusyOpenPdfById] = useState<Record<string, boolean>>({});
   const [pcFirstImages, setPcFirstImages] = useState<Record<number, { path: string; signedUrl: string } | null>>({});
+  const [openConsoleId, setOpenConsoleId] = useState<string | null>(null);
+  const [consoleById, setConsoleById] = useState<Record<string, { id: string; nafn?: string | null; geymsluplass?: string | null; tengi?: string | null }>>({});
+  const [consoleModalImages, setConsoleModalImages] = useState<{ path: string; signedUrl: string }[]>([]);
+  const [consoleImagesLoading, setConsoleImagesLoading] = useState<boolean>(false);
+  const [extendOrderId, setExtendOrderId] = useState<string | null>(null);
+  const [extendMonths, setExtendMonths] = useState<number>(1);
+  const [extendBusy, setExtendBusy] = useState<boolean>(false);
+  const [extendError, setExtendError] = useState<string | null>(null);
+
+  function addMonthsPreservingEnd(date: Date, months: number): Date {
+    const d = new Date(date);
+    const day = d.getDate();
+    d.setMonth(d.getMonth() + months);
+    if (d.getDate() < day) d.setDate(0);
+    return d;
+  }
+
+  async function handleExtendConfirm() {
+    if (!extendOrderId || !Number.isFinite(extendMonths) || extendMonths <= 0) {
+      setExtendError('Ógilt gildi.');
+      return;
+    }
+    try {
+      setExtendBusy(true);
+      setExtendError(null);
+      const order = orders.find(o => o.id === extendOrderId);
+      if (!order || !order.timabilTil) {
+        setExtendError('Vantar núverandi lokadagsetningu.');
+        return;
+      }
+      const base = new Date(order.timabilTil);
+      if (isNaN(base.getTime())) {
+        setExtendError('Ógild dagsetning í pöntun.');
+        return;
+      }
+      const monthsToAdd = Math.min(12, Math.max(1, Math.trunc(Number(extendMonths) || 1)));
+      const next = addMonthsPreservingEnd(base, monthsToAdd);
+      const nextIso = next.toISOString();
+
+      const { error } = await supabase
+        .from('orders')
+        .update({ timabilTil: nextIso })
+        .eq('id', extendOrderId);
+
+      if (error) {
+        setExtendError(error.message || 'Gat ekki framlengt.');
+        return;
+      }
+      setExtendOrderId(null);
+      setExtendMonths(1);
+      await retryFetchOrders();
+    } catch (e) {
+      setExtendError(e instanceof Error ? e.message : 'Óþekkt villa');
+    } finally {
+      setExtendBusy(false);
+    }
+  }
 
   // Redirect to home if signed out
   useEffect(() => {
@@ -328,6 +386,49 @@ export default function DashboardPage() {
     return () => { alive = false; };
   }, [orders, pcFirstImages]);
 
+  // Load console details and images when opening console modal
+  useEffect(() => {
+    if (!openConsoleId) return;
+    let alive = true;
+    (async () => {
+      try {
+        if (!consoleById[openConsoleId]) {
+          const { data } = await supabase
+            .from('gamingconsoles')
+            .select('id, nafn, geymsluplass, tengi')
+            .eq('id', openConsoleId)
+            .single();
+          if (!alive) return;
+          if (data) {
+            setConsoleById((prev) => ({ ...prev, [openConsoleId]: data as { id: string; nafn?: string; geymsluplass?: string; tengi?: string } }));
+          }
+        }
+      } catch {}
+      try {
+        setConsoleImagesLoading(true);
+        setConsoleModalImages([]);
+        const res = await fetch('/api/images/list-generic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bucket: 'consoles', folder: openConsoleId }),
+        });
+        if (!alive) return;
+        if (res.ok) {
+          const j = await res.json();
+          const files: { path: string; signedUrl: string }[] = (j?.files || []).map((f: { path: string; signedUrl: string }) => ({ path: f.path, signedUrl: f.signedUrl }));
+          setConsoleModalImages(files);
+        } else {
+          setConsoleModalImages([]);
+        }
+      } catch {
+        if (alive) setConsoleModalImages([]);
+      } finally {
+        if (alive) setConsoleImagesLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [openConsoleId, consoleById]);
+
   const getStatusMeta = (status: string) => {
     const accentBadge = 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30';
     const neutralBadge = 'bg-gray-100 text-gray-800 ring-1 ring-gray-300';
@@ -530,6 +631,11 @@ export default function DashboardPage() {
                   if (order.skjar) addons.push('Skjár');
                   if (order.lyklabord) addons.push('Lyklaborð');
                   if (order.mus) addons.push('Mús');
+                  const extraControllersText =
+                    order.gamingconsole_uuid && typeof order.numberofextracon === 'number' && order.numberofextracon > 0
+                      ? `${order.numberofextracon} Auka fjarðstýringar`
+                      : null;
+                  const addonsText = [addons.length ? addons.join(', ') : null, extraControllersText].filter(Boolean).join(' · ');
                   const meta = getStatusMeta(order.status);
                   const progressMap = [10, 57, 100];
                   const progressWidth = `${progressMap[Math.min(Math.max(meta.step, 0), 2)]}%`;
@@ -545,12 +651,12 @@ export default function DashboardPage() {
                                 Pöntun #{order.orderNumber || order.id.slice(-8)}
                               </h4>
                             </div>
-                            <div className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                            <div className="mt-2 flex items-center justify-between gap-2 text-sm text-gray-700 w-full">
                               {order.gamingpc_uuid ? (
                                 <button
                                   type="button"
                                   onClick={() => setOpenPcId(order.gamingpc_uuid!)}
-                                  className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium"
+                                  className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium min-w-0 max-w-[75%] overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer"
                                 >
                                   {pcNamesById[order.gamingpc_uuid] || 'Vara'}
                                 </button>
@@ -558,12 +664,12 @@ export default function DashboardPage() {
                                 <button
                                   type="button"
                                   onClick={() => router.push(`/console/${order.gamingconsole_uuid}`)}
-                                  className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium"
+                                  className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium min-w-0 max-w-[75%] overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer"
                                 >
                                   {consoleNamesById[order.gamingconsole_uuid] || 'Vara'}
                                 </button>
                               ) : 'Vara'}
-                              {(() => { const p = formatPrice(order.verd); return p ? (<span className="ml-1 text-gray-900 font-semibold">{p}</span>) : null; })()}
+                              {(() => { const p = formatPrice(order.verd); return p ? (<span className="ml-1 text-gray-900 font-semibold whitespace-nowrap flex-shrink-0">{p}</span>) : null; })()}
                             </div>
                           </div>
                           <div className="text-right">
@@ -613,7 +719,7 @@ export default function DashboardPage() {
 
                         {/* Addons label above created line */}
                         <div className="mt-3 text-xs md:text-sm text-gray-700 text-center">
-                          <span className="text-gray-500">Aukahlutir:</span> <span className="font-medium text-gray-900">{addons.length ? addons.join(', ') : '—'}</span>
+                          <span className="text-gray-500">Aukahlutir:</span> <span className="font-medium text-gray-900">{addonsText || '—'}</span>
                         </div>
 
                         {/* Created line between boxes and buttons */}
@@ -625,7 +731,7 @@ export default function DashboardPage() {
                               type="button"
                               onClick={() => handleOpenPdf(order.id, order.pdf_url, order.orderNumber)}
                               disabled={!!busyOpenPdfById[order.id]}
-                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-white bg-[var(--color-accent)] hover:brightness-110 disabled:opacity-50"
+                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-white bg-[var(--color-accent)] hover:brightness-110 disabled:opacity-50 cursor-pointer"
                             >
                               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 11v8m0 0l-3-3m3 3l3-3M5 7h14"/></svg>
                               Sækja reikning
@@ -635,18 +741,33 @@ export default function DashboardPage() {
                             <button
                               type="button"
                               onClick={() => setOpenPcId(order.gamingpc_uuid!)}
-                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50"
+                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
+                            >
+                              Sjá vöru
+                            </button>
+                          ) : order.gamingconsole_uuid ? (
+                            <button
+                              type="button"
+                              onClick={() => setOpenConsoleId(order.gamingconsole_uuid!)}
+                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
                             >
                               Sjá vöru
                             </button>
                           ) : null}
+                          <button
+                            type="button"
+                            onClick={() => { setExtendOrderId(order.id); setExtendMonths(1); setExtendError(null); }}
+                            className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
+                          >
+                            Framlengja
+                          </button>
                         </div>
                       </div>
                       </div>
                       {order.trygging ? (
                         <div className="mt-2 mb-1 text-center">
                           <span className="inline-block text-[10px] md:text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-green-500/30">
-                            Pöntun trygð
+                            Pöntun tryggð
                           </span>
                         </div>
                       ) : null}
@@ -660,11 +781,11 @@ export default function DashboardPage() {
         {/* Product modal */}
         {openPcId && pcById[openPcId] ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40" onClick={() => setOpenPcId(null)} />
+            <div className="absolute inset-0 bg-black/40 cursor-pointer" onClick={() => setOpenPcId(null)} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6 z-10">
               <div className="flex items-start justify-between mb-4">
                 <h3 className="text-xl font-bold text-gray-900">{pcById[openPcId].name}</h3>
-                <button onClick={() => setOpenPcId(null)} className="text-gray-500 hover:text-gray-700">✕</button>
+                <button onClick={() => setOpenPcId(null)} className="text-gray-500 hover:text-gray-700 cursor-pointer">✕</button>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
@@ -712,7 +833,121 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="mt-4 text-right">
-                <button onClick={() => setOpenPcId(null)} className="inline-flex items-center px-3 py-1.5 text-sm rounded-full ring-1 ring-gray-300 text-gray-700 hover:bg-gray-50">Loka</button>
+                <button onClick={() => setOpenPcId(null)} className="inline-flex items-center px-3 py-1.5 text-sm rounded-full ring-1 ring-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer">Loka</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {/* Extend rental modal */}
+        {extendOrderId ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40 cursor-pointer" onClick={() => { if (!extendBusy) { setExtendOrderId(null); } }} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 z-10">
+              <div className="flex items-start justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Framlengja leigutímabil</h3>
+                <button onClick={() => { if (!extendBusy) { setExtendOrderId(null); } }} className="text-gray-500 hover:text-gray-700 cursor-pointer">✕</button>
+              </div>
+
+              <div className="space-y-3 text-sm">
+                <div className="text-gray-700">
+                  <span className="text-gray-500">Núverandi lokadagsetning:</span>{' '}
+                  {(() => {
+                    const ord = orders.find(o => o.id === extendOrderId);
+                    return formatDateOnly(ord?.timabilTil);
+                  })()}
+                </div>
+
+                <label className="block">
+                  <span className="block text-gray-700 mb-1">Bæta við mánuðum</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    step={1}
+                    value={extendMonths}
+                    onChange={(e) => setExtendMonths(Math.min(12, Math.max(1, Number(e.target.value || 1))))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)]"
+                  />
+                </label>
+
+                <div className="text-gray-700">
+                  <span className="text-gray-500">Ný lokadagsetning:</span>{' '}
+                  {(() => {
+                    const ord = orders.find(o => o.id === extendOrderId);
+                    if (!ord?.timabilTil) return '—';
+                    const base = new Date(ord.timabilTil);
+                    if (isNaN(base.getTime())) return '—';
+                    const next = addMonthsPreservingEnd(base, extendMonths);
+                    return next.toLocaleDateString('is-IS');
+                  })()}
+                </div>
+
+                {extendError ? (
+                  <div className="p-2 text-xs rounded bg-red-50 text-red-700 border border-red-200">{extendError}</div>
+                ) : null}
+              </div>
+
+              <div className="mt-5 flex justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={extendBusy}
+                  onClick={() => { if (!extendBusy) { setExtendOrderId(null); } }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Hætta við
+                </button>
+                <button
+                  type="button"
+                  disabled={extendBusy}
+                  onClick={handleExtendConfirm}
+                  className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] rounded-md hover:brightness-110 disabled:opacity-50"
+                >
+                  {extendBusy ? 'Uppfæri…' : 'Staðfesta'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {/* Console modal */}
+        {openConsoleId && consoleById[openConsoleId] ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40 cursor-pointer" onClick={() => setOpenConsoleId(null)} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6 z-10">
+              <div className="flex items-start justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">{consoleById[openConsoleId].nafn || 'Leikjatölva'}</h3>
+                <button onClick={() => setOpenConsoleId(null)} className="text-gray-500 hover:text-gray-700 cursor-pointer">✕</button>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <div className="aspect-video rounded-xl overflow-hidden mb-3 bg-gray-100 flex items-center justify-center">
+                    {consoleImagesLoading ? (
+                      <div className="text-gray-400 text-sm">Hleð myndum…</div>
+                    ) : consoleModalImages.length > 0 ? (
+                      <img
+                        src={consoleModalImages[0].signedUrl}
+                        alt={consoleById[openConsoleId].nafn || ''}
+                        className="w-full h-full object-contain"
+                        loading="eager"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300" />
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm content-start">
+                  <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
+                    <p className="text-gray-500">Geymslupláss</p>
+                    <p className="mt-1 font-semibold text-gray-900">{consoleById[openConsoleId].geymsluplass || '—'}</p>
+                  </div>
+                  <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
+                    <p className="text-gray-500">Tengi</p>
+                    <p className="mt-1 font-semibold text-gray-900">{consoleById[openConsoleId].tengi || '—'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 text-right">
+                <button onClick={() => setOpenConsoleId(null)} className="inline-flex items-center px-3 py-1.5 text-sm rounded-full ring-1 ring-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer">Loka</button>
               </div>
             </div>
           </div>

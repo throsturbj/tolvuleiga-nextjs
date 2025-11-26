@@ -4,7 +4,7 @@ import { sendOrderEmails } from '@/lib/email'
 
 export const runtime = 'nodejs'
 
-type Body = { orderId?: string; userEmail?: string }
+type Body = { orderId?: string; userEmail?: string; message?: string }
 
 export async function POST(req: NextRequest) {
 	try {
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 		}
 
 		const { buffer, filename, meta } = await generateOrderPdfBuffer(body.orderId)
-		const adminText = buildAdminOrderText(meta)
+		const adminText = buildAdminOrderText(meta, body.userEmail, body.message)
 
 		await sendOrderEmails({
 			userEmail: body.userEmail,

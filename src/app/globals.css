@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F7F6F2; /* Primary (light) */
+  --background: #F2F1ED; /* Primary (light) */
   --foreground: #111111;
-  --primary: #F7F6F2; /* map to light background for sections */
+  --primary: #F2F1ED; /* map to light background for sections */
   --secondary: #004932; /* Secondary */
   --accent: #FF5733; /* Accent */
 }

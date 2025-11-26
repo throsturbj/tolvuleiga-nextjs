@@ -91,10 +91,18 @@ export default function VorurAdminPage() {
   const [screenFormPcIds, setScreenFormPcIds] = useState<number[]>([]);
   const [screenEditPcIds, setScreenEditPcIds] = useState<number[]>([]);
   const [screenIdToPcIds, setScreenIdToPcIds] = useState<Record<string, number[]>>({});
+  // Screen <-> Console linking
+  const [screenFormConsoleIds, setScreenFormConsoleIds] = useState<string[]>([]);
+  const [screenEditConsoleIds, setScreenEditConsoleIds] = useState<string[]>([]);
+  const [screenIdToConsoleIds, setScreenIdToConsoleIds] = useState<Record<string, string[]>>({});
   const [createPcOpen, setCreatePcOpen] = useState<boolean>(false);
   const [editPcOpen, setEditPcOpen] = useState<boolean>(false);
   const [createPcMenuPos, setCreatePcMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [editPcMenuPos, setEditPcMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [createConsoleOpen, setCreateConsoleOpen] = useState<boolean>(false);
+  const [editConsoleOpen, setEditConsoleOpen] = useState<boolean>(false);
+  const [createConsoleMenuPos, setCreateConsoleMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [editConsoleMenuPos, setEditConsoleMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   // Keyboards state
   const [keyboards, setKeyboards] = useState<KeyboardRow[]>([]);
   const [keyboardsLoading, setKeyboardsLoading] = useState<boolean>(false);
@@ -235,8 +243,20 @@ export default function VorurAdminPage() {
               map[l.screen_id].push(l.gamingpc_id);
             });
             setScreenIdToPcIds(map);
+            // Fetch console links
+            const { data: consoleLinks } = await supabase
+              .from("screen_gamingconsoles")
+              .select("screen_id,gamingconsole_id")
+              .in("screen_id", ids);
+            const cmap: Record<string, string[]> = {};
+            (consoleLinks || []).forEach((l: { screen_id: string; gamingconsole_id: string }) => {
+              if (!cmap[l.screen_id]) cmap[l.screen_id] = [];
+              cmap[l.screen_id].push(l.gamingconsole_id);
+            });
+            setScreenIdToConsoleIds(cmap);
           } else {
             setScreenIdToPcIds({});
+            setScreenIdToConsoleIds({});
           }
         }
       } catch (err) {
@@ -387,8 +407,28 @@ export default function VorurAdminPage() {
     setEditPcMenuPos({ top: r.bottom, left: r.left, width: r.width });
     setEditPcOpen(true);
   };
+  const toggleCreateConsole = (consoleId: string) => {
+    setScreenFormConsoleIds((prev) =>
+      prev.includes(consoleId) ? prev.filter((id) => id !== consoleId) : [...prev, consoleId]
+    );
+  };
+  const toggleEditConsole = (consoleId: string) => {
+    setScreenEditConsoleIds((prev) =>
+      prev.includes(consoleId) ? prev.filter((id) => id !== consoleId) : [...prev, consoleId]
+    );
+  };
+  const openCreateConsoleMenu = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setCreateConsoleMenuPos({ top: r.bottom, left: r.left, width: r.width });
+    setCreateConsoleOpen(true);
+  };
+  const openEditConsoleMenu = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setEditConsoleMenuPos({ top: r.bottom, left: r.left, width: r.width });
+    setEditConsoleOpen(true);
+  };
   useEffect(() => {
-    if (!createPcOpen && !editPcOpen && !createKbOpen && !editKbOpen && !createMsOpen && !editMsOpen) return;
+    if (!createPcOpen && !editPcOpen && !createKbOpen && !editKbOpen && !createMsOpen && !editMsOpen && !createConsoleOpen && !editConsoleOpen) return;
     const handler = () => {
       setCreatePcOpen(false);
       setEditPcOpen(false);
@@ -396,6 +436,8 @@ export default function VorurAdminPage() {
       setEditKbOpen(false);
       setCreateMsOpen(false);
       setEditMsOpen(false);
+      setCreateConsoleOpen(false);
+      setEditConsoleOpen(false);
     };
     window.addEventListener('scroll', handler, true);
     window.addEventListener('resize', handler, true);
@@ -403,7 +445,7 @@ export default function VorurAdminPage() {
       window.removeEventListener('scroll', handler, true);
       window.removeEventListener('resize', handler, true);
     };
-  }, [createPcOpen, editPcOpen, createKbOpen, editKbOpen, createMsOpen, editMsOpen]);
+  }, [createPcOpen, editPcOpen, createKbOpen, editKbOpen, createMsOpen, editMsOpen, createConsoleOpen, editConsoleOpen]);
 
   const sanitizeFileName = (name: string) => {
     return name
@@ -828,7 +870,7 @@ export default function VorurAdminPage() {
 
   useEffect(() => {
     const fetchConsoles = async () => {
-      if (activeTab !== "consoles") return;
+      if (activeTab !== "consoles" && activeTab !== "screens") return;
       if (!session?.user || !isAdmin) return;
       setConsolesLoading(true);
       setError(null);
@@ -1094,8 +1136,13 @@ export default function VorurAdminPage() {
           const rowsToInsert = screenFormPcIds.map((pcId) => ({ screen_id: created.id, gamingpc_id: pcId }));
           await supabase.from("screen_gamingpcs").insert(rowsToInsert);
         }
+        if (screenFormConsoleIds.length > 0) {
+          const rowsToInsert = screenFormConsoleIds.map((cid) => ({ screen_id: created.id, gamingconsole_id: cid }));
+          await supabase.from("screen_gamingconsoles").insert(rowsToInsert);
+        }
         setScreens((prev) => [created, ...prev]);
         setScreenIdToPcIds((prev) => ({ ...prev, [created.id]: [...screenFormPcIds] }));
+        setScreenIdToConsoleIds((prev) => ({ ...prev, [created.id]: [...screenFormConsoleIds] }));
         setScreenForm({
           framleidandi: "",
           skjastaerd: "",
@@ -1106,6 +1153,7 @@ export default function VorurAdminPage() {
           gamingPC_id: 0,
         });
         setScreenFormPcIds([]);
+        setScreenFormConsoleIds([]);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -1150,6 +1198,8 @@ export default function VorurAdminPage() {
     });
     const selected = screenIdToPcIds[row.id] || [];
     setScreenEditPcIds(selected);
+    const selectedConsoles = screenIdToConsoleIds[row.id] || [];
+    setScreenEditConsoleIds(selectedConsoles);
   };
 
   const handleCancelScreenEdit = () => {
@@ -1229,9 +1279,23 @@ export default function VorurAdminPage() {
           await supabase.from("screen_gamingpcs").insert(rowsToInsert);
         }
         setScreenIdToPcIds((prev) => ({ ...prev, [id]: [...next] }));
+        // Reconcile console links
+        const existingC = screenIdToConsoleIds[id] || [];
+        const nextC = screenEditConsoleIds || [];
+        const toAddC = nextC.filter((x) => !existingC.includes(x));
+        const toRemoveC = existingC.filter((x) => !nextC.includes(x));
+        if (toRemoveC.length > 0) {
+          await supabase.from("screen_gamingconsoles").delete().eq("screen_id", id).in("gamingconsole_id", toRemoveC);
+        }
+        if (toAddC.length > 0) {
+          const rowsToInsertC = toAddC.map((cid) => ({ screen_id: id, gamingconsole_id: cid }));
+          await supabase.from("screen_gamingconsoles").insert(rowsToInsertC);
+        }
+        setScreenIdToConsoleIds((prev) => ({ ...prev, [id]: [...nextC] }));
         setScreenEditingId(null);
         setScreenEditForm(null);
         setScreenEditPcIds([]);
+        setScreenEditConsoleIds([]);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -1350,7 +1414,6 @@ export default function VorurAdminPage() {
   const handleUpdateMouse = async (id: string | number) => {
     if (!isAdmin || !mouseEditForm) return;
     const errs = validateMouse(mouseEditForm);
-    if ((mouseEditPcIds || []).length === 0) errs.push("Veldu að minnsta kosti eina tölvu");
     if (errs.length > 0) {
       setError(errs.join(" · "));
       return;
@@ -1433,7 +1496,6 @@ export default function VorurAdminPage() {
   const handleUpdateKeyboard = async (id: string) => {
     if (!isAdmin || !keyboardEditForm) return;
     const errs = validateKeyboard(keyboardEditForm);
-    if ((keyboardEditPcIds || []).length === 0) errs.push("Veldu að minnsta kosti eina tölvu");
     if (errs.length > 0) {
       setError(errs.join(" · "));
       return;
@@ -1865,6 +1927,7 @@ export default function VorurAdminPage() {
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Endurnýjunartíðni</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Verð</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">GamingPC</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Consoles</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-70">Aðgerðir</th>
                 </tr>
               </thead>
@@ -1939,6 +2002,57 @@ export default function VorurAdminPage() {
                       ) : null}
                     </div>
                   </td>
+                  <td className="px-2 py-3 align-top w-16">
+                    <div className="relative inline-block">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          if (createConsoleOpen) {
+                            setCreateConsoleOpen(false);
+                          } else {
+                            openCreateConsoleMenu(e.currentTarget as HTMLElement);
+                          }
+                        }}
+                        className="inline-flex items-center px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 text-xs"
+                      >
+                        {screenFormConsoleIds.length > 0
+                          ? `${screenFormConsoleIds
+                              .map((id) => consoles.find((c) => c.id === id)?.nafn || `#${id}`)
+                              .filter(Boolean)
+                              .slice(0, 2)
+                              .join(", ")}${screenFormConsoleIds.length > 2 ? ` +${screenFormConsoleIds.length - 2}` : ""}`
+                          : "Veldu consoles"}
+                        <svg className="ml-2 h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z"/></svg>
+                      </button>
+                      {createConsoleOpen && createConsoleMenuPos ? (
+                        <div
+                          className="fixed z-50 bg-white border border-gray-200 rounded shadow-md"
+                          style={{ top: createConsoleMenuPos.top, left: createConsoleMenuPos.left, minWidth: createConsoleMenuPos.width, width: Math.max(createConsoleMenuPos.width, 224) }}
+                        >
+                          <div className="max-h-60 overflow-auto p-1">
+                            {consoles.map((c) => {
+                              const checked = screenFormConsoleIds.includes(c.id);
+                              return (
+                                <label key={c.id} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer select-none text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleCreateConsole(c.id)}
+                                    className="h-3 w-3"
+                                  />
+                                  <span className="truncate">{c.nafn}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 px-2 py-1 border-t border-gray-200">
+                            <button type="button" onClick={() => setScreenFormConsoleIds([])} className="text-xs text-gray-600 hover:underline">Hreinsa</button>
+                            <button type="button" onClick={() => setCreateConsoleOpen(false)} className="text-xs text-[var(--color-accent)] hover:underline">Loka</button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </td>
                   <td className="px-2 py-3 align-top">
                     <button
                       type="button"
@@ -1985,6 +2099,21 @@ export default function VorurAdminPage() {
                         })()}
                       </div>
                     </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6">
+                        {(() => {
+                          const ids = screenIdToConsoleIds[r.id] || [];
+                          if (ids.length === 0) return "—";
+                          const names = ids
+                            .map((id) => {
+                              const c = consoles.find((cc) => cc.id === id);
+                              return c ? c.nafn : `#${id}`;
+                            })
+                            .filter(Boolean);
+                          return names.join(", ");
+                        })()}
+                      </div>
+                    </td>
                     <td className="px-2 py-3 align-top">
                       <div className="grid grid-cols-3 gap-2 w-64">
                         <button
@@ -2017,7 +2146,7 @@ export default function VorurAdminPage() {
                 ))}
                 {!screensLoading && screens.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
                       Engir skjáir fundust.
                     </td>
                   </tr>
@@ -2571,7 +2700,7 @@ export default function VorurAdminPage() {
                   <input value={screenEditForm.endurnyjunartidni} onChange={(e) => onChangeScreenEdit("endurnyjunartidni", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
                 </div>
                 <div className="relative">
-                  <label className="block text-xs text-gray-600 mb-1">Tengdar tölvur</label>
+                <label className="block text-xs text-gray-600 mb-1">Tengdar tölvur</label>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -2622,6 +2751,58 @@ export default function VorurAdminPage() {
                     </div>
                   ) : null}
                 </div>
+              <div className="relative">
+                <label className="block text-xs text-gray-600 mb-1">Tengdar consoles</label>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    if (editConsoleOpen) {
+                      setEditConsoleOpen(false);
+                    } else {
+                      openEditConsoleMenu(e.currentTarget as HTMLElement);
+                    }
+                  }}
+                  className="inline-flex items-center w-full justify-between px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 text-sm"
+                >
+                  <span className="truncate">
+                    {screenEditConsoleIds.length > 0
+                      ? screenEditConsoleIds
+                          .map((id) => consoles.find((c) => c.id === id)?.nafn || `#${id}`)
+                          .filter(Boolean)
+                          .slice(0, 3)
+                          .join(", ") + (screenEditConsoleIds.length > 3 ? ` +${screenEditConsoleIds.length - 3}` : "")
+                      : "Veldu consoles"}
+                  </span>
+                  <svg className="ml-2 h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z"/></svg>
+                </button>
+                {editConsoleOpen && editConsoleMenuPos ? (
+                  <div
+                    className="fixed z-50 bg-white border border-gray-200 rounded shadow-md"
+                    style={{ top: editConsoleMenuPos.top, left: editConsoleMenuPos.left, minWidth: editConsoleMenuPos.width, width: editConsoleMenuPos.width }}
+                  >
+                    <div className="max-h-60 overflow-auto p-1">
+                      {consoles.map((c) => {
+                        const checked = (screenEditConsoleIds || []).includes(c.id);
+                        return (
+                          <label key={c.id} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer select-none text-sm">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleEditConsole(c.id)}
+                              className="h-3 w-3"
+                            />
+                            <span className="truncate">{c.nafn}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between gap-2 px-2 py-1 border-t border-gray-200">
+                      <button type="button" onClick={() => setScreenEditConsoleIds([])} className="text-xs text-gray-600 hover:underline">Hreinsa</button>
+                      <button type="button" onClick={() => setEditConsoleOpen(false)} className="text-xs text-[var(--color-accent)] hover:underline">Loka</button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               </div>
             </div>
             <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">

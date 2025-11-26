@@ -14,7 +14,7 @@ interface UserProfile {
   city: string;
   postal_code: string;
   kennitala?: string;
-  ibudnumber?: string;
+  ibudnumer?: string;
 }
 
 function UserInfoPageInner() {
@@ -40,7 +40,7 @@ function UserInfoPageInner() {
     address: "",
     city: "",
     postal_code: "",
-    ibudnumber: "",
+    ibudnumer: "",
   });
 
   // Initialize email field from auth session
@@ -84,8 +84,8 @@ function UserInfoPageInner() {
                 phone: "",
                 address: "",
                 city: "",
-                postal_code: "",
-                ibudnumber: "",
+                postal_code: null,
+                ibudnumer: "",
               })
               .select()
               .single();
@@ -99,7 +99,7 @@ function UserInfoPageInner() {
                 address: created.address || "",
                 city: created.city || "",
                 postal_code: created.postal_code || "",
-                ibudnumber: created.ibudnumber || "",
+                ibudnumer: created.ibudnumer || "",
               });
             }
           } else {
@@ -115,7 +115,7 @@ function UserInfoPageInner() {
               address: data.address || "",
               city: data.city || "",
               postal_code: data.postal_code || "",
-              ibudnumber: data.ibudnumber || "",
+              ibudnumer: data.ibudnumer || "",
             });
           }
         }
@@ -167,9 +167,22 @@ function UserInfoPageInner() {
       }
 
       // 2) Update profile fields in 'users' table
+      // Sanitize payload and ensure correct types for columns (postal_code is text in DB)
+      const trimmedPostal = (formData.postal_code ?? '').toString().trim();
+      const finalPostal = trimmedPostal !== '' ? trimmedPostal : null;
+      const updatePayload = {
+        full_name: (formData.full_name ?? '').trim(),
+        kennitala: (formData.kennitala ?? '').trim(),
+        phone: (formData.phone ?? '').trim(),
+        address: (formData.address ?? '').trim(),
+        city: (formData.city ?? '').trim(),
+        postal_code: finalPostal,
+        ibudnumer: (formData.ibudnumer ?? '').trim(),
+      };
+
       const { error } = await supabase
         .from("users")
-        .update(formData)
+        .update(updatePayload)
         .eq("auth_uid", uid);
 
       if (error) throw error;
@@ -296,11 +309,11 @@ function UserInfoPageInner() {
                 </div>
 
                 <div>
-                  <label htmlFor="ibudnumber" className="block text-sm font-medium text-gray-700 mb-2">Íbúðarnúmer (ef á við)</label>
+                  <label htmlFor="ibudnumer" className="block text-sm font-medium text-gray-700 mb-2">Íbúðarnúmer (ef á við)</label>
                   <input
-                    id="ibudnumber"
-                    name="ibudnumber"
-                    value={formData.ibudnumber}
+                    id="ibudnumer"
+                    name="ibudnumer"
+                    value={formData.ibudnumer}
                     onChange={onChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
                     placeholder="Sláðu inn íbúðarnúmer (ef á við)"

@@ -111,7 +111,7 @@ function AuthPageInner() {
             kennitala: formData.kennitala,
             phone: formData.phone,
             address: formData.address,
-            ibudnumber: formData.ibudnumber,
+            ibudnumer: formData.ibudnumber,
             city: formData.city,
             postal_code: formData.postal_code
           });

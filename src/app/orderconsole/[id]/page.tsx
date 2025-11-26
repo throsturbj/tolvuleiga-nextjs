@@ -25,7 +25,7 @@ interface UserProfile {
   city: string;
   postal_code: string;
   kennitala?: string;
-  ibudnumber?: string;
+  ibudnumer?: string;
 }
 
 export default function OrderConsolePage() {
@@ -45,7 +45,7 @@ export default function OrderConsolePage() {
   const loadedForUidRef = useRef<string | null>(null);
 
   // Selection passed from console page
-  const [selection, setSelection] = useState<{ months: number; addons?: { skjár?: boolean; lyklaborð?: boolean; mus?: boolean }; insured?: boolean; finalPrice?: number } | null>(null);
+  const [selection, setSelection] = useState<{ months: number; addons?: { skjár?: boolean; lyklaborð?: boolean; mus?: boolean }; insured?: boolean; finalPrice?: number; extraControllers?: number } | null>(null);
   const [confirmNoInsurance, setConfirmNoInsurance] = useState(false);
 
   const addMonths = (date: Date, months: number) => {
@@ -64,7 +64,7 @@ export default function OrderConsolePage() {
       if (typeof window !== 'undefined') {
         const raw = window.sessionStorage.getItem('orderSelection');
         if (raw) {
-          const parsed = JSON.parse(raw) as { months?: number; addons?: unknown; insured?: boolean; finalPrice?: number };
+          const parsed = JSON.parse(raw) as { months?: number; addons?: unknown; insured?: boolean; finalPrice?: number; extraControllers?: unknown };
           const months = parsed.months && [1,3,6,12].includes(parsed.months) ? parsed.months : 3;
           const src = (parsed.addons ?? {}) as Record<string, unknown>;
           const mapped = {
@@ -74,7 +74,8 @@ export default function OrderConsolePage() {
           };
           const insured = parsed.insured === true;
           const finalPrice = typeof parsed.finalPrice === 'number' && Number.isFinite(parsed.finalPrice) ? parsed.finalPrice : undefined;
-          setSelection({ months, addons: mapped, insured, finalPrice });
+          const extraControllers = typeof parsed.extraControllers === 'number' && Number.isFinite(parsed.extraControllers) ? parsed.extraControllers : undefined;
+          setSelection({ months, addons: mapped, insured, finalPrice, extraControllers });
         } else {
           setSelection({ months: 3, addons: {} });
         }
@@ -227,6 +228,7 @@ export default function OrderConsolePage() {
             lyklabord,
             mus,
             trygging,
+            numberofextracon: typeof selection?.extraControllers === 'number' ? selection.extraControllers : 0,
             verd: finalMonthlyPrice,
             gamingpc_uuid: null,
             gamingconsole_uuid: consoleIdParam,
@@ -248,7 +250,7 @@ export default function OrderConsolePage() {
               fetch('/api/order/send-emails', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderId: inserted.id, userEmail }),
+                body: JSON.stringify({ orderId: inserted.id, userEmail, message: formData.message?.trim() || undefined }),
               }).catch(() => {});
             }
           }
@@ -391,9 +393,9 @@ export default function OrderConsolePage() {
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Borg/Póstnúmer:</span> {userProfile.city || 'Ekki skráð'} {userProfile.postal_code || ''}
                     </p>
-                    {userProfile.ibudnumber ? (
+                    {userProfile.ibudnumer ? (
                       <p className="text-sm text-gray-600">
-                        <span className="font-medium">Íbúðarnúmer:</span> {userProfile.ibudnumber}
+                        <span className="font-medium">Íbúðarnúmer:</span> {userProfile.ibudnumer}
                       </p>
                     ) : null}
                   </div>
@@ -431,9 +433,11 @@ export default function OrderConsolePage() {
                   if (a['skjár']) list.push('Skjár');
                   if (a['lyklaborð'] || a['lyklabord']) list.push('Lyklaborð');
                   if (a['mús'] || a['mus']) list.push('Mús');
-                  return list.length > 0 ? (
-                    <p><span className="font-medium">Aukahlutir -</span> {list.join(', ')}</p>
-                  ) : null;
+                  const extra = typeof selection?.extraControllers === 'number' && selection.extraControllers > 0
+                    ? `Auka fjarstýringar: ${selection.extraControllers}`
+                    : null;
+                  const text = [list.length > 0 ? list.join(', ') : null, extra].filter(Boolean).join(' · ');
+                  return text ? (<p><span className="font-medium">Aukahlutir -</span> {text}</p>) : null;
                 })()}
               </div>
             </div>

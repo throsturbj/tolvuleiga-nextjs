@@ -76,7 +76,7 @@ export default function Home() {
           console.error('Home: Error fetching products', lastError);
           setItems([]);
         } else {
-          const visible = data.filter((pc) => !pc.falid);
+          const visible = data.filter((pc) => pc.falid === true ? false : true);
           debug('Home/PCs/visible', { count: visible.length });
           // Batch fetch first images for visible PCs
           try {
@@ -119,7 +119,7 @@ export default function Home() {
     fetchItems();
     return () => { isMounted = false; };
     // Re-run when auth state finishes initializing or when user identity changes
-  }, [session?.user, session?.user?.id, session?.access_token]);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -196,7 +196,7 @@ export default function Home() {
     };
     fetchConsoles();
     return () => { isMounted = false; };
-  }, [session?.user, session?.user?.id, session?.access_token]);
+  }, []);
   return (
     <div className="min-h-screen">
       {process.env.NEXT_PUBLIC_DEBUG === 'true' ? (

@@ -46,6 +46,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
+    const SESSION_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+    const setCookie = (key: string, value: string, maxAgeSeconds: number) => {
+      try {
+        document.cookie = `${key}=${value}; Path=/; Max-Age=${maxAgeSeconds}`;
+      } catch {}
+    };
+    const clearCookie = (key: string) => {
+      try {
+        document.cookie = `${key}=; Path=/; Max-Age=0`;
+      } catch {}
+    };
+    const getCookie = (key: string): string | null => {
+      try {
+        const m = document.cookie.match(new RegExp(`(?:^|; )${key.replace(/[-[\]/{}()*+?.\\^$|]/g, '\\$&')}=([^;]*)`));
+        return m ? decodeURIComponent(m[1]) : null;
+      } catch {
+        return null;
+      }
+    };
+
     // Get initial session - properly await it
     const getInitialSession = async () => {
       try {
@@ -54,6 +74,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const error = initial.error;
         
         if (!isMounted) return;
+
+        // Initialize session-start timestamp if missing (do NOT extend on refresh)
+        try {
+          if (session?.user) {
+            const existing = getCookie('session-start');
+            if (!existing) {
+              setCookie('session-start', String(Date.now()), 60 * 60 * 24 * 7); // client-visible, short-lived policy enforced elsewhere
+            }
+          } else {
+            clearCookie('session-start');
+          }
+        } catch {}
 
         // If the session exists but is expired (or about to), refresh it before proceeding
         try {
@@ -123,6 +155,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
           // Clear auth flag cookie for middleware UX redirects
           try { document.cookie = 'is-authenticated=; Path=/; Max-Age=0'; } catch {}
+          // Clear session-start cookie
+          try { document.cookie = 'session-start=; Path=/; Max-Age=0'; } catch {}
           // Clear localStorage on sign out
           if (typeof window !== 'undefined') {
             localStorage.removeItem('rentify.supabase.auth.token');
@@ -135,6 +169,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'PASSWORD_RECOVERY' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
           // Set auth flag cookie so middleware can allow access before server cookies sync
           try { document.cookie = `is-authenticated=${session?.user ? 'true' : ''}; Path=/; Max-Age=${60 * 60 * 24 * 7}`; } catch {}
+          // Only set session-start when we first sign in (do NOT extend on token refresh)
+          if (event === 'SIGNED_IN' && session?.user) {
+            const existing = getCookie('session-start');
+            if (!existing) {
+              setCookie('session-start', String(Date.now()), 2 * 60 * 60); // 2 hours
+            }
+            try { localStorage.setItem('sessionStartedAt', String(Date.now())); } catch {}
+          }
           if (session?.user) {
             await fetchUserProfileRef.current(session.user.id);
           } else {
@@ -161,11 +203,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    // Strict 2-hour session cap: check periodically and force sign-out if exceeded
+    const interval = setInterval(async () => {
+      if (!isMounted) return;
+      try {
+        const startedAtStr = (typeof window !== 'undefined' && localStorage.getItem('sessionStartedAt')) || getCookie('session-start');
+        const startedAt = startedAtStr ? parseInt(startedAtStr, 10) : NaN;
+        if (Number.isFinite(startedAt)) {
+          const age = Date.now() - startedAt;
+          if (age > SESSION_MAX_AGE_MS) {
+            // Force sign out and clear markers
+            try { clearCookie('session-start'); } catch {}
+            try { localStorage.removeItem('sessionStartedAt'); } catch {}
+            try { await supabase.auth.signOut(); } catch (e) { console.error('AuthContext: Forced sign-out error', e); }
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+            router.push('/auth');
+          }
+        }
+      } catch (e) {
+        // No-op
+      }
+    }, 60 * 1000);
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       isMounted = false;
       clearTimeout(timeout);
+      clearInterval(interval);
       subscription.unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

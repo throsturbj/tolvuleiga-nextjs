@@ -24,6 +24,7 @@ export async function middleware(req: NextRequest) {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 2 // 2 hours
 
   if (!supabaseUrl || !supabaseAnonKey) return res
 
@@ -52,6 +53,42 @@ export async function middleware(req: NextRequest) {
 
   const softAuthenticated = req.cookies.get('is-authenticated')?.value === 'true'
 
+  // Enforce strict 2-hour cap since initial sign-in
+  const sessionStartCookie = req.cookies.get('session-start')?.value || null
+  const sessionStartMs = sessionStartCookie ? Number.parseInt(sessionStartCookie, 10) : NaN
+  const now = Date.now()
+  const hasValidStart = Number.isFinite(sessionStartMs)
+  const isExpiredByPolicy = !!(session?.user && hasValidStart && (now - sessionStartMs > SESSION_MAX_AGE_MS))
+
+  // If signed in but missing a start cookie, initialize it without extending future lifetime
+  if (session?.user && !sessionStartCookie) {
+    res.cookies.set('session-start', String(now), { path: '/', maxAge: 60 * 60 * 24 * 7 })
+  }
+
+  if (isExpiredByPolicy) {
+    try {
+      await supabase.auth.signOut()
+    } catch {}
+    // Clear helper cookies
+    res.cookies.set('is-authenticated', '', { path: '/', maxAge: 0 })
+    res.cookies.set('session-start', '', { path: '/', maxAge: 0 })
+
+    // API routes should receive 401 instead of redirect to avoid broken fetches
+    if (path.startsWith('/api/')) {
+      return new NextResponse(JSON.stringify({ error: 'UNAUTHORIZED', message: 'Session expired' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const url = req.nextUrl.clone()
+    url.pathname = '/auth'
+    if (path !== '/auth') {
+      url.searchParams.set('redirect', `${path}${req.nextUrl.search}`)
+    }
+    return NextResponse.redirect(url)
+  }
+
   if (isProtected && !(session || softAuthenticated)) {
     const redirect = `${path}${req.nextUrl.search}`
     const url = req.nextUrl.clone()
@@ -69,6 +106,8 @@ export const config = {
     '/stjornbord/:path*',
     '/vorur/:path*',
     '/notendaupplysingar/:path*',
+    // Apply auth/session checks on APIs as well (returns 401 JSON on expiry)
+    '/api/:path*',
     // Always run on auth to keep cookies refreshed when landing there
     '/auth',
   ],

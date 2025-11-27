@@ -269,7 +269,7 @@ export default function DashboardPage() {
       console.log('Dashboard: Cleanup function called');
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]); // Depend on session instead of authLoading
+  }, [session, authLoading]);
 
   // Handle page focus/visibility - refresh data when tab becomes visible
   useEffect(() => {

@@ -29,6 +29,7 @@ export type UserRow = {
 	address?: string | null
 	city?: string | null
 	postal_code?: string | null
+	ibudnumer?: string | null
 }
 
 export type PcRow = {
@@ -63,7 +64,7 @@ export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderR
 	if (order.auth_uid) {
 		const { data: userRow } = await supabase
 			.from('users')
-			.select('auth_uid, full_name, kennitala, phone, address, city, postal_code')
+			.select('auth_uid, full_name, kennitala, phone, address, city, postal_code, ibudnumer')
 			.eq('auth_uid', order.auth_uid)
 			.single<UserRow>()
 		user = userRow ?? null
@@ -156,6 +157,9 @@ export async function generateOrderPdfBuffer(orderId: string): Promise<{ buffer:
 	doc.text(`Sími: ${bundle.user?.phone || '—'}`)
 	doc.text(`Heimilisfang: ${bundle.user?.address || '—'}`)
 	doc.text(`Borg/Póstnúmer: ${bundle.user?.city || '—'} ${bundle.user?.postal_code || ''}`)
+	if (bundle.user?.ibudnumer) {
+		doc.text(`Íbúðarnúmer: ${bundle.user.ibudnumer}`)
+	}
 	doc.moveDown()
 
 	doc.fontSize(14).fillColor('#000').text('Vara', { underline: true }).moveDown(0.5)
@@ -236,6 +240,7 @@ export function buildAdminOrderText(meta: Awaited<ReturnType<typeof fetchOrderBu
 		`Sími: ${user?.phone || '—'}`,
 		`Heimilisfang: ${user?.address || '—'}`,
 		`Borg/Póstnúmer: ${user?.city || '—'} ${user?.postal_code || ''}`,
+		...(user?.ibudnumer ? [`Íbúðarnúmer: ${user.ibudnumer}`] : []),
 		'',
 		'Vara:',
 		pc

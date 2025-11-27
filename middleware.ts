@@ -100,8 +100,6 @@ export const config = {
     '/stjornbord/:path*',
     '/vorur/:path*',
     '/notendaupplysingar/:path*',
-    // Apply auth/session checks on APIs as well (returns 401 JSON on expiry)
-    '/api/:path*',
     // Always run on auth to keep cookies refreshed when landing there
     '/auth',
   ],

@@ -38,22 +38,40 @@ export default function Home() {
 
   useEffect(() => {
     let isMounted = true;
-    // Wait for auth to initialize so RLS reads (if any) see the right session
-    if (authLoading) return;
     const fetchItems = async () => {
       try {
-        // Always use anonymous client for public catalog to avoid RLS variance when logged-in
-        const { data, error } = await supabasePublic
-          .from("GamingPC")
-          .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
-          .order("id", { ascending: false });
+        // Prefer authed client if user exists; otherwise anon; fallback to the other on failure/empty
+        const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
+        let data: GamingPCItem[] | null = null;
+        let lastError: unknown = null;
+        for (const client of clients) {
+          try {
+            const { data: d, error } = await client
+              .from("GamingPC")
+              .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
+              .order("id", { ascending: false });
+            if (error) {
+              lastError = error;
+              continue;
+            }
+            const arr = (d as GamingPCItem[]) || [];
+            if (arr.length > 0) {
+              data = arr;
+              break;
+            } else {
+              // keep trying next client if current returned empty
+              data = arr;
+            }
+          } catch (e) {
+            lastError = e;
+          }
+        }
         if (!isMounted) return;
-        if (error) {
-          console.error('Home: Error fetching products', error);
+        if (!data) {
+          console.error('Home: Error fetching products', lastError);
           setItems([]);
         } else {
-          const all = (data as GamingPCItem[]) || [];
-          const visible = all.filter((pc) => !pc.falid);
+          const visible = data.filter((pc) => !pc.falid);
           // Batch fetch first images for visible PCs
           try {
             const ids = visible.map((p) => p.id);
@@ -91,24 +109,40 @@ export default function Home() {
     fetchItems();
     return () => { isMounted = false; };
     // Re-run when auth state finishes initializing or when user identity changes
-  }, [authLoading, session?.user, session?.user?.id, session?.access_token]);
+  }, [session?.user, session?.user?.id, session?.access_token]);
 
   useEffect(() => {
     let isMounted = true;
-    if (authLoading) return;
     const fetchConsoles = async () => {
       try {
-        // Always use anonymous client for public catalog to avoid RLS variance when logged-in
-        const { data, error } = await supabasePublic
-          .from("gamingconsoles")
-          .select("id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi")
-          .order("inserted_at", { ascending: false });
+        // Prefer authed client if user exists; otherwise anon; fallback to the other on failure/empty
+        const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
+        let data: GamingConsoleItem[] | null = null;
+        let lastError: unknown = null;
+        for (const client of clients) {
+          try {
+            const { data: d, error } = await client
+              .from("gamingconsoles")
+              .select("id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi")
+              .order("inserted_at", { ascending: false });
+            if (error) {
+              lastError = error;
+              continue;
+            }
+            const arr = (d as GamingConsoleItem[]) || [];
+            // Accept empty arrays too; we just prefer a non-empty source if available
+            data = arr;
+            if (arr.length > 0) break;
+          } catch (e) {
+            lastError = e;
+          }
+        }
         if (!isMounted) return;
-        if (error) {
-          console.error('Home: Error fetching consoles', error);
+        if (!data) {
+          console.error('Home: Error fetching consoles', lastError);
           setConsoles([]);
         } else {
-          const all = (data as GamingConsoleItem[]) || [];
+          const all = data || [];
           if (all.length === 0) {
             setConsoles([]);
             return;
@@ -144,7 +178,7 @@ export default function Home() {
     };
     fetchConsoles();
     return () => { isMounted = false; };
-  }, [authLoading, session?.user, session?.user?.id, session?.access_token]);
+  }, [session?.user, session?.user?.id, session?.access_token]);
   return (
     <div className="min-h-screen">
       {/* Hero Section */}

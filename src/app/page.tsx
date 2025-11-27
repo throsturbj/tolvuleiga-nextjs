@@ -77,6 +77,7 @@ export default function Home() {
           setItems([]);
         } else {
           const visible = data.filter((pc) => !pc.falid);
+          debug('Home/PCs/visible', { count: visible.length });
           // Batch fetch first images for visible PCs
           try {
             const ids = visible.map((p) => p.id);
@@ -94,14 +95,18 @@ export default function Home() {
                   imageUrl: map[p.id]?.signedUrl,
                 }));
                 setItems(merged);
+                debug('Home/PCs/setItems', { count: merged.length, withImages: true });
               } else {
                 setItems(visible);
+                debug('Home/PCs/setItems', { count: visible.length, withImages: false, reason: 'images api !ok' });
               }
             } else {
               setItems(visible);
+              debug('Home/PCs/setItems', { count: visible.length, withImages: false, reason: 'no ids' });
             }
           } catch {
             setItems(visible);
+            debug('Home/PCs/setItems', { count: visible.length, withImages: false, reason: 'images api error' });
           }
         }
       } catch (e) {
@@ -154,6 +159,7 @@ export default function Home() {
           const all = data || [];
           if (all.length === 0) {
             setConsoles([]);
+            debug('Home/Consoles/set', { count: 0 });
             return;
           }
           try {
@@ -171,11 +177,14 @@ export default function Home() {
                 imageUrl: map[c.id]?.signedUrl || null,
               }));
               setConsoles(merged);
+              debug('Home/Consoles/set', { count: merged.length, withImages: true });
             } else {
               setConsoles(all);
+              debug('Home/Consoles/set', { count: all.length, withImages: false, reason: 'images api !ok' });
             }
           } catch {
             setConsoles(all);
+            debug('Home/Consoles/set', { count: all.length, withImages: false, reason: 'images api error' });
           }
         }
       } catch (e) {
@@ -190,6 +199,11 @@ export default function Home() {
   }, [session?.user, session?.user?.id, session?.access_token]);
   return (
     <div className="min-h-screen">
+      {process.env.NEXT_PUBLIC_DEBUG === 'true' ? (
+        <div className="fixed bottom-2 right-2 z-50 text-[10px] bg-black/70 text-white px-2 py-1 rounded">
+          <span>debug: items={items.length} consoles={consoles.length}</span>
+        </div>
+      ) : null}
       {/* Hero Section */}
       <section className="bg-[var(--color-primary)] py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

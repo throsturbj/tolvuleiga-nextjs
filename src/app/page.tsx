@@ -42,40 +42,11 @@ export default function Home() {
     if (authLoading) return;
     const fetchItems = async () => {
       try {
-        // Helper: resilient fetch of GamingPC with one refresh attempt, then anon retry
-        const loadPcs = async () => {
-          const run = async () => {
-            return await supabase
-              .from("GamingPC")
-              .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
-              .order("id", { ascending: false });
-          };
-          let result = await run();
-          if (result.error && session?.user) {
-            try { await supabase.auth.refreshSession(); } catch {}
-            result = await run();
-          }
-          if (result.error && session?.user) {
-            try { await supabase.auth.signOut(); } catch {}
-            result = await run();
-          }
-          return result;
-        };
-
-        const { data: initialData, error } = await loadPcs();
-        let data = initialData;
-        // If authenticated read returns empty set (possible RLS), retry anonymously
-        if (!error && session?.user && Array.isArray(data) && data.length === 0) {
-          try {
-            const { data: anonData, error: anonErr } = await supabasePublic
-              .from("GamingPC")
-              .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
-              .order("id", { ascending: false });
-            if (!anonErr && Array.isArray(anonData)) {
-              data = anonData as typeof data;
-            }
-          } catch {}
-        }
+        // Always use anonymous client for public catalog to avoid RLS variance when logged-in
+        const { data, error } = await supabasePublic
+          .from("GamingPC")
+          .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
+          .order("id", { ascending: false });
         if (!isMounted) return;
         if (error) {
           console.error('Home: Error fetching products', error);
@@ -127,40 +98,11 @@ export default function Home() {
     if (authLoading) return;
     const fetchConsoles = async () => {
       try {
-        // Helper: resilient fetch of consoles with one refresh attempt, then anon retry
-        const loadConsoles = async () => {
-          const run = async () => {
-            return await supabase
-              .from("gamingconsoles")
-              .select("id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi")
-              .order("inserted_at", { ascending: false });
-          };
-          let result = await run();
-          if (result.error && session?.user) {
-            try { await supabase.auth.refreshSession(); } catch {}
-            result = await run();
-          }
-          if (result.error && session?.user) {
-            try { await supabase.auth.signOut(); } catch {}
-            result = await run();
-          }
-          return result;
-        };
-
-        const { data: initialData, error } = await loadConsoles();
-        let data = initialData;
-        // If authenticated read returns empty set (possible RLS), retry anonymously
-        if (!error && session?.user && Array.isArray(data) && data.length === 0) {
-          try {
-            const { data: anonData, error: anonErr } = await supabasePublic
-              .from("gamingconsoles")
-              .select("id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi")
-              .order("inserted_at", { ascending: false });
-            if (!anonErr && Array.isArray(anonData)) {
-              data = anonData as typeof data;
-            }
-          } catch {}
-        }
+        // Always use anonymous client for public catalog to avoid RLS variance when logged-in
+        const { data, error } = await supabasePublic
+          .from("gamingconsoles")
+          .select("id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi")
+          .order("inserted_at", { ascending: false });
         if (!isMounted) return;
         if (error) {
           console.error('Home: Error fetching consoles', error);

@@ -142,7 +142,7 @@ export default function DashboardPage() {
           const { data: { session }, error } = await supabase.auth.getSession();
           if (error) {
             console.error('Dashboard: Session check error:', error);
-            if (isMounted) router.push("/");
+            if (isMounted) { setLoading(false); router.push("/"); }
             return;
           }
           
@@ -152,18 +152,18 @@ export default function DashboardPage() {
             setTimeout(() => {
               if (isMounted && !user) {
                 console.log('Dashboard: Still no user after session found, redirecting to home');
-                router.push("/");
+                setLoading(false); router.push("/");
               }
             }, 2000);
             return;
           } else {
             console.log('Dashboard: No session found, redirecting to home');
-            if (isMounted) router.push("/");
+            if (isMounted) { setLoading(false); router.push("/"); }
             return;
           }
         } catch (error) {
           console.error('Dashboard: Error checking session:', error);
-          if (isMounted) router.push("/");
+          if (isMounted) { setLoading(false); router.push("/"); }
           return;
         }
       }

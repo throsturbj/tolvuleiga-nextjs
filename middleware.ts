@@ -51,19 +51,12 @@ export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname
   const isProtected = PROTECTED_PATHS.some((p) => path === p || path.startsWith(`${p}/`))
 
-  const softAuthenticated = req.cookies.get('is-authenticated')?.value === 'true'
-
   // Enforce strict 2-hour cap since initial sign-in
   const sessionStartCookie = req.cookies.get('session-start')?.value || null
   const sessionStartMs = sessionStartCookie ? Number.parseInt(sessionStartCookie, 10) : NaN
   const now = Date.now()
   const hasValidStart = Number.isFinite(sessionStartMs)
   const isExpiredByPolicy = !!(session?.user && hasValidStart && (now - sessionStartMs > SESSION_MAX_AGE_MS))
-
-  // If signed in but missing a start cookie, initialize it without extending future lifetime
-  if (session?.user && !sessionStartCookie) {
-    res.cookies.set('session-start', String(now), { path: '/', maxAge: 60 * 60 * 24 * 7 })
-  }
 
   if (isExpiredByPolicy) {
     try {
@@ -89,7 +82,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (isProtected && !(session || softAuthenticated)) {
+  // Strict: protected routes require a valid server session
+  if (isProtected && !session) {
     const redirect = `${path}${req.nextUrl.search}`
     const url = req.nextUrl.clone()
     url.pathname = '/auth'

@@ -41,17 +41,6 @@ export default function Home() {
     if (authLoading) return;
     const fetchItems = async () => {
       try {
-        // Strict 2-hour auth cap: if session exists but is older than 2h, sign out before querying
-        try {
-          if (session?.user && typeof document !== 'undefined') {
-            const m = document.cookie.match(/(?:^|; )session-start=([^;]*)/);
-            const started = m ? parseInt(decodeURIComponent(m[1]), 10) : NaN;
-            if (Number.isFinite(started) && Date.now() - started > 2 * 60 * 60 * 1000) {
-              try { await supabase.auth.signOut(); } catch {}
-            }
-          }
-        } catch {}
-
         const { data, error } = await supabase
           .from("GamingPC")
           .select("id, name, verd, cpu, gpu, storage, uppselt, falid")

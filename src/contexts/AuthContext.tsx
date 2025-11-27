@@ -75,14 +75,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (!isMounted) return;
 
-        // Initialize session-start timestamp if missing (do NOT extend on refresh)
+        // Do not set session-start here to avoid resetting the 2-hour window on page refresh.
+        // Only clear the marker if there is no session.
         try {
-          if (session?.user) {
-            const existing = getCookie('session-start');
-            if (!existing) {
-              setCookie('session-start', String(Date.now()), 60 * 60 * 24 * 7); // client-visible, short-lived policy enforced elsewhere
-            }
-          } else {
+          if (!session?.user) {
             clearCookie('session-start');
           }
         } catch {}

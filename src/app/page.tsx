@@ -62,7 +62,8 @@ export default function Home() {
           return result;
         };
 
-        let { data, error } = await loadPcs();
+        const { data: initialData, error } = await loadPcs();
+        let data = initialData;
         // If authenticated read returns empty set (possible RLS), retry anonymously
         if (!error && session?.user && Array.isArray(data) && data.length === 0) {
           try {
@@ -119,7 +120,7 @@ export default function Home() {
     fetchItems();
     return () => { isMounted = false; };
     // Re-run when auth state finishes initializing or when user identity changes
-  }, [authLoading, session?.user?.id, session?.access_token]);
+  }, [authLoading, session?.user, session?.user?.id, session?.access_token]);
 
   useEffect(() => {
     let isMounted = true;
@@ -146,7 +147,8 @@ export default function Home() {
           return result;
         };
 
-        let { data, error } = await loadConsoles();
+        const { data: initialData, error } = await loadConsoles();
+        let data = initialData;
         // If authenticated read returns empty set (possible RLS), retry anonymously
         if (!error && session?.user && Array.isArray(data) && data.length === 0) {
           try {
@@ -200,7 +202,7 @@ export default function Home() {
     };
     fetchConsoles();
     return () => { isMounted = false; };
-  }, [authLoading, session?.user?.id, session?.access_token]);
+  }, [authLoading, session?.user, session?.user?.id, session?.access_token]);
   return (
     <div className="min-h-screen">
       {/* Hero Section */}

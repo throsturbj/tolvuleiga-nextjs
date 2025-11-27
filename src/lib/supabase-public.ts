@@ -14,6 +14,7 @@ export const supabasePublic = (() => {
 			persistSession: false,
 			autoRefreshToken: false,
 			detectSessionInUrl: false,
+			storageKey: 'sb-public', // unique to avoid multi-client storage warnings
 			storage: undefined,
 		},
 	})

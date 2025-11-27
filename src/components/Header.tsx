@@ -74,8 +74,8 @@ export default function Header() {
 					<nav aria-label="Primary" className="hidden md:flex items-center gap-5">
 						<Link href="/about" className="hover:underline underline-offset-4">Um Okkur</Link>
 						<Link href="/contact" className="hover:underline underline-offset-4">Hafa Samband</Link>
-						{/* Auth controls: hide until auth check resolves; show either signed-in menu or signed-out link */}
-						{!loading && user ? (
+						{/* Auth controls: hide until auth check resolves; show signed-in menu if we have either profile or session user */}
+						{!loading && (user || session?.user) ? (
 							<div className="relative user-menu-container">
 								<button
 									onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -188,7 +188,7 @@ export default function Header() {
 						<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3 flex flex-col gap-2">
 						<Link href="/about" className="py-2" onClick={() => setIsOpen(false)}>Um Okkur</Link>
 						<Link href="/contact" className="py-2" onClick={() => setIsOpen(false)}>Hafa Samband</Link>
-						{!loading && user ? (
+						{!loading && (user || session?.user) ? (
 							<div className="user-menu-container">
 								<button
 									onClick={() => setIsUserMenuOpen((v) => !v)}

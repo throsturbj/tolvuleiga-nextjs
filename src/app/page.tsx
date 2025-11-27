@@ -41,10 +41,27 @@ export default function Home() {
     if (authLoading) return;
     const fetchItems = async () => {
       try {
-        const { data, error } = await supabase
-          .from("GamingPC")
-          .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
-          .order("id", { ascending: false });
+        // Helper: resilient fetch of GamingPC with one refresh attempt, then anon retry
+        const loadPcs = async () => {
+          const run = async () => {
+            return await supabase
+              .from("GamingPC")
+              .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
+              .order("id", { ascending: false });
+          };
+          let result = await run();
+          if (result.error && session?.user) {
+            try { await supabase.auth.refreshSession(); } catch {}
+            result = await run();
+          }
+          if (result.error && session?.user) {
+            try { await supabase.auth.signOut(); } catch {}
+            result = await run();
+          }
+          return result;
+        };
+
+        const { data, error } = await loadPcs();
         if (!isMounted) return;
         if (error) {
           console.error('Home: Error fetching products', error);
@@ -96,10 +113,27 @@ export default function Home() {
     if (authLoading) return;
     const fetchConsoles = async () => {
       try {
-        const { data, error } = await supabase
-          .from("gamingconsoles")
-          .select("id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi")
-          .order("inserted_at", { ascending: false });
+        // Helper: resilient fetch of consoles with one refresh attempt, then anon retry
+        const loadConsoles = async () => {
+          const run = async () => {
+            return await supabase
+              .from("gamingconsoles")
+              .select("id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi")
+              .order("inserted_at", { ascending: false });
+          };
+          let result = await run();
+          if (result.error && session?.user) {
+            try { await supabase.auth.refreshSession(); } catch {}
+            result = await run();
+          }
+          if (result.error && session?.user) {
+            try { await supabase.auth.signOut(); } catch {}
+            result = await run();
+          }
+          return result;
+        };
+
+        const { data, error } = await loadConsoles();
         if (!isMounted) return;
         if (error) {
           console.error('Home: Error fetching consoles', error);

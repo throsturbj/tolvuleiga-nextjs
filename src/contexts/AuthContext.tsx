@@ -38,6 +38,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const userRef = useRef<User | null>(null);
   const fetchUserProfileRef = useRef<(authUid: string) => Promise<void>>(async () => {});
+  const buildProvisionalUser = (s: Session): User => {
+    const authUid = s.user.id;
+    const meta = (s.user as unknown as { user_metadata?: Record<string, unknown> } | undefined)?.user_metadata || {};
+    const isAdmin = meta && typeof (meta as Record<string, unknown>)['isAdmin'] === 'boolean' ? Boolean((meta as Record<string, unknown>)['isAdmin']) : false;
+    const fullName = typeof meta['full_name'] === 'string' && (meta['full_name'] as string).trim().length > 0
+      ? (meta['full_name'] as string).trim()
+      : '';
+    return {
+      id: authUid,
+      auth_uid: authUid,
+      email: s.user.email || '',
+      full_name: fullName,
+      phone: '',
+      address: '',
+      city: '',
+      postal_code: '',
+      isAdmin,
+    };
+  };
 
   useEffect(() => {
     userRef.current = user;
@@ -103,6 +122,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setSession(session);
         debug('AuthContext/setSession', { hasUser: !!session?.user });
+        // Make a provisional user immediately if we have a session to prevent UI stalls
+        if (session?.user) {
+          try {
+            setUser((prev) => prev ?? buildProvisionalUser(session!));
+          } catch {}
+        } else {
+          setUser(null);
+        }
+        // Do not block UI on profile fetch
+        setLoading(false);
         // Keep a lightweight client-visible auth flag for middleware UX redirects
         try {
           if (session?.user) {
@@ -120,11 +149,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (session?.user) {
           try {
-            await fetchUserProfileRef.current(session.user.id);
+            // Fetch profile in background; update user if found
+            fetchUserProfileRef.current(session.user.id);
           } catch (error) {
             console.error('AuthContext: Error fetching profile in getInitialSession:', error);
-            setUser(null);
-            setLoading(false);
+            // Keep provisional user; loading already false
           }
         } else {
           setUser(null);
@@ -177,8 +206,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             try { localStorage.setItem('sessionStartedAt', String(Date.now())); } catch {}
           }
+          // Set provisional user and unblock UI immediately
           if (session?.user) {
-            await fetchUserProfileRef.current(session.user.id);
+            setUser((prev) => prev ?? buildProvisionalUser(session));
+          }
+          setLoading(false);
+          if (session?.user) {
+            // Fetch real profile in background; ignore errors here
+            fetchUserProfileRef.current(session.user.id).catch(() => {});
           } else {
           }
         } else {
@@ -294,7 +329,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           // No data returned
-          setUser(null);
+          // Keep provisional user if present
           setLoading(false);
           return;
         } catch (innerErr) {
@@ -316,7 +351,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('AuthContext: Error fetching user profile:', error);
-      setUser(null);
+      // Keep provisional user if present; just mark not loading
       setLoading(false);
     }
   }, [user]);

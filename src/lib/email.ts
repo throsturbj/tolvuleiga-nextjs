@@ -115,4 +115,39 @@ Tölvuleiga`,
 	})
 }
 
+export async function sendOrderReminderEmail(args: {
+	to: string
+	timabilTilDateString: string
+	dashboardUrl: string
+}): Promise<void> {
+	const { to, timabilTilDateString, dashboardUrl } = args
+	const subject = 'Minning: Pöntun er að klárast'
+	const text = `Kæri viðskiptavinur,
+
+Við viljum minna þig á að pöntun þín er að enda (${timabilTilDateString}).
+
+Þú getur framlengt ef þú vilt á síðunni okkar á Pantanir: ${dashboardUrl}
+
+Ef þú ætlar ekki að framlengja þá höfum við samband þegar tímabilinu er lokið og við sækjum pakkann þinn.
+
+Kær kveðja,
+Tölvuleiga`
+
+	const html = `
+<div style="font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#111">
+  <p>Kæri viðskiptavinur,</p>
+  <p>Við viljum minna þig á að pöntun þín er að enda (<strong>${timabilTilDateString}</strong>).</p>
+  <p>Þú getur framlengt ef þú vilt á síðunni okkar á Pantanir.</p>
+  <p style="margin:24px 0">
+    <a href="${dashboardUrl}" style="background:#2563eb;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600">
+      Pantanir
+    </a>
+  </p>
+  <p>Ef þú ætlar ekki að framlengja þá höfum við samband þegar tímabilinu er lokið og við sækjum pakkann þinn.</p>
+  <p style="margin-top:24px">Kær kveðja,<br/>Tölvuleiga</p>
+</div>`
+
+	await sendMail({ to, subject, text, html })
+}
+
 

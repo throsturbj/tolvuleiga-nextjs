@@ -35,6 +35,7 @@ export default function AdminDashboardPage() {
   const [busyUpdateById, setBusyUpdateById] = useState<Record<string, boolean>>({});
   const [busyDeleteById, setBusyDeleteById] = useState<Record<string, boolean>>({});
   const [busyOpenPdfById, setBusyOpenPdfById] = useState<Record<string, boolean>>({});
+  const [busyRemindById, setBusyRemindById] = useState<Record<string, boolean>>({});
 
   const isAdmin = !!user?.isAdmin;
 
@@ -139,13 +140,20 @@ export default function AdminDashboardPage() {
   };
 
   const tableRows = useMemo(() => {
-    return orders.map((o) => ({
-      ...o,
-      periodFmt:
-        o.timabilFra && o.timabilTil
-          ? `${formatDate(o.timabilFra)} → ${formatDate(o.timabilTil)}`
-          : "—",
-    }));
+    return orders.map((o) => {
+      const nowMs = Date.now();
+      const tilMs = o.timabilTil ? new Date(o.timabilTil).getTime() : NaN;
+      const daysLeft = Number.isFinite(tilMs) ? Math.ceil((tilMs - nowMs) / (1000 * 60 * 60 * 24)) : null;
+      const expiringSoon = typeof daysLeft === 'number' && daysLeft <= 2;
+      return {
+        ...o,
+        periodFmt:
+          o.timabilFra && o.timabilTil
+            ? `${formatDate(o.timabilFra)} → ${formatDate(o.timabilTil)}`
+            : "—",
+        expiringSoon,
+      };
+    });
   }, [orders]);
 
   const formatPrice = (value: unknown) => {
@@ -203,6 +211,27 @@ export default function AdminDashboardPage() {
       }
     } finally {
       setBusyDeleteById((p) => ({ ...p, [orderId]: false }));
+    }
+  };
+
+  const handleSendReminder = async (orderId: string) => {
+    if (!isAdmin) return;
+    setBusyRemindById((p) => ({ ...p, [orderId]: true }));
+    setError(null);
+    try {
+      const res = await fetch('/api/order/send-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null) as { error?: string } | null;
+        setError(json?.error || 'Gat ekki sent minningarpóst');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Villa við að senda minningu');
+    } finally {
+      setBusyRemindById((p) => ({ ...p, [orderId]: false }));
     }
   };
 
@@ -329,7 +358,7 @@ export default function AdminDashboardPage() {
               </thead>
               <tbody>
                 {tableRows.map((o) => (
-                  <tr key={o.id} className="border-b border-gray-100 hover:bg-gray-50/60">
+                  <tr key={o.id} className={`border-b border-gray-100 hover:bg-gray-50/60 ${o.expiringSoon ? 'bg-red-50' : ''}`}>
                     <td className="px-4 py-3 align-top">
                       <div className="font-mono text-[13px] text-gray-800">
                         {o.orderNumber ?? "—"}
@@ -394,6 +423,14 @@ export default function AdminDashboardPage() {
                           className="inline-flex items-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50"
                         >
                           Uppfæra
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!!busyRemindById[o.id]}
+                          onClick={() => handleSendReminder(o.id)}
+                          className="inline-flex items-center px-2.5 py-1.5 rounded border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs disabled:opacity-50 whitespace-nowrap"
+                        >
+                          Minna á
                         </button>
                         <button
                           type="button"

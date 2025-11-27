@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { supabasePublic } from "@/lib/supabase-public";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function Home() {
@@ -61,7 +62,19 @@ export default function Home() {
           return result;
         };
 
-        const { data, error } = await loadPcs();
+        let { data, error } = await loadPcs();
+        // If authenticated read returns empty set (possible RLS), retry anonymously
+        if (!error && session?.user && Array.isArray(data) && data.length === 0) {
+          try {
+            const { data: anonData, error: anonErr } = await supabasePublic
+              .from("GamingPC")
+              .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
+              .order("id", { ascending: false });
+            if (!anonErr && Array.isArray(anonData)) {
+              data = anonData as typeof data;
+            }
+          } catch {}
+        }
         if (!isMounted) return;
         if (error) {
           console.error('Home: Error fetching products', error);
@@ -133,7 +146,19 @@ export default function Home() {
           return result;
         };
 
-        const { data, error } = await loadConsoles();
+        let { data, error } = await loadConsoles();
+        // If authenticated read returns empty set (possible RLS), retry anonymously
+        if (!error && session?.user && Array.isArray(data) && data.length === 0) {
+          try {
+            const { data: anonData, error: anonErr } = await supabasePublic
+              .from("gamingconsoles")
+              .select("id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi")
+              .order("inserted_at", { ascending: false });
+            if (!anonErr && Array.isArray(anonData)) {
+              data = anonData as typeof data;
+            }
+          } catch {}
+        }
         if (!isMounted) return;
         if (error) {
           console.error('Home: Error fetching consoles', error);

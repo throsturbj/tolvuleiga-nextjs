@@ -77,10 +77,18 @@ export default function Home() {
           setItems([]);
         } else {
           const visible = data.filter((pc) => pc.falid === true ? false : true);
-          debug('Home/PCs/visible', { count: visible.length });
+          // Sort by numeric verd ascending (smallest price first)
+          const sorted = [...visible].sort((a, b) => {
+            const aDigits = (a.verd || '').toString().replace(/\D+/g, '');
+            const bDigits = (b.verd || '').toString().replace(/\D+/g, '');
+            const aNum = parseInt(aDigits, 10) || 0;
+            const bNum = parseInt(bDigits, 10) || 0;
+            return aNum - bNum;
+          });
+          debug('Home/PCs/visible', { count: sorted.length });
           // Batch fetch first images for visible PCs
           try {
-            const ids = visible.map((p) => p.id);
+            const ids = sorted.map((p) => p.id);
             if (ids.length > 0) {
               const res = await fetch("/api/images/first", {
                 method: "POST",
@@ -90,23 +98,23 @@ export default function Home() {
               if (res.ok) {
                 const j = await res.json();
                 const map: Record<number, { path: string; signedUrl: string } | null> = j?.results || {};
-                const merged = visible.map((p) => ({
+                const merged = sorted.map((p) => ({
                   ...p,
                   imageUrl: map[p.id]?.signedUrl,
                 }));
                 setItems(merged);
                 debug('Home/PCs/setItems', { count: merged.length, withImages: true });
               } else {
-                setItems(visible);
-                debug('Home/PCs/setItems', { count: visible.length, withImages: false, reason: 'images api !ok' });
+                setItems(sorted);
+                debug('Home/PCs/setItems', { count: sorted.length, withImages: false, reason: 'images api !ok' });
               }
             } else {
-              setItems(visible);
-              debug('Home/PCs/setItems', { count: visible.length, withImages: false, reason: 'no ids' });
+              setItems(sorted);
+              debug('Home/PCs/setItems', { count: sorted.length, withImages: false, reason: 'no ids' });
             }
           } catch {
-            setItems(visible);
-            debug('Home/PCs/setItems', { count: visible.length, withImages: false, reason: 'images api error' });
+            setItems(sorted);
+            debug('Home/PCs/setItems', { count: sorted.length, withImages: false, reason: 'images api error' });
           }
         }
       } catch (e) {

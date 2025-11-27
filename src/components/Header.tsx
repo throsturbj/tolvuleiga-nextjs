@@ -5,6 +5,7 @@ import Image from "next/image";
 import logo from "../../img/logo.png";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { debug } from "@/lib/debug";
 
 export default function Header() {
 	const [isOpen, setIsOpen] = useState(false);
@@ -13,6 +14,11 @@ export default function Header() {
 
 	// Quiet effect to keep hooks order stable
 	useEffect(() => {}, []);
+
+	// Debug render state to diagnose flicker or wrong visibility
+	useEffect(() => {
+		debug('Header/render', { loading, hasUser: !!user, hasSession: !!session });
+	}, [loading, user, session]);
 
 	// Get first name from full_name
 	const getFirstName = (fullName: string) => {

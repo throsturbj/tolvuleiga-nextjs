@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { checkSession } from '@/lib/auth-utils';
 import type { Session } from '@supabase/supabase-js';
+import { debug } from '@/lib/debug';
 
 interface User {
   id: string;
@@ -72,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const initial = await supabase.auth.getSession();
         let { session } = initial.data;
         const error = initial.error;
+        debug('AuthContext/init', { hasUser: !!session?.user, expiresAt: (session as { expires_at?: number } | null)?.expires_at, error: !!error });
         
         if (!isMounted) return;
 
@@ -100,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         setSession(session);
+        debug('AuthContext/setSession', { hasUser: !!session?.user });
         // Keep a lightweight client-visible auth flag for middleware UX redirects
         try {
           if (session?.user) {
@@ -145,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, session) => {
         if (!isMounted) return;
         setSession(session);
+        debug('AuthContext/event', { event, hasUser: !!session?.user });
         
         if (event === 'SIGNED_OUT') {
           setUser(null);
@@ -208,6 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (Number.isFinite(startedAt)) {
           const age = Date.now() - startedAt;
           if (age > SESSION_MAX_AGE_MS) {
+            debug('AuthContext/expire', { ageMs: age, thresholdMs: SESSION_MAX_AGE_MS });
             // Force sign out and clear markers
             try { clearCookie('session-start'); } catch {}
             try { localStorage.removeItem('sessionStartedAt'); } catch {}
@@ -322,6 +327,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchUserProfile]);
 
   const signIn = async (email: string, password: string) => {
+    debug('AuthContext/signIn', { email });
     const result = await supabase.auth.signInWithPassword({ email, password });
     if (result.error) {
       console.error('AuthContext: Sign in error:', result.error);
@@ -355,6 +361,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      
+      debug('AuthContext/signOut', {});
       
       // Clear session state first
       setSession(null);

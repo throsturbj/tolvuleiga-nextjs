@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { supabasePublic } from "@/lib/supabase-public";
 import { useAuth } from "@/contexts/AuthContext";
+import { debug } from "@/lib/debug";
 
 export default function Home() {
   interface GamingPCItem {
@@ -42,6 +43,7 @@ export default function Home() {
       try {
         // Prefer authed client if user exists; otherwise anon; fallback to the other on failure/empty
         const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
+        debug('Home/PCs/start', { hasUser: !!session?.user, order: clients.map((c) => (c === supabase ? 'authed' : 'anon')) });
         let data: GamingPCItem[] | null = null;
         let lastError: unknown = null;
         for (const client of clients) {
@@ -52,9 +54,11 @@ export default function Home() {
               .order("id", { ascending: false });
             if (error) {
               lastError = error;
+              debug('Home/PCs/error', { client: client === supabase ? 'authed' : 'anon', error });
               continue;
             }
             const arr = (d as GamingPCItem[]) || [];
+            debug('Home/PCs/result', { client: client === supabase ? 'authed' : 'anon', count: arr.length });
             if (arr.length > 0) {
               data = arr;
               break;
@@ -64,6 +68,7 @@ export default function Home() {
             }
           } catch (e) {
             lastError = e;
+            debug('Home/PCs/exception', { client: client === supabase ? 'authed' : 'anon', error: e });
           }
         }
         if (!isMounted) return;
@@ -117,6 +122,7 @@ export default function Home() {
       try {
         // Prefer authed client if user exists; otherwise anon; fallback to the other on failure/empty
         const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
+        debug('Home/Consoles/start', { hasUser: !!session?.user, order: clients.map((c) => (c === supabase ? 'authed' : 'anon')) });
         let data: GamingConsoleItem[] | null = null;
         let lastError: unknown = null;
         for (const client of clients) {
@@ -127,14 +133,17 @@ export default function Home() {
               .order("inserted_at", { ascending: false });
             if (error) {
               lastError = error;
+              debug('Home/Consoles/error', { client: client === supabase ? 'authed' : 'anon', error });
               continue;
             }
             const arr = (d as GamingConsoleItem[]) || [];
             // Accept empty arrays too; we just prefer a non-empty source if available
             data = arr;
+            debug('Home/Consoles/result', { client: client === supabase ? 'authed' : 'anon', count: arr.length });
             if (arr.length > 0) break;
           } catch (e) {
             lastError = e;
+            debug('Home/Consoles/exception', { client: client === supabase ? 'authed' : 'anon', error: e });
           }
         }
         if (!isMounted) return;

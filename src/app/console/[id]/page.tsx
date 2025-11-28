@@ -555,7 +555,7 @@ export default function ConsoleDetailPage() {
       {insured ? (
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 mt-2 mb-2 text-center">
           <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-green-500/30">
-            Vara trygð
+            Vara tryggð
           </span>
         </div>
       ) : null}

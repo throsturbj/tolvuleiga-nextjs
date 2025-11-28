@@ -64,7 +64,15 @@ export async function sendWelcomeEmail(to: string): Promise<void> {
 	await sendMail({
 		to,
 		subject: 'Velkomin/n til Tölvuleigu',
-		text: 'Takk fyrir að skrá þig! Við munum hafa samband fljótlega.',
+		text: `Góðan dag,
+
+Takk kærlega fyrir að skrá þig!
+
+Við erum mjög spennt að hafa þig með okkur og vonum að þjónustan okkar muni koma þér að góðum notum. 
+Ef þú hefur einhverjar spurningar eða þarft aðstoð er þér alltaf velkomið að hafa samband.
+
+Kærar kveðjur,
+Tölvuleiga.is`,
 	})
 }
 
@@ -92,16 +100,21 @@ export async function sendOrderEmails(args: {
 	await sendMail({
 		to: args.userEmail,
 		subject: 'Pöntunarstaðfesting',
-		text: `Kæri viðskiptavinur,
+		text: `Góðan dag,
 
-Takk kærlega fyrir að panta hjá okkur tölvu. Við munum strax byrja að setja hana saman fyrir þig.
+Takk fyrir að velja tolvuleiga.is.
 
-Í millitíðinni þarft þú að greiða reikning sem við munum senda þér í heimabankann. Greiðslan mun staðfesta ferlið hjá okkur.
+Vinsamlegast athugið að áætlaður afhendingartími er 7 virkir dagar.
+Reikningur verður sendur í heimabankann þinn á næstu dögum. Greiðsla reiknings þarf að berast áður en hafist er handa við samsetningu og undirbúning tölvunnar, 
+þar sem ferlið hefst ekki fyrr en greiðsla hefur verið staðfest.
 
-Í viðhengi máttu sjá pöntunarstaðfestinguna þína.
+Ef einhverjar spurningar vakna varðandi pöntunina, þjónustuna eða aðra þætti, hvetjum við þig eindregið til að hafa samband við okkur. Þú getur náð í okkur á netfanginu tolvuleiga@tolvuleiga.is,
+og við munum leitast við að svara eins fljótt og kostur er.
 
-Kær kveðja,
-Tölvuleiga`,
+Við þökkum traustið og hlökkum til að afgreiða pöntunina þína.
+
+Kærar kveðjur,
+Tölvuleiga.is`,
 		attachments: args.pdfAttachment ? [
 			{ filename: args.pdfAttachment.filename, content: args.pdfAttachment.content, contentType: 'application/pdf' },
 		] : undefined,

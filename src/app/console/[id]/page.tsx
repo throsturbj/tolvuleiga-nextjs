@@ -66,6 +66,7 @@ export default function ConsoleDetailPage() {
   const [modalImages, setModalImages] = useState<{ name: string; path: string; signedUrl: string }[]>([]);
   const [modalActiveIndex, setModalActiveIndex] = useState<number>(0);
   const [modalLoading, setModalLoading] = useState<boolean>(false);
+  const [zoomImageSrc, setZoomImageSrc] = useState<string | null>(null);
   const durations = [1, 3, 6, 12] as const;
   const [durationIndex, setDurationIndex] = useState<number>(0);
   const sliderProgress = (durationIndex / (durations.length - 1)) * 100;
@@ -371,7 +372,7 @@ export default function ConsoleDetailPage() {
             {/* Duration slider */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-700 font-medium">Tímabil</p>
+                <p className="text-sm text-gray-700 font-medium">Leigutímabil</p>
                 <p className="text-sm text-gray-500">{durations[durationIndex]} mánuðir</p>
               </div>
               <div className="w-full max-w-xs sm:max-w-sm mx-auto">
@@ -400,7 +401,7 @@ export default function ConsoleDetailPage() {
               <div className="grid grid-cols-3 gap-3 justify-center justify-items-center items-end">
                 {extraControllersMax > 0 ? (
                   <div className="col-span-3 sm:col-span-1 flex flex-col items-center gap-2">
-                    <div className="text-sm text-gray-700">Auka fjarðstýringar</div>
+                    <div className="text-sm text-gray-700">Auka fjarstýringar</div>
                     <div className="inline-flex items-center gap-2">
                       <button
                         type="button"
@@ -485,9 +486,10 @@ export default function ConsoleDetailPage() {
                     setInsured(false);
                     return;
                   }
+                  // Turn insurance on immediately; keep animation purely visual
+                  setInsured(true);
                   setAnimatingInsurance(true);
                   window.setTimeout(() => {
-                    setInsured(true);
                     setAnimatingInsurance(false);
                   }, 1000);
                 }}
@@ -631,11 +633,22 @@ export default function ConsoleDetailPage() {
                 ) : modalImages.length > 0 ? (
                   <div className="space-y-3">
                     <div className="relative aspect-[4/3] bg-gray-100 flex items-center justify-center rounded">
-                      <img
-                        src={modalImages[Math.min(modalActiveIndex, modalImages.length - 1)]?.signedUrl}
-                        alt=""
-                        className="max-h-full max-w-full object-contain"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const src = modalImages[Math.min(modalActiveIndex, modalImages.length - 1)]?.signedUrl;
+                          if (src) setZoomImageSrc(src);
+                        }}
+                        className="h-full w-full flex items-center justify-center cursor-zoom-in"
+                        aria-label="Stækka mynd"
+                        title="Smelltu til að stækka"
+                      >
+                        <img
+                          src={modalImages[Math.min(modalActiveIndex, modalImages.length - 1)]?.signedUrl}
+                          alt=""
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </button>
                     </div>
                     <div className="flex gap-2 overflow-x-auto">
                       {modalImages.map((img, idx) => (
@@ -655,6 +668,32 @@ export default function ConsoleDetailPage() {
             <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end">
               <button type="button" onClick={() => setModalType(null)} className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm cursor-pointer">Loka</button>
             </div>
+          </div>
+        </div>
+      ) : null}
+      {/* Image lightbox overlay (modal image zoom) */}
+      {zoomImageSrc ? (
+        <div className="fixed inset-0 z-[60]">
+          <div
+            className="absolute inset-0 bg-black/80"
+            onClick={() => setZoomImageSrc(null)}
+            aria-hidden="true"
+          />
+          <div role="dialog" aria-modal="true" className="relative z-[61] h-full w-full flex items-center justify-center p-4">
+            <img
+              src={zoomImageSrc}
+              alt=""
+              className="max-h-[95vh] max-w-[95vw] object-contain shadow-2xl rounded"
+            />
+            <button
+              type="button"
+              onClick={() => setZoomImageSrc(null)}
+              className="absolute top-4 right-4 h-9 w-9 inline-flex items-center justify-center rounded-full bg-white/90 text-gray-700 hover:bg-white shadow cursor-pointer"
+              aria-label="Loka"
+              title="Loka"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 6.22a.75.75 0 011.06 0L10 8.88l2.66-2.66a.75.75 0 111.06 1.06L11.06 9.94l2.66 2.66a.75.75 0 11-1.06 1.06L10 11l-2.66 2.66a.75.75 0 11-1.06-1.06L8.94 9.94 6.28 7.28a.75.75 0 010-1.06z"/></svg>
+            </button>
           </div>
         </div>
       ) : null}

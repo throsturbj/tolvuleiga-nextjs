@@ -14,6 +14,8 @@ function AuthPageInner() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgotStatus, setForgotStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
+  const [forgotMessage, setForgotMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -43,6 +45,36 @@ function AuthPageInner() {
       [e.target.name]: e.target.value
     });
     setError(null);
+  };
+
+  const handleForgotPassword = async () => {
+    try {
+      setForgotStatus("loading");
+      setForgotMessage(null);
+      setError(null);
+      const email = formData.email.trim();
+      if (!email) {
+        setForgotStatus("error");
+        setForgotMessage("Settu inn netfang fyrst.");
+        return;
+      }
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setForgotStatus("error");
+        setForgotMessage(data?.error || "Tókst ekki að senda endursetningarpóst.");
+        return;
+      }
+      setForgotStatus("sent");
+      setForgotMessage("Tengill til að endursetja lykilorð var sendur á netfangið.");
+    } catch (e) {
+      setForgotStatus("error");
+      setForgotMessage("Tókst ekki að senda endursetningarpóst.");
+    }
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -223,6 +255,22 @@ function AuthPageInner() {
                   {isSubmitting ? 'Skrái inn...' : 'Skrá inn'}
                 </button>
               </form>
+
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={forgotStatus === "loading"}
+                  className="text-[var(--color-secondary)] hover:opacity-80 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {forgotStatus === "loading" ? 'Sendi tengil...' : 'Gleymt lykilorð?'}
+                </button>
+                {forgotMessage && (
+                  <p className={`mt-2 text-sm ${forgotStatus === 'error' ? 'text-red-600' : 'text-gray-600'}`}>
+                    {forgotMessage}
+                  </p>
+                )}
+              </div>
 
               <div className="mt-6">
                 <Link

@@ -163,4 +163,33 @@ Tölvuleiga`
 	await sendMail({ to, subject, text, html })
 }
 
+export async function sendPasswordResetEmail(args: { to: string; resetLink: string }): Promise<void> {
+	const { to, resetLink } = args
+	const subject = 'Gleymt lykilorð - Tölvuleiga'
+	const text = `Kæri viðskiptavinur,
+
+Það virðist sem að það sé verið að reyna að undursitja lykilorðið á netfang: ${to}
+
+Vinsamlegast smelltu á eftirfarandi tengil til að setja nýtt lykilorð:
+${resetLink}
+
+Kær kveðja,
+Tölvuleiga`
+
+	const html = `
+<div style="font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#111">
+  <p>Kæri viðskiptavinur,</p>
+  <p>Það virðist sem að það sé verið að reyna að undursitja lykilorðið á netfang: <strong>${to}</strong></p>
+  <p>Smelltu á hlekkinn hér fyrir neðan til að setja nýtt lykilorð:</p>
+  <p style="margin:24px 0">
+    <a href="${resetLink}" style="background:#2563eb;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600">
+      Endursetja lykilorð
+    </a>
+  </p>
+  <p style="margin-top:24px">Kær kveðja,<br/>Tölvuleiga</p>
+</div>`
+
+	await sendMail({ to, subject, text, html })
+}
+
 

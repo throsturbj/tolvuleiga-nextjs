@@ -13,6 +13,7 @@ export type OrderRow = {
 	verd?: number | null
 	gamingpc_uuid?: number | null
 	gamingconsole_uuid?: string | null
+	screen_uuid?: string | null
 	created_at?: string | null
 	skjar?: boolean | null
 	lyklabord?: boolean | null
@@ -51,11 +52,20 @@ export type ConsoleRow = {
 	tengi?: string | null
 }
 
-export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderRow; user: UserRow | null; pc: PcRow | null; console: ConsoleRow | null }> {
+export type ScreenRow = {
+	id: string
+	framleidandi?: string | null
+	skjastaerd?: string | null
+	upplausn?: string | null
+	skjataekni?: string | null
+	endurnyjunartidni?: string | null
+}
+
+export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderRow; user: UserRow | null; pc: PcRow | null; console: ConsoleRow | null; screen: ScreenRow | null }> {
 	const supabase = getServerSupabase()
 	const { data: order, error: orderErr } = await supabase
 		.from('orders')
-		.select('id, orderNumber, auth_uid, timabilFra, timabilTil, verd, gamingpc_uuid, gamingconsole_uuid, created_at, skjar, lyklabord, mus, trygging, numberofextracon')
+		.select('id, orderNumber, auth_uid, timabilFra, timabilTil, verd, gamingpc_uuid, gamingconsole_uuid, screen_uuid, created_at, skjar, lyklabord, mus, trygging, numberofextracon')
 		.eq('id', orderId)
 		.single<OrderRow>()
 	if (orderErr || !order) throw new Error('Order not found')
@@ -90,7 +100,17 @@ export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderR
 		console = cRow ?? null
 	}
 
-	return { order, user, pc, console }
+	let screen: ScreenRow | null = null
+	if (order.screen_uuid) {
+		const { data: sRow } = await supabase
+			.from('screens')
+			.select('id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni')
+			.eq('id', order.screen_uuid)
+			.single<ScreenRow>()
+		screen = sRow ?? null
+	}
+
+	return { order, user, pc, console, screen }
 }
 
 function formatKr(value: number | string | null | undefined) {
@@ -177,6 +197,12 @@ export async function generateOrderPdfBuffer(orderId: string): Promise<{ buffer:
 		doc.text(`Heiti: ${bundle.console.nafn || '—'}`)
 		doc.text(`Geymslupláss: ${bundle.console.geymsluplass || '—'}`)
 		doc.text(`Tengi: ${bundle.console.tengi || '—'}`)
+	} else if (bundle.screen) {
+		doc.text(`Framleiðandi: ${bundle.screen.framleidandi || '—'}`)
+		doc.text(`Skjástærð: ${bundle.screen.skjastaerd || '—'}`)
+		doc.text(`Upplausn: ${bundle.screen.upplausn || '—'}`)
+		doc.text(`Skjátegund: ${bundle.screen.skjataekni || '—'}`)
+		doc.text(`Endurnýjunartíðni: ${bundle.screen.endurnyjunartidni || '—'}`)
 	}
 	doc.moveDown()
 
@@ -226,7 +252,7 @@ export async function generateOrderPdfBuffer(orderId: string): Promise<{ buffer:
 }
 
 export function buildAdminOrderText(meta: Awaited<ReturnType<typeof fetchOrderBundle>>, userEmail?: string | null, message?: string | null): string {
-	const { order, user, pc, console } = meta
+	const { order, user, pc, console, screen } = meta
 	const parts = [
 		'Ný pöntun fyrir Tölvuleigu',
 		'',
@@ -254,10 +280,18 @@ export function buildAdminOrderText(meta: Awaited<ReturnType<typeof fetchOrderBu
 				`Aflgjafi: ${pc?.powersupply || '—'}`,
 				`Kæling: ${pc?.cpucooler || '—'}`,
 			].join('\n')
-			: [
+			: console
+			? [
 				`Heiti: ${console?.nafn || '—'}`,
 				`Geymslupláss: ${console?.geymsluplass || '—'}`,
 				`Tengi: ${console?.tengi || '—'}`,
+			].join('\n')
+			: [
+				`Framleiðandi: ${screen?.framleidandi || '—'}`,
+				`Skjástærð: ${screen?.skjastaerd || '—'}`,
+				`Upplausn: ${screen?.upplausn || '—'}`,
+				`Skjátegund: ${screen?.skjataekni || '—'}`,
+				`Endurnýjunartíðni: ${screen?.endurnyjunartidni || '—'}`,
 			].join('\n'),
 		'',
 		'Leigutímabil:',

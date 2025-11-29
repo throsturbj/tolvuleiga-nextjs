@@ -25,6 +25,7 @@ interface Order {
   verd?: number;
   gamingpc_uuid?: number | null;
   gamingconsole_uuid?: string | null;
+  screen_uuid?: string | null;
   numberofextracon?: number | null;
   pdf_url?: string | null;
 }
@@ -52,6 +53,7 @@ export default function DashboardPage() {
   const [pcNamesById, setPcNamesById] = useState<Record<number, string>>({});
   const [pcById, setPcById] = useState<Record<number, GamingPCItem>>({});
   const [consoleNamesById, setConsoleNamesById] = useState<Record<string, string>>({});
+  const [screenNamesById, setScreenNamesById] = useState<Record<string, string>>({});
   const [openPcId, setOpenPcId] = useState<number | null>(null);
   const [busyOpenPdfById, setBusyOpenPdfById] = useState<Record<string, boolean>>({});
   const [pcFirstImages, setPcFirstImages] = useState<Record<number, { path: string; signedUrl: string } | null>>({});
@@ -59,6 +61,10 @@ export default function DashboardPage() {
   const [consoleById, setConsoleById] = useState<Record<string, { id: string; nafn?: string | null; geymsluplass?: string | null; tengi?: string | null }>>({});
   const [consoleModalImages, setConsoleModalImages] = useState<{ path: string; signedUrl: string }[]>([]);
   const [consoleImagesLoading, setConsoleImagesLoading] = useState<boolean>(false);
+  const [openScreenId, setOpenScreenId] = useState<string | null>(null);
+  const [screenById, setScreenById] = useState<Record<string, { id: string; framleidandi?: string | null; skjastaerd?: string | null; upplausn?: string | null; skjataekni?: string | null; endurnyjunartidni?: string | null }>>({});
+  const [screenModalImages, setScreenModalImages] = useState<{ path: string; signedUrl: string }[]>([]);
+  const [screenImagesLoading, setScreenImagesLoading] = useState<boolean>(false);
   const [extendOrderId, setExtendOrderId] = useState<string | null>(null);
   const [extendMonths, setExtendMonths] = useState<number>(1);
   const [extendBusy, setExtendBusy] = useState<boolean>(false);
@@ -210,6 +216,9 @@ export default function DashboardPage() {
         const consoleIds = Array.from(
           new Set((ordersData || []).map(o => o.gamingconsole_uuid).filter((v: unknown): v is string => typeof v === 'string' && v.length > 0))
         )
+        const screenIds = Array.from(
+          new Set((ordersData || []).map(o => o.screen_uuid).filter((v: unknown): v is string => typeof v === 'string' && v.length > 0))
+        )
         if (ids.length > 0) {
           try {
             const { data: pcRows } = await supabase
@@ -241,6 +250,25 @@ export default function DashboardPage() {
           }
         } else {
           setConsoleNamesById({})
+        }
+
+        if (screenIds.length > 0) {
+          try {
+            const { data: sRows } = await supabase
+              .from('screens')
+              .select('id, framleidandi, skjastaerd')
+              .in('id', screenIds as string[])
+            const smap: Record<string, string> = {}
+            ;(sRows || []).forEach((r: { id: string; framleidandi?: string | null; skjastaerd?: string | null }) => {
+              const title = [r.framleidandi || '', r.skjastaerd || ''].join(' ').trim() || 'Skjár'
+              smap[r.id] = title
+            })
+            setScreenNamesById(smap)
+          } catch {
+            setScreenNamesById({})
+          }
+        } else {
+          setScreenNamesById({})
         }
 
         setOrders(ordersData || [])
@@ -428,6 +456,49 @@ export default function DashboardPage() {
     })();
     return () => { alive = false; };
   }, [openConsoleId, consoleById]);
+
+  // Load screen details and images when opening screen modal
+  useEffect(() => {
+    if (!openScreenId) return;
+    let alive = true;
+    (async () => {
+      try {
+        if (!screenById[openScreenId]) {
+          const { data } = await supabase
+            .from('screens')
+            .select('id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni')
+            .eq('id', openScreenId)
+            .single();
+          if (!alive) return;
+          if (data) {
+            setScreenById((prev) => ({ ...prev, [openScreenId]: data as { id: string; framleidandi?: string; skjastaerd?: string; upplausn?: string; skjataekni?: string; endurnyjunartidni?: string } }));
+          }
+        }
+      } catch {}
+      try {
+        setScreenImagesLoading(true);
+        setScreenModalImages([]);
+        const res = await fetch('/api/images/list-generic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bucket: 'screens', folder: openScreenId }),
+        });
+        if (!alive) return;
+        if (res.ok) {
+          const j = await res.json();
+          const files: { path: string; signedUrl: string }[] = (j?.files || []).map((f: { path: string; signedUrl: string }) => ({ path: f.path, signedUrl: f.signedUrl }));
+          setScreenModalImages(files);
+        } else {
+          setScreenModalImages([]);
+        }
+      } catch {
+        if (alive) setScreenModalImages([]);
+      } finally {
+        if (alive) setScreenImagesLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [openScreenId, screenById]);
 
   const getStatusMeta = (status: string) => {
     const accentBadge = 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30';
@@ -625,7 +696,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
                 {orders.map((order: Order) => {
                   const addons: string[] = [];
                   if (order.skjar) addons.push('Skjár');
@@ -641,8 +712,8 @@ export default function DashboardPage() {
                   const progressWidth = `${progressMap[Math.min(Math.max(meta.step, 0), 2)]}%`;
 
                   return (
-                    <div key={order.id} className="relative">
-                      <div className={`group relative rounded-2xl border bg-white shadow-sm hover:shadow-md transition-shadow ${order.trygging ? 'border-green-500' : 'border-gray-200'}`}>
+                    <div key={order.id} className="relative h-full">
+                      <div className={`group relative h-full rounded-2xl border bg-white shadow-sm hover:shadow-md transition-shadow ${order.trygging ? 'border-green-500' : 'border-gray-200'}`}>
                         <div className="rounded-2xl p-5 h-full flex flex-col">
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -667,6 +738,14 @@ export default function DashboardPage() {
                                   className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium min-w-0 max-w-[75%] overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer"
                                 >
                                   {consoleNamesById[order.gamingconsole_uuid] || 'Vara'}
+                                </button>
+                              ) : order.screen_uuid ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenScreenId(order.screen_uuid!)}
+                                  className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium min-w-0 max-w-[75%] overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer"
+                                >
+                                  {screenNamesById[order.screen_uuid] || 'Skjár'}
                                 </button>
                               ) : 'Vara'}
                               {(() => { const p = formatPrice(order.verd); return p ? (<span className="ml-1 text-gray-900 font-semibold whitespace-nowrap flex-shrink-0">{p}</span>) : null; })()}
@@ -725,7 +804,16 @@ export default function DashboardPage() {
                         {/* Created line between boxes and buttons */}
                         <div className="mt-4 text-xs md:text-sm text-gray-600 text-center">Stofnað: {formatDate(order.created_at)}</div>
 
-                        <div className="mt-5 flex items-center justify-center gap-3">
+                        {/* Insurance label inside card */}
+                        {order.trygging ? (
+                          <div className="mt-3 text-center">
+                            <span className="inline-block text-[10px] md:text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-green-500/30">
+                              Þessi pöntun er tryggð
+                            </span>
+                          </div>
+                        ) : null}
+
+                        <div className="mt-auto pt-5 flex items-center justify-center gap-3">
                           {order.pdf_url || order.orderNumber ? (
                             <button
                               type="button"
@@ -753,6 +841,14 @@ export default function DashboardPage() {
                             >
                               Sjá vöru
                             </button>
+                          ) : order.screen_uuid ? (
+                            <button
+                              type="button"
+                              onClick={() => setOpenScreenId(order.screen_uuid!)}
+                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
+                            >
+                              Sjá vöru
+                            </button>
                           ) : null}
                           <button
                             type="button"
@@ -764,13 +860,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       </div>
-                      {order.trygging ? (
-                        <div className="mt-2 mb-1 text-center">
-                          <span className="inline-block text-[10px] md:text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-green-500/30">
-                            Pöntun tryggð
-                          </span>
-                        </div>
-                      ) : null}
+
                     </div>
                   );
                 })}
@@ -904,6 +994,58 @@ export default function DashboardPage() {
                 >
                   {extendBusy ? 'Uppfæri…' : 'Staðfesta'}
                 </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {/* Screen modal */}
+        {openScreenId && screenById[openScreenId] ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40 cursor-pointer" onClick={() => setOpenScreenId(null)} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6 z-10">
+              <div className="flex items-start justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">{screenById[openScreenId].framleidandi || 'Skjár'}</h3>
+                <button onClick={() => setOpenScreenId(null)} className="text-gray-500 hover:text-gray-700 cursor-pointer">✕</button>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <div className="aspect-video rounded-xl overflow-hidden mb-3 bg-gray-100 flex items-center justify-center">
+                    {screenImagesLoading ? (
+                      <div className="text-gray-400 text-sm">Hleð myndum…</div>
+                    ) : screenModalImages.length > 0 ? (
+                      <img
+                        src={screenModalImages[0].signedUrl}
+                        alt={screenById[openScreenId].framleidandi || ''}
+                        className="w-full h-full object-contain"
+                        loading="eager"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300" />
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm content-start">
+                  <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
+                    <p className="text-gray-500">Skjástærð</p>
+                    <p className="mt-1 font-semibold text-gray-900">{screenById[openScreenId].skjastaerd || '—'}</p>
+                  </div>
+                  <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
+                    <p className="text-gray-500">Upplausn</p>
+                    <p className="mt-1 font-semibold text-gray-900">{screenById[openScreenId].upplausn || '—'}</p>
+                  </div>
+                  <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
+                    <p className="text-gray-500">Skjátegund</p>
+                    <p className="mt-1 font-semibold text-gray-900">{screenById[openScreenId].skjataekni || '—'}</p>
+                  </div>
+                  <div className="rounded-xl ring-1 ring-gray-200 p-3 min-h-[88px] h-full flex flex-col justify-between">
+                    <p className="text-gray-500">Endurnýjunartíðni</p>
+                    <p className="mt-1 font-semibold text-gray-900">{screenById[openScreenId].endurnyjunartidni || '—'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 text-right">
+                <button onClick={() => setOpenScreenId(null)} className="inline-flex items-center px-3 py-1.5 text-sm rounded-full ring-1 ring-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer">Loka</button>
               </div>
             </div>
           </div>

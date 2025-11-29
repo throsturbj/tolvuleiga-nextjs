@@ -13,10 +13,12 @@ export async function POST(req: NextRequest) {
 		}
 
 		const origin = (() => {
+			const envOrigin = (process.env.NEXT_PUBLIC_SITE_ORIGIN || '').replace(/\/+$/, '')
+			if (envOrigin) return envOrigin
 			try {
 				return new URL(req.url).origin
 			} catch {
-				return process.env.NEXT_PUBLIC_SITE_ORIGIN || 'http://localhost:3000'
+				return 'http://localhost:3000'
 			}
 		})()
 		const resetPage = `${origin}/reset-password`

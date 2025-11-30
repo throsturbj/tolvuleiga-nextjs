@@ -17,8 +17,12 @@ interface AdminOrderRow {
   skjar?: boolean | null;
   lyklabord?: boolean | null;
   mus?: boolean | null;
+  trygging?: boolean | null;
   verd?: number | null;
   gamingpc_uuid?: number | null;
+  gamingconsole_uuid?: string | null;
+  screen_uuid?: string | null;
+  numberofextracon?: number | null;
   pdf_url?: string | null;
 }
 
@@ -35,7 +39,27 @@ export default function AdminDashboardPage() {
   const [busyUpdateById, setBusyUpdateById] = useState<Record<string, boolean>>({});
   const [busyDeleteById, setBusyDeleteById] = useState<Record<string, boolean>>({});
   const [busyOpenPdfById, setBusyOpenPdfById] = useState<Record<string, boolean>>({});
+  const [busyGeneratePdfById, setBusyGeneratePdfById] = useState<Record<string, boolean>>({});
   const [busyRemindById, setBusyRemindById] = useState<Record<string, boolean>>({});
+  const [editOrderId, setEditOrderId] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState<boolean>(false);
+  const [editDraft, setEditDraft] = useState<{
+    status: string;
+    timabilFra: string | null;
+    timabilTil: string | null;
+    verd: number | null;
+    skjar: boolean;
+    lyklabord: boolean;
+    mus: boolean;
+    trygging: boolean;
+    numberofextracon: number;
+    gamingpc_uuid: number | null;
+    gamingconsole_uuid: string | null;
+    screen_uuid: string | null;
+  } | null>(null);
+  const [allPcs, setAllPcs] = useState<Array<{ id: number; name: string }>>([]);
+  const [allConsoles, setAllConsoles] = useState<Array<{ id: string; nafn: string }>>([]);
+  const [allScreens, setAllScreens] = useState<Array<{ id: string; label: string }>>([]);
 
   const isAdmin = !!user?.isAdmin;
 
@@ -67,12 +91,6 @@ export default function AdminDashboardPage() {
         } else {
           const rows = (data as AdminOrderRow[]) ?? [];
           setOrders(rows);
-          // Initialize pending statuses for inline edits
-          const nextPending: Record<string, string> = {};
-          for (const r of rows) {
-            nextPending[r.id] = r.status;
-          }
-          setPendingStatusById(nextPending);
           // Fetch owner names for displayed orders
           const uids = Array.from(
             new Set(
@@ -112,6 +130,36 @@ export default function AdminDashboardPage() {
             setPcNamesById(mapPc);
           } else {
             setPcNamesById({});
+          }
+          // Fetch all product lists for modal selection
+          try {
+            const [pcsRes, consRes, scrRes] = await Promise.all([
+              supabase.from('GamingPC').select('id,name'),
+              supabase.from('gamingconsoles').select('id, nafn'),
+              supabase.from('screens').select('id, framleidandi, skjastaerd, upplausn'),
+            ]);
+            if (!pcsRes.error && Array.isArray(pcsRes.data)) {
+              setAllPcs((pcsRes.data as Array<{ id: number; name?: string | null }>).map(r => ({ id: r.id, name: r.name || String(r.id) })));
+            } else {
+              setAllPcs([]);
+            }
+            if (!consRes.error && Array.isArray(consRes.data)) {
+              setAllConsoles((consRes.data as Array<{ id: string; nafn?: string | null }>).map(r => ({ id: r.id, nafn: r.nafn || r.id })));
+            } else {
+              setAllConsoles([]);
+            }
+            if (!scrRes.error && Array.isArray(scrRes.data)) {
+              setAllScreens((scrRes.data as Array<{ id: string; framleidandi?: string | null; skjastaerd?: string | null; upplausn?: string | null }>).map(r => {
+                const parts = [r.framleidandi, r.skjastaerd, r.upplausn].filter(Boolean);
+                return { id: r.id, label: parts.length > 0 ? parts.join(' · ') : r.id };
+              }));
+            } else {
+              setAllScreens([]);
+            }
+          } catch {
+            setAllPcs([]);
+            setAllConsoles([]);
+            setAllScreens([]);
           }
         }
       } catch (err) {
@@ -164,25 +212,90 @@ export default function AdminDashboardPage() {
 
   const allowedStatuses = ["Undirbúningur", "Í gangi", "Í vinnslu", "Lokið", "Hætt við"] as const;
 
-  const handleChangeStatus = (orderId: string, status: string) => {
-    setPendingStatusById((prev) => ({ ...prev, [orderId]: status }));
+  const isoToLocalInput = (iso?: string | null) => {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const mm = pad(d.getMonth() + 1);
+      const dd = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const mi = pad(d.getMinutes());
+      return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    } catch {
+      return '';
+    }
   };
 
-  const handleUpdateOrder = async (orderId: string) => {
-    if (!isAdmin) return;
-    const newStatus = pendingStatusById[orderId];
-    if (!newStatus) return;
-    setBusyUpdateById((p) => ({ ...p, [orderId]: true }));
+  const localInputToIso = (val: string) => {
+    if (!val) return null;
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString();
+  };
+
+  const roundToNearest10 = (n: number) => {
+    return Math.round(n / 10) * 10;
+  };
+
+  const openEditModal = (order: AdminOrderRow) => {
+    setEditOrderId(order.id);
+    setEditDraft({
+      status: order.status,
+      timabilFra: order.timabilFra || null,
+      timabilTil: order.timabilTil || null,
+      verd: typeof order.verd === 'number' ? order.verd : (typeof order.verd === 'string' ? parseInt(String(order.verd).replace(/\D+/g, ''), 10) || null : null),
+      skjar: !!order.skjar,
+      lyklabord: !!order.lyklabord,
+      mus: !!order.mus,
+      trygging: !!order.trygging,
+      numberofextracon: typeof order.numberofextracon === 'number' ? order.numberofextracon : 0,
+      gamingpc_uuid: typeof order.gamingpc_uuid === 'number' ? order.gamingpc_uuid : null,
+      gamingconsole_uuid: order.gamingconsole_uuid || null,
+      screen_uuid: order.screen_uuid || null,
+    });
+  };
+
+  const closeEditModal = () => {
+    setEditOrderId(null);
+    setEditDraft(null);
+    setSavingEdit(false);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!isAdmin || !editOrderId || !editDraft) return;
+    setSavingEdit(true);
+    setError(null);
+    const payload = {
+      status: editDraft.status,
+      timabilFra: editDraft.timabilFra,
+      timabilTil: editDraft.timabilTil,
+      verd: editDraft.verd,
+      skjar: editDraft.skjar,
+      lyklabord: editDraft.lyklabord,
+      mus: editDraft.mus,
+      trygging: editDraft.trygging,
+      numberofextracon: editDraft.numberofextracon,
+      gamingpc_uuid: editDraft.gamingpc_uuid,
+      gamingconsole_uuid: editDraft.gamingconsole_uuid,
+      screen_uuid: editDraft.screen_uuid,
+    } as Record<string, unknown>;
     try {
       const { error } = await supabase
-        .from("orders")
-        .update({ status: newStatus })
-        .eq("id", orderId);
-      if (!error) {
-        setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)));
+        .from('orders')
+        .update(payload)
+        .eq('id', editOrderId);
+      if (error) {
+        setError(error.message);
+      } else {
+        setOrders((prev) => prev.map((o) => (o.id === editOrderId ? { ...o, ...payload } as AdminOrderRow : o)));
+        closeEditModal();
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Uppfærsla mistókst');
     } finally {
-      setBusyUpdateById((p) => ({ ...p, [orderId]: false }));
+      setSavingEdit(false);
     }
   };
 
@@ -308,6 +421,31 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleGenerateAdminPdf = async (orderId: string) => {
+    if (!isAdmin) return;
+    setBusyGeneratePdfById((p) => ({ ...p, [orderId]: true }));
+    try {
+      const res = await fetch('/api/order/generate-admin-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      if (res.ok) {
+        const json = await res.json().catch(() => null) as { pdfUrl?: string } | null;
+        if (json?.pdfUrl) {
+          setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, pdf_url: json.pdfUrl } : o)));
+        }
+      } else {
+        const json = await res.json().catch(() => null) as { error?: string } | null;
+        setError(json?.error || 'Gat ekki búið til PDF');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Villa við að búa til PDF');
+    } finally {
+      setBusyGeneratePdfById((p) => ({ ...p, [orderId]: false }));
+    }
+  };
+
   if (authLoading || (!session?.user && typeof window !== "undefined")) {
     return (
       <div className="min-h-screen bg-gray-50 py-10">
@@ -351,8 +489,9 @@ export default function AdminDashboardPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Kennitala</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Vara</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Verð</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Tímabil</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[20rem]">Tímabil</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Aukahlutir</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Trygging</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Aðgerðir</th>
                 </tr>
               </thead>
@@ -365,15 +504,7 @@ export default function AdminDashboardPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 align-top">
-                      <select
-                        className="border border-gray-300 rounded px-2 py-1 text-xs"
-                        value={pendingStatusById[o.id] ?? o.status}
-                        onChange={(e) => handleChangeStatus(o.id, e.target.value)}
-                      >
-                        {allowedStatuses.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">{o.status}</span>
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="text-[13px] text-gray-700">{o.auth_uid ? (ownersByUid[o.auth_uid] || "—") : "—"}</div>
@@ -385,7 +516,7 @@ export default function AdminDashboardPage() {
                     <td className="px-4 py-3 align-top text-gray-700">
                       {(() => { const p = formatPrice(o.verd); return p ? p : '—'; })()}
                     </td>
-                    <td className="px-4 py-3 align-top text-gray-700">{o.periodFmt}</td>
+                    <td className="px-4 py-3 align-top text-gray-700 min-w-[20rem] whitespace-nowrap">{o.periodFmt}</td>
                     <td className="px-4 py-3 align-top text-gray-700">
                       <div className="flex flex-wrap gap-2">
                         {o.skjar ? (
@@ -399,6 +530,13 @@ export default function AdminDashboardPage() {
                         ) : null}
                         {!o.skjar && !o.lyklabord && !o.mus ? <span className="text-xs text-gray-400">—</span> : null}
                       </div>
+                    </td>
+                    <td className="px-4 py-3 align-top text-gray-700">
+                      {o.trygging ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs">Já</span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Nei</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="flex items-center gap-2">
@@ -418,8 +556,7 @@ export default function AdminDashboardPage() {
                         ) : null}
                         <button
                           type="button"
-                          disabled={!!busyUpdateById[o.id]}
-                          onClick={() => handleUpdateOrder(o.id)}
+                          onClick={() => openEditModal(o)}
                           className="inline-flex items-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50"
                         >
                           Uppfæra
@@ -440,13 +577,22 @@ export default function AdminDashboardPage() {
                         >
                           Eyða
                         </button>
+                        <button
+                          type="button"
+                          disabled={!!busyGeneratePdfById[o.id]}
+                          onClick={() => handleGenerateAdminPdf(o.id)}
+                          className="inline-flex items-center px-2.5 py-1.5 rounded border border-purple-600 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 whitespace-nowrap"
+                          title="Endurskapa PDF og senda á admin"
+                        >
+                          PDF
+                        </button>
                       </div>
                     </td>
                   </tr>
                 ))}
                 {!loading && orders.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
                       Engar pantanir fundust.
                     </td>
                   </tr>
@@ -455,6 +601,169 @@ export default function AdminDashboardPage() {
             </table>
           </div>
         </div>
+        {/* Edit modal */}
+        {editOrderId && editDraft ? (
+          <div className="fixed inset-0 z-50">
+            <div className="absolute inset-0 bg-black/40" onClick={savingEdit ? undefined : closeEditModal} />
+            <div className="relative z-10 mx-auto mt-20 w-full max-w-2xl rounded-lg bg-white shadow-xl">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Uppfæra pöntun</h2>
+                <button className="text-gray-500 hover:text-gray-700" onClick={closeEditModal} disabled={savingEdit}>✕</button>
+              </div>
+              <div className="px-6 py-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Staða</label>
+                    <select
+                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                      value={editDraft.status}
+                      onChange={(e) => setEditDraft((d) => d ? { ...d, status: e.target.value } : d)}
+                    >
+                      {allowedStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Verð (kr/mánuði)</label>
+                    <input
+                      type="number"
+                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                      value={editDraft.verd ?? ''}
+                      onChange={(e) => setEditDraft((d) => d ? { ...d, verd: e.target.value === '' ? null : Number(e.target.value) } : d)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Frá</label>
+                    <input
+                      type="datetime-local"
+                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                      value={isoToLocalInput(editDraft.timabilFra)}
+                      onChange={(e) => setEditDraft((d) => d ? { ...d, timabilFra: localInputToIso(e.target.value) } : d)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Til</label>
+                    <input
+                      type="datetime-local"
+                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                      value={isoToLocalInput(editDraft.timabilTil)}
+                      onChange={(e) => setEditDraft((d) => d ? { ...d, timabilTil: localInputToIso(e.target.value) } : d)}
+                    />
+                  </div>
+                  <div className="col-span-1 md:col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Vara</label>
+                    <select
+                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                      value={
+                        editDraft.gamingpc_uuid ? `pc:${editDraft.gamingpc_uuid}` :
+                        editDraft.gamingconsole_uuid ? `console:${editDraft.gamingconsole_uuid}` :
+                        editDraft.screen_uuid ? `screen:${editDraft.screen_uuid}` : ''
+                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setEditDraft((d) => {
+                          if (!d) return d;
+                          if (!v) return { ...d, gamingpc_uuid: null, gamingconsole_uuid: null, screen_uuid: null };
+                          const [kind, id] = v.split(':', 2);
+                          if (kind === 'pc') {
+                            return { ...d, gamingpc_uuid: Number(id), gamingconsole_uuid: null, screen_uuid: null };
+                          } else if (kind === 'console') {
+                            return { ...d, gamingpc_uuid: null, gamingconsole_uuid: id, screen_uuid: null };
+                          } else {
+                            return { ...d, gamingpc_uuid: null, gamingconsole_uuid: null, screen_uuid: id };
+                          }
+                        });
+                      }}
+                    >
+                      <option value="">—</option>
+                      {allPcs.length > 0 ? <optgroup label="Tölvur (PC)"></optgroup> : null}
+                      {allPcs.map((p) => (
+                        <option key={`pc:${p.id}`} value={`pc:${p.id}`}>{p.name}</option>
+                      ))}
+                      {allConsoles.length > 0 ? <optgroup label="Leikjatölvur"></optgroup> : null}
+                      {allConsoles.map((c) => (
+                        <option key={`console:${c.id}`} value={`console:${c.id}`}>{c.nafn}</option>
+                      ))}
+                      {allScreens.length > 0 ? <optgroup label="Skjáir"></optgroup> : null}
+                      {allScreens.map((s) => (
+                        <option key={`screen:${s.id}`} value={`screen:${s.id}`}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {(!!editDraft.gamingconsole_uuid) ? (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Auka fjarstýringar</label>
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                        value={editDraft.numberofextracon}
+                        onChange={(e) => setEditDraft((d) => d ? { ...d, numberofextracon: Math.max(0, Number(e.target.value || 0)) } : d)}
+                      />
+                    </div>
+                  ) : null}
+                  <div className="grid grid-cols-2 gap-3">
+                    {(!!editDraft.gamingpc_uuid || !!editDraft.gamingconsole_uuid) ? (
+                      <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" checked={editDraft.skjar} onChange={(e) => setEditDraft((d) => d ? { ...d, skjar: e.target.checked } : d)} />
+                        Skjár
+                      </label>
+                    ) : null}
+                    {(!!editDraft.gamingpc_uuid) ? (
+                      <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" checked={editDraft.lyklabord} onChange={(e) => setEditDraft((d) => d ? { ...d, lyklabord: e.target.checked } : d)} />
+                        Lyklaborð
+                      </label>
+                    ) : null}
+                    {(!!editDraft.gamingpc_uuid) ? (
+                      <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" checked={editDraft.mus} onChange={(e) => setEditDraft((d) => d ? { ...d, mus: e.target.checked } : d)} />
+                        Mús
+                      </label>
+                    ) : null}
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={editDraft.trygging}
+                        onChange={(e) => setEditDraft((d) => {
+                          if (!d) return d;
+                          const nextChecked = e.target.checked;
+                          let nextPrice = d.verd;
+                          if (typeof nextPrice === 'number') {
+                            if (nextChecked && !d.trygging) {
+                              nextPrice = roundToNearest10(nextPrice * 1.1);
+                            } else if (!nextChecked && d.trygging) {
+                              nextPrice = roundToNearest10(nextPrice / 1.1);
+                            }
+                          }
+                          return { ...d, trygging: nextChecked, verd: nextPrice };
+                        })}
+                      />
+                      Trygging
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  disabled={savingEdit}
+                  className="inline-flex items-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm disabled:opacity-50"
+                >
+                  Hætta við
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={savingEdit}
+                  className="inline-flex items-center px-3 py-1.5 rounded border border-green-600 text-green-700 hover:bg-green-50 text-sm disabled:opacity-50"
+                >
+                  Vista
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
   );

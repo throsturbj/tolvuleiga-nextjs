@@ -100,7 +100,22 @@ export async function sendOrderEmails(args: {
 	await sendMail({
 		to: args.userEmail,
 		subject: 'Pöntunarstaðfesting',
-		text: `Góðan dag,
+    text: buildUserOrderConfirmationText(),
+		attachments: args.pdfAttachment ? [
+			{ filename: args.pdfAttachment.filename, content: args.pdfAttachment.content, contentType: 'application/pdf' },
+		] : undefined,
+	})
+
+	// To admin plain text
+	await sendMail({
+		to: admin,
+		subject: 'Ný pöntun á vefnum',
+		text: args.orderTextForAdmin,
+	})
+}
+
+export function buildUserOrderConfirmationText(): string {
+  return `Góðan dag,
 
 Takk fyrir að velja tolvuleiga.is.
 
@@ -114,18 +129,7 @@ og við munum leitast við að svara eins fljótt og kostur er.
 Við þökkum traustið og hlökkum til að afgreiða pöntunina þína.
 
 Kærar kveðjur,
-Tölvuleiga.is`,
-		attachments: args.pdfAttachment ? [
-			{ filename: args.pdfAttachment.filename, content: args.pdfAttachment.content, contentType: 'application/pdf' },
-		] : undefined,
-	})
-
-	// To admin plain text
-	await sendMail({
-		to: admin,
-		subject: 'Ný pöntun á vefnum',
-		text: args.orderTextForAdmin,
-	})
+Tölvuleiga.is`
 }
 
 export async function sendOrderReminderEmail(args: {

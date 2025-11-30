@@ -25,7 +25,8 @@ Leigutaki skal tafarlaust tilkynna leigusala um bilun, skemmdir eða tap á bún
 			<p className="text-black/70 dark:text-white/70">6. Greiðsluskilmálar</p>
 			<p className="text-black/70 dark:text-white/70">Leiga fyrir skammtímaleigu (t.d. nokkra daga) skal greidd fyrirfram við afhendingu búnaðar.
 Við langtímaleigu (t.d. mánaðarlega) skal greiða mánaðarlega fyrirfram samkvæmt útgefnum reikningi.
-Greiðsludráttur getur leitt til dráttarvaxta og innheimtukostnaðar samkvæmt íslenskum lögum.</p>
+Greiðsludráttur getur leitt til dráttarvaxta og innheimtukostnaðar samkvæmt íslenskum lögum.
+Leigusali áskilur sér rétt til að innkalla leigða vöru ef reikningur hefur ekki verið greiddur innan 7 daga frá eindaga.</p>
 			<p className="text-black/70 dark:text-white/70">7. Notkun og meðferð búnaðar</p>
 			<p className="text-black/70 dark:text-white/70">Leigutaki skuldbindur sig til að fara vel með búnaðinn og nota hann í samræmi við leiðbeiningar leigusala.
 Óheimilt er að setja upp, fjarlægja eða breyta hugbúnaði, eða nota búnaðinn í ólögmætum tilgangi.

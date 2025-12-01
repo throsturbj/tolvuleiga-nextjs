@@ -124,7 +124,7 @@ Reikningur verður sendur í heimabankann þinn á næstu dögum. Greiðsla reik
 þar sem ferlið hefst ekki fyrr en greiðsla hefur verið staðfest.
 
 Ef einhverjar spurningar vakna varðandi pöntunina, þjónustuna eða aðra þætti, hvetjum við þig eindregið til að hafa samband við okkur. Þú getur náð í okkur á netfanginu tolvuleiga@tolvuleiga.is,
-og við munum leitast við að svara eins fljótt og kostur er.
+og við munum leitast við að svara eins fljótt og kostur er. Leigutímabil byrjar daginn sem afhending er.
 
 Við þökkum traustið og hlökkum til að afgreiða pöntunina þína.
 

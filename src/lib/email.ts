@@ -119,12 +119,12 @@ export function buildUserOrderConfirmationText(): string {
 
 Takk fyrir að velja tolvuleiga.is.
 
-Vinsamlegast athugið að áætlaður afhendingartími er 7 virkir dagar.
+Vinsamlegast athugið að áætlaður afhendingartími er 7 virkir dagar. Leigutímabil byrjar daginn sem afhending er.
 Reikningur verður sendur í heimabankann þinn á næstu dögum. Greiðsla reiknings þarf að berast áður en hafist er handa við samsetningu og undirbúning tölvunnar, 
 þar sem ferlið hefst ekki fyrr en greiðsla hefur verið staðfest.
 
 Ef einhverjar spurningar vakna varðandi pöntunina, þjónustuna eða aðra þætti, hvetjum við þig eindregið til að hafa samband við okkur. Þú getur náð í okkur á netfanginu tolvuleiga@tolvuleiga.is,
-og við munum leitast við að svara eins fljótt og kostur er. Leigutímabil byrjar daginn sem afhending er.
+og við munum leitast við að svara eins fljótt og kostur er.
 
 Við þökkum traustið og hlökkum til að afgreiða pöntunina þína.
 

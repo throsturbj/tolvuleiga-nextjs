@@ -11,15 +11,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/page.js"
     ],
-    "/api/images/first/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/images/first/route.js"
-    ],
     "/api/images/first-generic/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/images/first-generic/route.js"
+    ],
+    "/api/images/first/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/images/first/route.js"
     ],
     "/auth/page": [
       "static/chunks/webpack.js",
@@ -31,20 +31,10 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/page.js"
     ],
-    "/productscreen/[id]/page": [
+    "/stjornbord/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/productscreen/[id]/page.js"
-    ],
-    "/api/images/list-generic/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/images/list-generic/route.js"
-    ],
-    "/vorur/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/vorur/page.js"
+      "static/chunks/app/stjornbord/page.js"
     ],
     "/product/[id]/page": [
       "static/chunks/webpack.js",
@@ -56,10 +46,10 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/images/list/route.js"
     ],
-    "/orderscreen/[id]/page": [
+    "/order/[id]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/orderscreen/[id]/page.js"
+      "static/chunks/app/order/[id]/page.js"
     ],
     "/api/generate-pdf/route": [
       "static/chunks/webpack.js",
@@ -71,40 +61,20 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/order/send-emails/route.js"
     ],
-    "/console/[id]/page": [
+    "/api/preorders/notify/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/console/[id]/page.js"
+      "static/chunks/app/api/preorders/notify/route.js"
     ],
-    "/orderconsole/[id]/page": [
+    "/api/admin/users/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/orderconsole/[id]/page.js"
+      "static/chunks/app/api/admin/users/route.js"
     ],
-    "/stjornbord/page": [
+    "/api/admin/auth-emails/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/stjornbord/page.js"
-    ],
-    "/order/[id]/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/order/[id]/page.js"
-    ],
-    "/api/order/generate-admin-pdf/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/order/generate-admin-pdf/route.js"
-    ],
-    "/[orderNumber]/pdf/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/[orderNumber]/pdf/route.js"
-    ],
-    "/api/order/delete/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/order/delete/route.js"
+      "static/chunks/app/api/admin/auth-emails/route.js"
     ]
   }
 }

@@ -425,13 +425,24 @@ export default function Home() {
                       return `Frá ${formatted} kr/mánuði`;
                     })()}
                   </p>
-                  <Link
-                    href={`/product/${pc.id}`}
-                    className="mt-4 inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Sjá nánar
-                  </Link>
+                  <div className="mt-4 flex items-center gap-2">
+                    <Link
+                      href={`/product/${pc.id}`}
+                      className="inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Sjá nánar
+                    </Link>
+                    {pc.uppselt ? (
+                      <Link
+                        href={`/product/${pc.id}`}
+                        className="inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Skrá á biðlista
+                      </Link>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             ))}

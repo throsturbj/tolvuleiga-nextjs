@@ -78,6 +78,10 @@ export default function ProductDetailPage() {
   // Insurance UI
   const [insured, setInsured] = useState<boolean>(false);
   const [animatingInsurance, setAnimatingInsurance] = useState<boolean>(false);
+  // Waitlist state
+  const [isWaitlisting, setIsWaitlisting] = useState<boolean>(false);
+  const [waitlisted, setWaitlisted] = useState<boolean>(false);
+  const [waitlistError, setWaitlistError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -346,6 +350,45 @@ export default function ProductDetailPage() {
     }
   };
 
+  const handleWaitlistClick = async () => {
+    if (!product) return;
+    // Require auth similar to order flow
+    if (!session?.user) {
+      router.push(`/auth?redirect=/product/${productIdParam}`);
+      return;
+    }
+    if (isWaitlisting || waitlisted) return;
+    setIsWaitlisting(true);
+    setWaitlistError(null);
+    try {
+      const { error } = await supabase
+        .from('preorders')
+        .insert({
+          auth_uid: session.user.id,
+          gamingpc_uuid: productIdNum,
+        });
+      if (error) {
+        setWaitlistError(error.message || 'Mistókst að skrá á biðlista');
+        return;
+      }
+      setWaitlisted(true);
+      // Best-effort admin email notification
+      try {
+        await fetch('/api/preorders/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId: productIdNum, productName: product.name }),
+        });
+      } catch {}
+      // Go to dashboard after success
+      router.push('/dashboard');
+    } catch (e) {
+      setWaitlistError(e instanceof Error ? e.message : 'Mistókst að skrá á biðlista');
+    } finally {
+      setIsWaitlisting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pt-3">
       <div className={
@@ -574,18 +617,27 @@ export default function ProductDetailPage() {
               >
                 {insured ? 'Enga Tryggingu' : 'Kaupa Tryggingu'}
               </button>
-              <button
-                onClick={handleOrderClick}
-                disabled={!!product.uppselt}
-                className={
-                  `flex-1 rounded-md px-4 py-2 text-sm font-medium text-white ` +
-                  (product.uppselt
-                    ? 'bg-[var(--color-accent)]/60 cursor-not-allowed'
-                    : 'bg-[var(--color-accent)] hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] cursor-pointer')
-                }
-              >
-                Leigja núna
-              </button>
+              {product.uppselt ? (
+                <button
+                  onClick={handleWaitlistClick}
+                  disabled={isWaitlisting || waitlisted}
+                  className={
+                    `flex-1 rounded-md px-4 py-2 text-sm font-medium text-white ` +
+                    ((isWaitlisting || waitlisted)
+                      ? 'bg-[var(--color-accent)]/60 cursor-not-allowed'
+                      : 'bg-[var(--color-accent)] hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] cursor-pointer')
+                  }
+                >
+                  {waitlisted ? 'Skráð á biðlista' : (isWaitlisting ? 'Skrái…' : 'Skrá á biðlista')}
+                </button>
+              ) : (
+                <button
+                  onClick={handleOrderClick}
+                  className="flex-1 rounded-md px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] cursor-pointer"
+                >
+                  Leigja núna
+                </button>
+              )}
               <button
                 onClick={() => {
                   router.push('/');
@@ -598,6 +650,9 @@ export default function ProductDetailPage() {
                 Sjá allar vörur
               </button>
             </div>
+            {product.uppselt && waitlistError ? (
+              <div className="text-sm text-red-600 pt-1">{waitlistError}</div>
+            ) : null}
           </div>
         </div>
       </div>

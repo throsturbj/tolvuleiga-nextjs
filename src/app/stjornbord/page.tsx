@@ -62,6 +62,10 @@ export default function AdminDashboardPage() {
   const [allScreens, setAllScreens] = useState<Array<{ id: string; label: string }>>([]);
 
   const isAdmin = !!user?.isAdmin;
+  const [activeTab, setActiveTab] = useState<'orders' | 'preorders'>('orders');
+  const [preorders, setPreorders] = useState<Array<{ id: string; auth_uid: string | null; created_at: string; gamingpc_uuid?: number | null }>>([]);
+  const [preorderUserNameByUid, setPreorderUserNameByUid] = useState<Record<string, string>>({});
+  const [preorderEmailByUid, setPreorderEmailByUid] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (authLoading) return;
@@ -92,13 +96,14 @@ export default function AdminDashboardPage() {
           const rows = (data as AdminOrderRow[]) ?? [];
           setOrders(rows);
           // Fetch owner names for displayed orders
-          const uids = Array.from(
+          const uidsFromOrders = Array.from(
             new Set(
               rows
                 .map((o) => o.auth_uid)
                 .filter((v): v is string => typeof v === "string" && v.length > 0)
             )
           );
+          const uids = uidsFromOrders;
           if (uids.length > 0) {
             const { data: usersData, error: usersError } = await supabase
               .from("users")
@@ -113,6 +118,9 @@ export default function AdminDashboardPage() {
               }
               setOwnersByUid(map);
               setKennitalaByUid(ktMap);
+            } else {
+              setOwnersByUid({});
+              setKennitalaByUid({});
             }
           } else {
             setOwnersByUid({});
@@ -173,6 +181,85 @@ export default function AdminDashboardPage() {
 
     fetchAllOrders();
   }, [session?.user, isAdmin]);
+
+  // Fetch all preorders and hydrate names/emails when Biðlisti tab is active
+  useEffect(() => {
+    const fetchPreorders = async () => {
+      if (!isAdmin || activeTab !== 'preorders') return;
+      try {
+        const { data, error } = await supabase
+          .from('preorders')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) {
+          return;
+        }
+        const rows = (data as Array<{ id: string; auth_uid: string | null; created_at: string; gamingpc_uuid?: number | null }>) || [];
+        setPreorders(rows);
+
+        // Ensure we have product names for all referenced PCs
+        try {
+          const prePcIds = Array.from(
+            new Set(rows.map(r => r.gamingpc_uuid).filter((v): v is number => typeof v === 'number'))
+          );
+          const missing = prePcIds.filter(id => pcNamesById[id] === undefined);
+          if (missing.length > 0) {
+            const { data: pcData } = await supabase
+              .from('GamingPC')
+              .select('id,name')
+              .in('id', missing);
+            if (Array.isArray(pcData)) {
+              const add: Record<number, string> = {};
+              pcData.forEach((r: { id: number; name?: string | null }) => { add[r.id] = (r.name || '').trim(); });
+              setPcNamesById(prev => ({ ...prev, ...add }));
+            }
+          }
+        } catch {}
+
+        const uids = Array.from(
+          new Set(rows.map(r => r.auth_uid).filter((v): v is string => typeof v === 'string' && v.length > 0))
+        );
+        if (uids.length === 0) {
+          setPreorderUserNameByUid({});
+          setPreorderEmailByUid({});
+          return;
+        }
+        // Fetch names from users (service route) and emails from auth
+        try {
+          const [usersRes, emailsRes] = await Promise.all([
+            fetch('/api/admin/users', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uids }),
+            }),
+            fetch('/api/admin/auth-emails', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uids }),
+            }),
+          ]);
+          if (usersRes.ok) {
+            const j = await usersRes.json() as { users?: Array<{ auth_uid: string; full_name?: string | null }> };
+            const map: Record<string, string> = {};
+            (j.users || []).forEach(u => { map[u.auth_uid] = (u.full_name || '').trim(); });
+            setPreorderUserNameByUid(map);
+          } else {
+            setPreorderUserNameByUid({});
+          }
+          if (emailsRes.ok) {
+            const ej = await emailsRes.json() as { emails?: Record<string, string> };
+            setPreorderEmailByUid(ej.emails || {});
+          } else {
+            setPreorderEmailByUid({});
+          }
+        } catch {
+          setPreorderUserNameByUid({});
+          setPreorderEmailByUid({});
+        }
+      } catch {}
+    };
+    fetchPreorders();
+  }, [activeTab, isAdmin, supabase]);
 
   const formatDate = (iso?: string | null) => {
     if (!iso) return "—";
@@ -468,8 +555,34 @@ export default function AdminDashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight">Stjórnborð</h1>
           <div className="text-sm text-gray-500">Allar pantanir</div>
         </div>
-
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        <div className="mb-4 border-b border-gray-200">
+          <nav className="-mb-px flex gap-4" aria-label="Tabs">
+            <button
+              type="button"
+              onClick={() => setActiveTab('orders')}
+              className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
+                activeTab === 'orders'
+                  ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Pantanir
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('preorders')}
+              className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
+                activeTab === 'preorders'
+                  ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Biðlisti
+            </button>
+          </nav>
+        </div>
+        {activeTab === 'orders' ? (
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <div className="text-sm text-gray-600">
               {loading ? "Sæki gögn…" : `${orders.length} pantanir fundust`}
@@ -600,7 +713,50 @@ export default function AdminDashboardPage() {
               </tbody>
             </table>
           </div>
-        </div>
+          </div>
+        ) : (
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                {`${preorders.length} biðlistar-skráningar`}
+              </div>
+            </div>
+            <div className="overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Dagsetning</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Notandi</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Netfang</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Vara</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preorders.map((po) => {
+                    const uid = po.auth_uid || '';
+                    const name = (uid && (preorderUserNameByUid[uid] || '') || '').trim();
+                    const email = uid ? (preorderEmailByUid[uid] || '') : '';
+                    return (
+                      <tr key={po.id} className="border-b border-gray-100 hover:bg-gray-50/60">
+                        <td className="px-4 py-3 align-top">{formatDate(po.created_at)}</td>
+                        <td className="px-4 py-3 align-top">{name || '—'}</td>
+                        <td className="px-4 py-3 align-top">{email || '—'}</td>
+                        <td className="px-4 py-3 align-top">{(typeof po.gamingpc_uuid === 'number' && pcNamesById[po.gamingpc_uuid]) ? pcNamesById[po.gamingpc_uuid] : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                  {preorders.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-10 text-center text-gray-500">
+                        Engar skráningar á biðlista fundust.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         {/* Edit modal */}
         {editOrderId && editDraft ? (
           <div className="fixed inset-0 z-50">

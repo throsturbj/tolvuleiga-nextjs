@@ -19,6 +19,7 @@ export default function Home() {
     uppselt?: boolean;
     falid?: boolean;
     imageUrl?: string;
+    price12?: string | null;
   }
 
   interface GamingConsoleItem {
@@ -98,35 +99,56 @@ export default function Home() {
             return aNum - bNum;
           });
           debug('Home/PCs/visible', { count: sorted.length });
-          // Batch fetch first images for visible PCs
+          // Batch fetch auxiliary data (images + 12-month prices)
           try {
             const ids = sorted.map((p) => p.id);
+            let imageMap: Record<number, { path: string; signedUrl: string } | null> = {};
+            let priceMap: Record<number, string | null> = {};
             if (ids.length > 0) {
-              const res = await fetch("/api/images/first", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ pcIds: ids }),
-              });
-              if (res.ok) {
-                const j = await res.json();
-                const map: Record<number, { path: string; signedUrl: string } | null> = j?.results || {};
-                const merged = sorted.map((p) => ({
-                  ...p,
-                  imageUrl: map[p.id]?.signedUrl,
-                }));
-                setItems(merged);
-                debug('Home/PCs/setItems', { count: merged.length, withImages: true });
-              } else {
-                setItems(sorted);
-                debug('Home/PCs/setItems', { count: sorted.length, withImages: false, reason: 'images api !ok' });
+              // 1) Images via server route
+              try {
+                const res = await fetch("/api/images/first", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ pcIds: ids }),
+                });
+                if (res.ok) {
+                  const j = await res.json();
+                  imageMap = (j?.results || {}) as Record<number, { path: string; signedUrl: string } | null>;
+                }
+              } catch {
+                // ignore, keep empty map
               }
-            } else {
-              setItems(sorted);
-              debug('Home/PCs/setItems', { count: sorted.length, withImages: false, reason: 'no ids' });
+              // 2) Prices from Supabase (try authed/anon in same order)
+              const clientsForPrices = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
+              for (const c of clientsForPrices) {
+                try {
+                  const { data: pricesRows, error: pricesErr } = await c
+                    .from("prices")
+                    .select('gamingpc_id, "12month"')
+                    .in("gamingpc_id", ids);
+                  if (!pricesErr && Array.isArray(pricesRows)) {
+                    priceMap = {};
+                    for (const row of pricesRows as Array<{ gamingpc_id: number; "12month": string | null }>) {
+                      priceMap[row.gamingpc_id] = row["12month"] ?? null;
+                    }
+                    break;
+                  }
+                } catch {
+                  // try next client
+                }
+              }
             }
+            const merged = sorted.map((p) => ({
+              ...p,
+              imageUrl: imageMap[p.id]?.signedUrl,
+              price12: priceMap[p.id] ?? null,
+            }));
+            setItems(merged);
+            debug('Home/PCs/setItems', { count: merged.length, withImages: !!Object.keys(imageMap).length, withPrices: !!Object.keys(priceMap).length });
           } catch {
             setItems(sorted);
-            debug('Home/PCs/setItems', { count: sorted.length, withImages: false, reason: 'images api error' });
+            debug('Home/PCs/setItems', { count: sorted.length, withImages: false, withPrices: false, reason: 'aux fetch error' });
           }
         }
       } catch (e) {
@@ -417,11 +439,9 @@ export default function Home() {
                   </p>
                   <p className="text-xl font-bold text-[var(--color-secondary)] mt-2">
                     {(() => {
-                      const digits = (pc.verd || '').toString().replace(/\D+/g, '');
-                      const base = parseInt(digits, 10) || 0;
-                      const raw = Math.round(base * 0.88); // 12% off total price
-                      const rounded = Math.ceil(raw / 10) * 10;
-                      const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                      const digits = (pc.price12 || '').toString().replace(/\D+/g, '');
+                      const num = parseInt(digits, 10) || 0;
+                      const formatted = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
                       return `Frá ${formatted} kr/mánuði`;
                     })()}
                   </p>

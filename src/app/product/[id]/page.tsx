@@ -148,7 +148,7 @@ export default function ProductDetailPage() {
   }, [productIdNum]);
 
   // Rental UI (kept on product page)
-  const durations = [1, 3, 6, 12] as const;
+  const durations = [1, 3, 6, 9, 12] as const;
   const [durationIndex, setDurationIndex] = useState<number>(0);
   const sliderProgress = (durationIndex / (durations.length - 1)) * 100;
   const [addons, setAddons] = useState({ skjár: false, lyklabord: false, mus: false });
@@ -224,6 +224,41 @@ export default function ProductDetailPage() {
       } catch {}
     };
     fetchLinks();
+    return () => { alive = false; };
+  }, [productIdNum]);
+
+  // Fetch monthly prices from `prices` table
+  const [priceRow, setPriceRow] = useState<null | {
+    "1month"?: string | null;
+    "3month"?: string | null;
+    "6month"?: string | null;
+    "9month"?: string | null;
+    "12month"?: string | null;
+  }>(null);
+  useEffect(() => {
+    let alive = true;
+    const fetchPrices = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("prices")
+          .select(' "1month", "3month", "6month", "9month", "12month" ')
+          .eq("gamingpc_id", productIdNum)
+          .single();
+        if (!alive) return;
+        if (!error && data) {
+          setPriceRow(data as typeof priceRow);
+        } else {
+          setPriceRow(null);
+        }
+      } catch {
+        if (alive) setPriceRow(null);
+      }
+    };
+    if (productIdNum && Number.isFinite(productIdNum)) {
+      fetchPrices();
+    } else {
+      setPriceRow(null);
+    }
     return () => { alive = false; };
   }, [productIdNum]);
 
@@ -309,12 +344,25 @@ export default function ProductDetailPage() {
     const n = parseInt(digits, 10);
     return Number.isFinite(n) ? n : 0;
   })();
-  const discountRates = [0, 0.04, 0.08, 0.12] as const;
-  const discountRate = discountRates[durationIndex] ?? 0;
-  const discountedPriceRaw = Math.max(0, Math.round(basePrice * (1 - discountRate)));
+  // Derive monthly base either from prices table or fallback discount
+  const durationValue = durations[durationIndex];
+  const monthlyFromTable = (() => {
+    if (!priceRow) return null;
+    if (durationValue === 1) return parsePrice(priceRow["1month"] || "");
+    if (durationValue === 3) return parsePrice(priceRow["3month"] || "");
+    if (durationValue === 6) return parsePrice(priceRow["6month"] || "");
+    if (durationValue === 9) return parsePrice(priceRow["9month"] || "");
+    if (durationValue === 12) return parsePrice(priceRow["12month"] || "");
+    return null;
+  })();
+  const fallbackDiscountRates = [0, 0.04, 0.08, 0.10, 0.12] as const; // includes 9 months fallback
+  const fallbackRate = fallbackDiscountRates[durationIndex] ?? 0;
+  const fallbackMonthly = Math.max(0, Math.round(basePrice * (1 - fallbackRate)));
+  const monthlyBase = Number.isFinite(monthlyFromTable ?? NaN) && (monthlyFromTable ?? 0) > 0 ? (monthlyFromTable as number) : fallbackMonthly;
+
   // Accessories are added on top (not discounted)
   const insuranceMultiplier = insured ? 1.1 : 1;
-  const finalPriceRaw = Math.round((discountedPriceRaw + addOnTotal) * insuranceMultiplier);
+  const finalPriceRaw = Math.round((monthlyBase + addOnTotal) * insuranceMultiplier);
   const finalPrice = Math.ceil(finalPriceRaw / 10) * 10;
   const formattedPrice = `${finalPrice.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr`;
 
@@ -513,7 +561,7 @@ export default function ProductDetailPage() {
                 <input
                   type="range"
                   min={0}
-                  max={3}
+                  max={durations.length - 1}
                   step={1}
                   value={durationIndex}
                   onChange={(e) => setDurationIndex(parseInt(e.target.value))}

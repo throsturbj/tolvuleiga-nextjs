@@ -159,6 +159,23 @@ export default function VorurAdminPage() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Prices modal state
+  const [pricesEditingPcId, setPricesEditingPcId] = useState<number | null>(null);
+  const [pricesBusy, setPricesBusy] = useState<boolean>(false);
+  const [pricesForm, setPricesForm] = useState<{
+    "1month": string;
+    "3month": string;
+    "6month": string;
+    "9month": string;
+    "12month": string;
+  }>({
+    "1month": "",
+    "3month": "",
+    "6month": "",
+    "9month": "",
+    "12month": "",
+  });
+
   const [form, setForm] = useState<NewRow>({
     name: "",
     verd: "",
@@ -537,6 +554,67 @@ export default function VorurAdminPage() {
       setImagesItems([]);
     } finally {
       setImagesBusy(false);
+    }
+  };
+
+  // Prices modal handlers
+  const openPricesModal = async (pcId: number) => {
+    setPricesEditingPcId(pcId);
+    setPricesBusy(true);
+    try {
+      const { data, error } = await supabase
+        .from("prices")
+        .select('gamingpc_id, "1month", "3month", "6month", "9month", "12month"')
+        .eq("gamingpc_id", pcId)
+        .limit(1);
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const row = data[0] as Record<string, string | number | null>;
+        setPricesForm({
+          "1month": (row["1month"] as string) || "",
+          "3month": (row["3month"] as string) || "",
+          "6month": (row["6month"] as string) || "",
+          "9month": (row["9month"] as string) || "",
+          "12month": (row["12month"] as string) || "",
+        });
+      } else {
+        setPricesForm({
+          "1month": "",
+          "3month": "",
+          "6month": "",
+          "9month": "",
+          "12month": "",
+        });
+      }
+    } finally {
+      setPricesBusy(false);
+    }
+  };
+  const closePricesModal = () => {
+    if (pricesBusy) return;
+    setPricesEditingPcId(null);
+  };
+  const handleSavePrices = async () => {
+    if (pricesEditingPcId === null) return;
+    setPricesBusy(true);
+    try {
+      const payload = {
+        gamingpc_id: pricesEditingPcId,
+        "1month": pricesForm["1month"],
+        "3month": pricesForm["3month"],
+        "6month": pricesForm["6month"],
+        "9month": pricesForm["9month"],
+        "12month": pricesForm["12month"],
+      };
+      const { error } = await supabase
+        .from("prices")
+        .upsert([payload], { onConflict: "gamingpc_id" })
+        .select("gamingpc_id")
+        .single();
+      if (!error) {
+        closePricesModal();
+      }
+    } finally {
+      setPricesBusy(false);
     }
   };
   const openKeyboardImagesModal = async (keyboardId: string) => {
@@ -1782,7 +1860,6 @@ export default function VorurAdminPage() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-12">Nafn</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-12">Verð</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Motherboard</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Power Supply</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">CPU</th>
@@ -1797,9 +1874,6 @@ export default function VorurAdminPage() {
                 <tr className="border-b border-gray-100 bg-gray-50">
                   <td className="px-2 py-3 align-top w-14">
                     <input value={form.name} onChange={(e) => onChange("name", e.target.value)} placeholder="Nafn" className="border border-gray-300 rounded px-2 py-1 text-xs w-16" />
-                  </td>
-                  <td className="px-2 py-3 align-top w-12">
-                    <input value={form.verd} onChange={(e) => onChange("verd", e.target.value)} placeholder="Verð" className="border border-gray-300 rounded px-2 py-1 text-xs w-12" />
                   </td>
                   <td className="px-2 py-3 align-top">
                     <input value={form.motherboard} onChange={(e) => onChange("motherboard", e.target.value)} placeholder="Motherboard" className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
@@ -1839,9 +1913,6 @@ export default function VorurAdminPage() {
                       <div className="truncate max-w-[4rem] leading-6" title={r.name}>{r.name}</div>
                     </td>
                     <td className="px-2 py-3 align-top text-gray-800 w-16">
-                      <div className="truncate max-w-[4rem] leading-6" title={r.verd}>{r.verd}</div>
-                    </td>
-                    <td className="px-2 py-3 align-top text-gray-800 w-16">
                       <div className="truncate max-w-[4rem] leading-6" title={r.motherboard}>{r.motherboard}</div>
                     </td>
                     <td className="px-2 py-3 align-top text-gray-800 w-16">
@@ -1863,7 +1934,17 @@ export default function VorurAdminPage() {
                       <div className="truncate max-w-[4rem] leading-6" title={r.gpu}>{r.gpu}</div>
                     </td>
                     <td className="px-2 py-3 align-top">
-                      <div className="grid grid-cols-5 gap-2 w-85">
+                      <div className="grid grid-cols-6 gap-2 w-85">
+                        <button
+                          type="button"
+                          onClick={() => openPricesModal(r.id)}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-green-500 text-green-600 hover:bg-green-50 text-xs w-full"
+                          title="Verð (tímabil)"
+                        >
+                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v3m0 12v3m5-12a5 5 0 00-5-5h-1a4 4 0 000 8h2a4 4 0 010 8h-1a5 5 0 01-5-5" />
+                          </svg>
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleToggleFalid(r.id, r.falid)}
@@ -3072,6 +3153,74 @@ export default function VorurAdminPage() {
                 className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm disabled:opacity-50"
               >
                 Uppfæra
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {pricesEditingPcId !== null ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={pricesBusy ? undefined : closePricesModal} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Verð á tímabilum</h2>
+              <button type="button" onClick={pricesBusy ? undefined : closePricesModal} className="text-gray-500 hover:text-gray-700 text-sm">Loka</button>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                <label className="text-sm text-gray-700 self-center">1 Mánuður</label>
+                <input
+                  value={pricesForm["1month"]}
+                  onChange={(e) => setPricesForm((prev) => ({ ...prev, ["1month"]: e.target.value }))}
+                  placeholder="Verð"
+                  className="border border-gray-300 rounded px-2 py-1 text-sm w-full"
+                />
+                <label className="text-sm text-gray-700 self-center">3 Mánuðir</label>
+                <input
+                  value={pricesForm["3month"]}
+                  onChange={(e) => setPricesForm((prev) => ({ ...prev, ["3month"]: e.target.value }))}
+                  placeholder="Verð"
+                  className="border border-gray-300 rounded px-2 py-1 text-sm w-full"
+                />
+                <label className="text-sm text-gray-700 self-center">6 Mánuðir</label>
+                <input
+                  value={pricesForm["6month"]}
+                  onChange={(e) => setPricesForm((prev) => ({ ...prev, ["6month"]: e.target.value }))}
+                  placeholder="Verð"
+                  className="border border-gray-300 rounded px-2 py-1 text-sm w-full"
+                />
+                <label className="text-sm text-gray-700 self-center">9 Mánuðir</label>
+                <input
+                  value={pricesForm["9month"]}
+                  onChange={(e) => setPricesForm((prev) => ({ ...prev, ["9month"]: e.target.value }))}
+                  placeholder="Verð"
+                  className="border border-gray-300 rounded px-2 py-1 text-sm w-full"
+                />
+                <label className="text-sm text-gray-700 self-center">12 Mánuðir</label>
+                <input
+                  value={pricesForm["12month"]}
+                  onChange={(e) => setPricesForm((prev) => ({ ...prev, ["12month"]: e.target.value }))}
+                  placeholder="Verð"
+                  className="border border-gray-300 rounded px-2 py-1 text-sm w-full"
+                />
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={pricesBusy ? undefined : closePricesModal}
+                className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm disabled:opacity-50"
+                disabled={pricesBusy}
+              >
+                Hætta við
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePrices}
+                disabled={pricesBusy}
+                className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm disabled:opacity-50"
+              >
+                {pricesBusy ? "Vistast…" : "Vista"}
               </button>
             </div>
           </div>

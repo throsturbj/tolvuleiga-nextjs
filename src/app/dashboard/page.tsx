@@ -78,6 +78,67 @@ export default function DashboardPage() {
   const [extendMonths, setExtendMonths] = useState<number>(1);
   const [extendBusy, setExtendBusy] = useState<boolean>(false);
   const [extendError, setExtendError] = useState<string | null>(null);
+  const [framlengingarByOrderId, setFramlengingarByOrderId] = useState<Record<string, { approved: boolean }>>({});
+  // Extend modal slider + prices
+  const extendDurations = [1, 3, 6, 9, 12] as const;
+  const [extendDurationIndex, setExtendDurationIndex] = useState<number>(0);
+  const extendSliderProgress = (extendDurationIndex / (extendDurations.length - 1)) * 100;
+  type ExtendProgressStyle = React.CSSProperties & { ['--progress']?: string };
+  const extendProgressStyle: ExtendProgressStyle = { '--progress': `${extendSliderProgress}%` };
+  const [extendPriceRow, setExtendPriceRow] = useState<null | {
+    "1month"?: string | null;
+    "3month"?: string | null;
+    "6month"?: string | null;
+    "9month"?: string | null;
+    "12month"?: string | null;
+  }>(null);
+  useEffect(() => {
+    // Load monthly prices for the selected order's GamingPC, when opening the modal
+    const load = async () => {
+      try {
+        const ord = orders.find(o => o.id === extendOrderId);
+        const pcId = ord?.gamingpc_uuid;
+        if (!pcId) { setExtendPriceRow(null); return; }
+        const { data } = await supabase
+          .from('prices')
+          .select(' "1month", "3month", "6month", "9month", "12month" ')
+          .eq('gamingpc_id', pcId)
+          .single();
+        setExtendPriceRow((data || null) as typeof extendPriceRow);
+      } catch {
+        setExtendPriceRow(null);
+      }
+    };
+    if (extendOrderId) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extendOrderId]);
+  const parseNum = (s: string | number | null | undefined) => {
+    if (typeof s === 'number') return s;
+    const digits = String(s || "").replace(/\D+/g, "");
+    const n = parseInt(digits, 10);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const selectedExtendMonths = extendDurations[extendDurationIndex];
+  const selectedExtendPrice = (() => {
+    if (!extendPriceRow) {
+      const ord = orders.find(o => o.id === extendOrderId);
+      return parseNum(ord?.verd);
+    }
+    if (selectedExtendMonths === 1) return parseNum(extendPriceRow["1month"]);
+    if (selectedExtendMonths === 3) return parseNum(extendPriceRow["3month"]);
+    if (selectedExtendMonths === 6) return parseNum(extendPriceRow["6month"]);
+    if (selectedExtendMonths === 9) return parseNum(extendPriceRow["9month"]);
+    if (selectedExtendMonths === 12) return parseNum(extendPriceRow["12month"]);
+    return 0;
+  })();
+  // Apply insurance multiplier similar to product page if order has trygging
+  const selectedExtendPriceWithInsurance = (() => {
+    const ord = orders.find(o => o.id === extendOrderId);
+    const multiplier = ord?.trygging ? 1.1 : 1;
+    const raw = Math.round(selectedExtendPrice * multiplier);
+    return Math.ceil(raw / 10) * 10;
+  })();
+  const formatIsk = (n: number) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' kr';
   // No tabs in user dashboard; keep simple view
 
   function addMonthsPreservingEnd(date: Date, months: number): Date {
@@ -443,6 +504,35 @@ export default function DashboardPage() {
     })();
     return () => { alive = false; };
   }, [orders, preorders, pcFirstImages]);
+
+  // Fetch framlengingar status for current orders
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const ids = (orders || []).map((o) => o.id);
+        if (ids.length === 0) {
+          if (alive) setFramlengingarByOrderId({});
+          return;
+        }
+        const { data } = await supabase
+          .from('framlengingar')
+          .select('order_id, approved')
+          .in('order_id', ids);
+        if (!alive) return;
+        const map: Record<string, { approved: boolean }> = {};
+        (data || []).forEach((row: { order_id: string; approved: boolean }) => {
+          if (!(row.order_id in map)) {
+            map[row.order_id] = { approved: !!row.approved };
+          }
+        });
+        setFramlengingarByOrderId(map);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { alive = false; };
+  }, [orders]);
 
   // Load console details and images when opening console modal
   useEffect(() => {
@@ -880,13 +970,32 @@ export default function DashboardPage() {
                               Sjá vöru
                             </button>
                           ) : null}
-                          <button
-                            type="button"
-                            onClick={() => { setExtendOrderId(order.id); setExtendMonths(1); setExtendError(null); }}
-                            className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
-                          >
-                            Framlengja
-                          </button>
+                          {(() => {
+                            const fr = framlengingarByOrderId[order.id];
+                            if (!fr) {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => { setExtendOrderId(order.id); setExtendMonths(1); setExtendError(null); }}
+                                  className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
+                                >
+                                  Framlengja
+                                </button>
+                              );
+                            }
+                            if (fr.approved) {
+                              return (
+                                <span className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-green-700 bg-white ring-1 ring-green-500/40">
+                                  Framlenging staðfest
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-red-700 bg-white ring-1 ring-red-500/40">
+                                Í skoðun
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
                       </div>
@@ -1023,38 +1132,69 @@ export default function DashboardPage() {
                 <button onClick={() => { if (!extendBusy) { setExtendOrderId(null); } }} className="text-gray-500 hover:text-gray-700 cursor-pointer">✕</button>
               </div>
 
-              <div className="space-y-3 text-sm">
+              <div className="space-y-4 text-sm">
                 <div className="text-gray-700">
-                  <span className="text-gray-500">Núverandi lokadagsetning:</span>{' '}
+                  <span className="text-gray-500">Núverandi tímabil:</span>{' '}
                   {(() => {
                     const ord = orders.find(o => o.id === extendOrderId);
-                    return formatDateOnly(ord?.timabilTil);
+                    const fra = formatDateOnly(ord?.timabilFra);
+                    const til = formatDateOnly(ord?.timabilTil);
+                    return `${fra} til ${til}`;
                   })()}
                 </div>
 
-                <label className="block">
-                  <span className="block text-gray-700 mb-1">Bæta við mánuðum</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={12}
-                    step={1}
-                    value={extendMonths}
-                    onChange={(e) => setExtendMonths(Math.min(12, Math.max(1, Number(e.target.value || 1))))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)]"
-                  />
-                </label>
-
                 <div className="text-gray-700">
-                  <span className="text-gray-500">Ný lokadagsetning:</span>{' '}
+                  <span className="text-gray-500">Nýtt tímabil eftir núverandi tímabil:</span>{' '}
                   {(() => {
                     const ord = orders.find(o => o.id === extendOrderId);
-                    if (!ord?.timabilTil) return '—';
-                    const base = new Date(ord.timabilTil);
+                    const tilRaw = ord?.timabilTil;
+                    if (!tilRaw) return '—';
+                    const base = new Date(tilRaw);
                     if (isNaN(base.getTime())) return '—';
-                    const next = addMonthsPreservingEnd(base, extendMonths);
-                    return next.toLocaleDateString('is-IS');
+                    const nextEnd = addMonthsPreservingEnd(base, selectedExtendMonths);
+                    return `${formatDateOnly(tilRaw)} til ${nextEnd.toLocaleDateString('is-IS')}`;
                   })()}
+                </div>
+
+                {/* Slider for months */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-700 font-medium">Bæta við</p>
+                    <p className="text-sm text-gray-500">{selectedExtendMonths} mánuðir</p>
+                  </div>
+                  <div className="w-full mx-auto">
+                    <input
+                      type="range"
+                      min={0}
+                      max={extendDurations.length - 1}
+                      step={1}
+                      value={extendDurationIndex}
+                      onChange={(e) => setExtendDurationIndex(parseInt(e.target.value))}
+                      className="range-compact cursor-pointer"
+                      style={extendProgressStyle}
+                      aria-label="Veldu leigutímabil"
+                    />
+                  </div>
+                  <div className="mt-1 w-full mx-auto flex justify-between text-[11px] text-gray-500">
+                    {extendDurations.map((m, idx) => (
+                      <span key={m} className={idx === extendDurationIndex ? 'text-[var(--color-accent)] font-medium' : ''}>{m}m</span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Price display */}
+                <div className="text-gray-700 space-y-1">
+                  <div>
+                    <span className="text-gray-500">Núverandi gjald:</span>{' '}
+                    {(() => {
+                      const ord = orders.find(o => o.id === extendOrderId);
+                      return formatIsk(parseNum(ord?.verd));
+                    })()}
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Nýtt gjald að eftir núverandi leigutímabil:</span>{' '}
+                    {formatIsk(selectedExtendPriceWithInsurance)}
+                  </div>
                 </div>
 
                 {extendError ? (
@@ -1074,10 +1214,41 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   disabled={extendBusy}
-                  onClick={handleExtendConfirm}
+                  onClick={async () => {
+                    if (!extendOrderId) return;
+                    try {
+                      setExtendBusy(true);
+                      setExtendError(null);
+                      const ord = orders.find(o => o.id === extendOrderId);
+                      const res = await fetch('/api/order/request-extension', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          orderId: extendOrderId,
+                          months: selectedExtendMonths,
+                          newMonthlyPrice: selectedExtendPriceWithInsurance,
+                          currentMonthlyPrice: parseNum(ord?.verd),
+                          timabilFra: ord?.timabilFra || null,
+                          timabilTil: ord?.timabilTil || null,
+                          userName: user?.full_name || user?.email || 'Viðskiptavinur',
+                        }),
+                      });
+                      if (!res.ok) {
+                        const msg = await res.text().catch(() => '');
+                        throw new Error(msg || 'Tókst ekki að senda beiðni.');
+                      }
+                      // Mark as pending locally so button updates to "Í skoðun"
+                      setFramlengingarByOrderId((prev) => ({ ...prev, [extendOrderId]: { approved: false } }));
+                      setExtendOrderId(null);
+                    } catch (e) {
+                      setExtendError(e instanceof Error ? e.message : 'Óþekkt villa');
+                    } finally {
+                      setExtendBusy(false);
+                    }
+                  }}
                   className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] rounded-md hover:brightness-110 disabled:opacity-50"
                 >
-                  {extendBusy ? 'Uppfæri…' : 'Staðfesta'}
+                  {extendBusy ? 'Sendi…' : 'Óska eftir að framlengja'}
                 </button>
               </div>
             </div>

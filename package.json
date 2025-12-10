@@ -13,11 +13,11 @@
     "@supabase/supabase-js": "^2.76.0",
     "@types/nodemailer": "^7.0.2",
     "fontkit": "^2.0.4",
-    "next": "15.5.5",
+    "next": "^15.5.7",
     "nodemailer": "^7.0.9",
     "pdfkit": "^0.17.2",
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react": "^19.1.2",
+    "react-dom": "^19.1.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

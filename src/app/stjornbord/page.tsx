@@ -60,6 +60,9 @@ export default function AdminDashboardPage() {
   const [allPcs, setAllPcs] = useState<Array<{ id: number; name: string }>>([]);
   const [allConsoles, setAllConsoles] = useState<Array<{ id: string; nafn: string }>>([]);
   const [allScreens, setAllScreens] = useState<Array<{ id: string; label: string }>>([]);
+  // Framlengingar (extensions) admin review
+  const [framlengingarByOrderId, setFramlengingarByOrderId] = useState<Record<string, { id: string; approved: boolean; newtimabilfra: string | null; newtimabiltil: string | null; newverd: string | null; nafn?: string | null }>>({});
+  const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
 
   const isAdmin = !!user?.isAdmin;
   const [activeTab, setActiveTab] = useState<'orders' | 'preorders'>('orders');
@@ -95,6 +98,35 @@ export default function AdminDashboardPage() {
         } else {
           const rows = (data as AdminOrderRow[]) ?? [];
           setOrders(rows);
+          // Fetch any framlengingar linked to these orders
+          try {
+            const orderIds = rows.map((r) => r.id);
+            if (orderIds.length > 0) {
+              const { data: frows } = await supabase
+                .from('framlengingar')
+                .select('id, order_id, approved, newtimabilfra, newtimabiltil, newverd, nafn')
+                .in('order_id', orderIds);
+              if (Array.isArray(frows)) {
+                const map: Record<string, { id: string; approved: boolean; newtimabilfra: string | null; newtimabiltil: string | null; newverd: string | null; nafn?: string | null }> = {};
+                (frows as Array<{ id: string; order_id: string; approved: boolean; newtimabilfra: string | null; newtimabiltil: string | null; newverd: string | null; nafn?: string | null }>).forEach((r) => {
+                  if (!(r.order_id in map)) {
+                    map[r.order_id] = { id: r.id, approved: !!r.approved, newtimabilfra: r.newtimabilfra, newtimabiltil: r.newtimabiltil, newverd: r.newverd, nafn: r.nafn || null };
+                  }
+                });
+                // Fix potential typo key if present
+                Object.keys(map).forEach((k) => {
+                  // no-op, ensure structure
+                });
+                setFramlengingarByOrderId(map);
+              } else {
+                setFramlengingarByOrderId({});
+              }
+            } else {
+              setFramlengingarByOrderId({});
+            }
+          } catch {
+            setFramlengingarByOrderId({});
+          }
           // Fetch owner names for displayed orders
           const uidsFromOrders = Array.from(
             new Set(
@@ -405,6 +437,15 @@ export default function AdminDashboardPage() {
           delete copy[orderId];
           return copy;
         });
+        // Force delete any related framlengingar rows for this order
+        try {
+          await supabase.from('framlengingar').delete().eq('order_id', orderId);
+          setFramlengingarByOrderId((prev) => {
+            const copy = { ...prev };
+            delete copy[orderId];
+            return copy;
+          });
+        } catch {}
       } else {
         const json = await res.json().catch(() => null) as { error?: string } | null;
         setError(json?.error || 'Gat ekki eytt pöntun');
@@ -522,6 +563,40 @@ export default function AdminDashboardPage() {
         if (json?.pdfUrl) {
           setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, pdf_url: json.pdfUrl } : o)));
         }
+        // After successful PDF generation, delete framlenging entry if it matches current order values and is approved
+        try {
+          const ord = orders.find((o) => o.id === orderId);
+          const fr = framlengingarByOrderId[orderId];
+          const toNum = (v: unknown) => {
+            const n = typeof v === 'number' ? v : parseInt(String(v || '').replace(/\D+/g, ''), 10);
+            return Number.isFinite(n) ? n : 0;
+          };
+          const eqIso = (a?: string | null, b?: string | null) => {
+            if (!a || !b) return false;
+            const ta = new Date(a).getTime();
+            const tb = new Date(b).getTime();
+            return Number.isFinite(ta) && Number.isFinite(tb) && ta === tb;
+          };
+          if (ord && fr && fr.approved) {
+            const match =
+              eqIso(fr.newtimabilfra, ord.timabilFra) &&
+              eqIso(fr.newtimabiltil, ord.timabilTil) &&
+              toNum(fr.newverd) === toNum(ord.verd);
+            if (match) {
+              const { error: delErr } = await supabase
+                .from('framlengingar')
+                .delete()
+                .eq('id', fr.id);
+              if (!delErr) {
+                setFramlengingarByOrderId((prev) => {
+                  const copy = { ...prev };
+                  delete copy[orderId];
+                  return copy;
+                });
+              }
+            }
+          }
+        } catch {}
       } else {
         const json = await res.json().catch(() => null) as { error?: string } | null;
         setError(json?.error || 'Gat ekki búið til PDF');
@@ -699,6 +774,16 @@ export default function AdminDashboardPage() {
                         >
                           PDF
                         </button>
+                        {framlengingarByOrderId[o.id] ? (
+                          <button
+                            type="button"
+                            onClick={() => setReviewOrderId(o.id)}
+                            className="inline-flex items-center px-2.5 py-1.5 rounded border border-orange-600 text-orange-700 hover:bg-orange-50 text-xs disabled:opacity-50 whitespace-nowrap"
+                            title="Skoða framlengingu"
+                          >
+                            Ósk
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -915,6 +1000,107 @@ export default function AdminDashboardPage() {
                   className="inline-flex items-center px-3 py-1.5 rounded border border-green-600 text-green-700 hover:bg-green-50 text-sm disabled:opacity-50"
                 >
                   Vista
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {/* Review Framlenging modal */}
+        {reviewOrderId && framlengingarByOrderId[reviewOrderId] ? (
+          <div className="fixed inset-0 z-50">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setReviewOrderId(null)} />
+            <div className="relative z-10 mx-auto mt-24 w-full max-w-xl rounded-lg bg-white shadow-xl">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Framlenging</h2>
+                <button className="text-gray-500 hover:text-gray-700" onClick={() => setReviewOrderId(null)}>✕</button>
+              </div>
+              <div className="px-6 py-4 space-y-3 text-sm">
+                {(() => {
+                  const ord = orders.find(o => o.id === reviewOrderId);
+                  const fr = framlengingarByOrderId[reviewOrderId]!;
+                  const fmt = (v: unknown) => {
+                    const n = typeof v === 'number' ? v : parseInt(String(v || '').replace(/\D+/g, ''), 10);
+                    return Number.isFinite(n) ? `${n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} kr/mánuði` : '—';
+                  };
+                  return (
+                    <>
+                      <div className="text-gray-700">
+                        <span className="text-gray-500">Nafn:</span>{' '}
+                        {ord?.auth_uid ? (ownersByUid[ord.auth_uid] || '—') : (fr.nafn || '—')}
+                      </div>
+                      <div className="text-gray-700">
+                        <span className="text-gray-500">Gamalt verð:</span>{' '}
+                        {fmt(ord?.verd ?? null)}
+                      </div>
+                      <div className="text-gray-700">
+                        <span className="text-gray-500">Nýtt verð:</span>{' '}
+                        {fmt(fr.newverd)}
+                      </div>
+                      <div className="text-gray-700">
+                        <span className="text-gray-500">Gamalt tímabil:</span>{' '}
+                        {ord?.timabilFra && ord?.timabilTil ? `${formatDate(ord.timabilFra)} → ${formatDate(ord.timabilTil)}` : '—'}
+                      </div>
+                      <div className="text-gray-700">
+                        <span className="text-gray-500">Nýtt tímabil:</span>{' '}
+                        {fr.newtimabilfra && fr.newtimabiltil ? `${formatDate(fr.newtimabilfra)} → ${formatDate(fr.newtimabiltil)}` : '—'}
+                      </div>
+                      <div className="text-gray-700">
+                        <span className="text-gray-500">Staða samþykkis:</span>{' '}
+                        {fr.approved ? 'Samþykkt' : 'Í bið'}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ordId = reviewOrderId;
+                    if (!ordId) return;
+                    const fr = framlengingarByOrderId[ordId];
+                    if (!fr) return;
+                    const next = !fr.approved;
+                    try {
+                      const { error } = await supabase
+                        .from('framlengingar')
+                        .update({ approved: next })
+                        .eq('id', fr.id);
+                      if (!error) {
+                        setFramlengingarByOrderId((prev) => ({ ...prev, [ordId]: { ...fr, approved: next } }));
+                      }
+                    } catch {}
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm"
+                >
+                  {framlengingarByOrderId[reviewOrderId]?.approved ? 'Ekki samþykkja' : 'Samþykkja'}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ordId = reviewOrderId;
+                    if (!ordId) return;
+                    const fr = framlengingarByOrderId[ordId];
+                    if (!fr) return;
+                    const newVerdNum = parseInt(String(fr.newverd || '').replace(/\D+/g, ''), 10);
+                    const payload: Record<string, unknown> = {};
+                    if (Number.isFinite(newVerdNum)) payload.verd = newVerdNum;
+                    if (fr.newtimabilfra) payload.timabilFra = fr.newtimabilfra;
+                    if (fr.newtimabiltil) payload.timabilTil = fr.newtimabiltil;
+                    try {
+                      const { error } = await supabase
+                        .from('orders')
+                        .update(payload)
+                        .eq('id', ordId);
+                      if (!error) {
+                        setOrders((prev) => prev.map((o) => (o.id === ordId ? { ...o, ...(payload as Partial<AdminOrderRow>) } : o)));
+                        setReviewOrderId(null);
+                      }
+                    } catch {}
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm"
+                >
+                  Uppfæra gildi
                 </button>
               </div>
             </div>

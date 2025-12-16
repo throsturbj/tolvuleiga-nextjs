@@ -21,11 +21,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/images/first-generic/route.js"
     ],
-    "/dashboard/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/page.js"
-    ],
     "/product/[id]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -36,35 +31,20 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/images/list/route.js"
     ],
-    "/api/order/request-extension/route": [
+    "/productscreen/[id]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/order/request-extension/route.js"
+      "static/chunks/app/productscreen/[id]/page.js"
+    ],
+    "/api/images/list-generic/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/images/list-generic/route.js"
     ],
     "/auth/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/auth/page.js"
-    ],
-    "/stjornbord/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/stjornbord/page.js"
-    ],
-    "/api/order/generate-admin-pdf/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/order/generate-admin-pdf/route.js"
-    ],
-    "/api/order/delete/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/order/delete/route.js"
-    ],
-    "/vorur/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/vorur/page.js"
     ],
     "/order/[id]/page": [
       "static/chunks/webpack.js",
@@ -80,6 +60,26 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/order/send-emails/route.js"
+    ],
+    "/dashboard/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/page.js"
+    ],
+    "/vorur/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/vorur/page.js"
+    ],
+    "/api/images/clean-folder/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/images/clean-folder/route.js"
+    ],
+    "/api/images/signed-upload/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/images/signed-upload/route.js"
     ]
   }
 }

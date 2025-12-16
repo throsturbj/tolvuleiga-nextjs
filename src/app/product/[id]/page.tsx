@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type React from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -75,6 +75,13 @@ export default function ProductDetailPage() {
   const [modalActiveIndex, setModalActiveIndex] = useState<number>(0);
   const [modalLoading, setModalLoading] = useState<boolean>(false);
   const [zoomImageSrc, setZoomImageSrc] = useState<string | null>(null);
+  // Screen hero (when it's the only accessory)
+  const [screenHeroImages, setScreenHeroImages] = useState<{ name: string; path: string; signedUrl: string }[]>([]);
+  const [screenLightboxOpen, setScreenLightboxOpen] = useState<boolean>(false);
+  const [screenLightboxIndex, setScreenLightboxIndex] = useState<number>(0);
+  // Mobile bubble position control
+  const [bubbleBottomPx, setBubbleBottomPx] = useState<number>(32);
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
   // Insurance UI
   const [insured, setInsured] = useState<boolean>(false);
   const [animatingInsurance, setAnimatingInsurance] = useState<boolean>(false);
@@ -310,6 +317,77 @@ export default function ProductDetailPage() {
     }
   };
 
+  const onlyScreen = screens.length > 0 && keyboards.length === 0 && mouses.length === 0;
+
+  // Load hero image for screen if it's the only accessory
+  useEffect(() => {
+    let alive = true;
+    const loadScreenHero = async () => {
+      if (!onlyScreen) {
+        if (alive) setScreenHeroImages([]);
+        return;
+      }
+      const id = selectedScreenId || screens[0]?.id;
+      if (!id) {
+        if (alive) setScreenHeroImages([]);
+        return;
+      }
+      try {
+        const res = await fetch('/api/images/list-generic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bucket: 'screens', folder: String(id) }),
+        });
+        if (!alive) return;
+        if (res.ok) {
+          const j = await res.json();
+          setScreenHeroImages(j?.files || []);
+        } else {
+          setScreenHeroImages([]);
+        }
+      } catch {
+        if (alive) setScreenHeroImages([]);
+      }
+    };
+    loadScreenHero();
+    return () => { alive = false; };
+  }, [onlyScreen, selectedScreenId, screens]);
+
+  // Keep mobile bubble above footer
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const base = 32; // px
+    const spacing = 8; // px extra clearance above footer
+    const update = () => {
+      try {
+        const footer = document.querySelector('footer') as HTMLElement | null;
+        if (!footer) {
+          setBubbleBottomPx(base);
+          return;
+        }
+        const rect = footer.getBoundingClientRect();
+        const vh = window.innerHeight || 0;
+        const overlap = vh - rect.top; // >0 when footer enters viewport
+        if (overlap > 0) {
+          setBubbleBottomPx(base + overlap + spacing);
+        } else {
+          setBubbleBottomPx(base);
+        }
+      } catch {
+        setBubbleBottomPx(base);
+      }
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true } as EventListenerOptions);
+    window.addEventListener('resize', update);
+    const id = window.setInterval(update, 500); // mitigate layout shifts
+    return () => {
+      window.removeEventListener('scroll', update as unknown as EventListener);
+      window.removeEventListener('resize', update as unknown as EventListener);
+      window.clearInterval(id);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -517,7 +595,7 @@ export default function ProductDetailPage() {
           {/* Right: Details */}
           <div className="bg-white rounded-lg shadow-sm p-6 space-y-6">
             <div>
-              <div className="flex items-baseline justify-between gap-4">
+              <div className="hidden sm:flex items-baseline justify-between gap-4">
                 <h1 className="text-2xl font-semibold text-gray-900">{product.name}</h1>
                 <p className="text-xl font-semibold text-[var(--color-secondary)]">{formattedPrice}/mánuði</p>
               </div>
@@ -577,59 +655,157 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
-            {/* Add-on toggles */}
+            {/* Add-on section */}
             <div className="space-y-3">
-              <p className="text-sm text-gray-700 font-medium">Aukahlutir</p>
-              <div className="grid grid-cols-3 gap-3 justify-center justify-items-center">
-                {/* Skjár (show only if linked) */}
-                {screens.length > 0 ? (
-                  <div className="flex flex-col items-center gap-1">
-                    <label htmlFor="toggle-skrar" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-                      <input id="toggle-skrar" type="checkbox" className="sr-only" checked={addons.skjár}
-                        onChange={(e) => setAddons({ ...addons, skjár: e.target.checked })} />
-                      <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
-                        <span className="inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform duration-200 group-has-[:checked]:translate-x-4" />
-                      </span>
-                      Skjár
-                    </label>
-                    <button type="button" onClick={() => openAccessoryModal('screen')} className="text-xs text-[var(--color-accent)] underline cursor-pointer">
-                      Sjá nánar
+              {onlyScreen ? (
+                <div className="rounded-lg border border-gray-200 bg-gradient-to-r from-[var(--color-accent)]/5 to-transparent p-3 relative">
+                  {(() => {
+                    const s = screens.find(x => x.id === (selectedScreenId || screens[0]?.id));
+                    const price = s ? parsePrice(s.verd || null) : 0;
+                    const priceStr = price ? `${price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} kr/mánuði` : '';
+                    return priceStr ? (
+                      <div className="absolute top-2 right-2 inline-flex items-center rounded-md bg-white/90 px-2.5 py-1 text-xs font-semibold text-[var(--color-secondary)] shadow border border-gray-200">
+                        + {priceStr}
+                      </div>
+                    ) : null;
+                  })()}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <div className="flex-1">
+                      <div className="inline-flex items-center gap-2 text-[11px] font-medium text-[var(--color-accent)] bg-[var(--color-accent)]/10 ring-1 ring-[var(--color-accent)]/30 px-2 py-0.5 rounded">
+                        Mælum með
+                      </div>
+                      {(() => {
+                        const s = screens.find(x => x.id === (selectedScreenId || screens[0]?.id));
+                        const price = s ? parsePrice(s.verd || null) : 0;
+                        const priceStr = price ? `${price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} kr/mánuði` : '';
+                        return (
+                          <>
+                            <ul className="mt-2 text-sm text-gray-700 space-y-1">
+                              {s?.skjastaerd ? <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" />{s.framleidandi} · {s.skjastaerd}</li> : null}
+                              {s?.upplausn ? <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" />{s.upplausn}</li> : null}
+                              {s?.endurnyjunartidni ? <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" />{s.endurnyjunartidni} endurnýjunartíðni</li> : null}
+                            </ul>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setAddons({ ...addons, skjár: !addons.skjár })}
+                                className={`inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-white ${addons.skjár ? 'bg-green-600 hover:bg-green-500' : 'bg-[var(--color-accent)] hover:brightness-95'} cursor-pointer`}
+                              >
+                                {addons.skjár ? 'Fjarlægja skjá' : 'Bæta við skjá'}
+                              </button>
+                            </div>
+                            {screens.length > 1 ? (
+                              <div className="mt-3">
+                                <label htmlFor="select-screen" className="block text-xs text-gray-500 mb-1">Veldu skjá</label>
+                                <select
+                                  id="select-screen"
+                                  value={selectedScreenId || screens[0]?.id}
+                                  onChange={(e) => setSelectedScreenId(e.target.value)}
+                                  className="w-full max-w-xs rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                >
+                                  {screens.map(sc => {
+                                    const p = parsePrice(sc.verd || null);
+                                    const pStr = p ? `${p.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} kr/mánuði` : '';
+                                    return (
+                                      <option key={sc.id} value={sc.id}>
+                                        {sc.framleidandi} {sc.skjastaerd} {pStr ? `— ${pStr}` : ''}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              </div>
+                            ) : null}
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (screenHeroImages.length === 0) {
+                          // Best-effort load in case images not preloaded yet
+                          try {
+                            const id = selectedScreenId || screens[0]?.id;
+                            if (id) {
+                              const res = await fetch('/api/images/list-generic', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ bucket: 'screens', folder: String(id) }),
+                              });
+                              if (res.ok) {
+                                const j = await res.json();
+                                setScreenHeroImages(j?.files || []);
+                              }
+                            }
+                          } catch {}
+                        }
+                        setScreenLightboxIndex(0);
+                        setScreenLightboxOpen(true);
+                      }}
+                      className="w-full sm:w-56 aspect-[4/3] bg-white rounded-md border border-gray-200 flex items-center justify-center overflow-hidden cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                      aria-label="Skoða myndir af skjá"
+                      title="Smelltu til að skoða allar myndir af skjá"
+                    >
+                      {screenHeroImages[0]?.signedUrl ? (
+                        <img src={screenHeroImages[0]?.signedUrl} alt="Skjár" className="max-h-full max-w-full object-contain pointer-events-none" />
+                      ) : (
+                        <div className="text-gray-400 text-xs">Mynd af skjá birtist hér</div>
+                      )}
                     </button>
                   </div>
-                ) : null}
-                {/* Lyklaborð */}
-                {keyboards.length > 0 ? (
-                  <div className="flex flex-col items-center gap-1">
-                    <label htmlFor="toggle-lyklabord" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-                      <input id="toggle-lyklabord" type="checkbox" className="sr-only" checked={addons.lyklabord}
-                        onChange={(e) => setAddons({ ...addons, lyklabord: e.target.checked })} />
-                      <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
-                        <span className="inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform duration-200 group-has-[:checked]:translate-x-4" />
-                      </span>
-                      Lyklaborð
-                    </label>
-                    <button type="button" onClick={() => openAccessoryModal('keyboard')} className="text-xs text-[var(--color-accent)] underline cursor-pointer">
-                      Sjá nánar
-                    </button>
-                  </div>
-                ) : null}
-                {/* Mús */}
-                {mouses.length > 0 ? (
-                  <div className="flex flex-col items-center gap-1">
-                    <label htmlFor="toggle-mus" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-                      <input id="toggle-mus" type="checkbox" className="sr-only" checked={addons.mus}
-                        onChange={(e) => setAddons({ ...addons, mus: e.target.checked })} />
-                      <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
-                        <span className="inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform duration-200 group-has-[:checked]:translate-x-4" />
-                      </span>
-                      Mús
-                    </label>
-                    <button type="button" onClick={() => openAccessoryModal('mouse')} className="text-xs text-[var(--color-accent)] underline cursor-pointer">
-                      Sjá nánar
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3 justify-center justify-items-center">
+                  {/* Skjár (show only if linked) */}
+                  {screens.length > 0 ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <label htmlFor="toggle-skrar" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                        <input id="toggle-skrar" type="checkbox" className="sr-only" checked={addons.skjár}
+                          onChange={(e) => setAddons({ ...addons, skjár: e.target.checked })} />
+                        <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
+                          <span className="inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform duration-200 group-has-[:checked]:translate-x-4" />
+                        </span>
+                        Skjár
+                      </label>
+                      <button type="button" onClick={() => openAccessoryModal('screen')} className="text-xs text-[var(--color-accent)] underline cursor-pointer">
+                        Sjá nánar
+                      </button>
+                    </div>
+                  ) : null}
+                  {/* Lyklaborð */}
+                  {keyboards.length > 0 ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <label htmlFor="toggle-lyklabord" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                        <input id="toggle-lyklabord" type="checkbox" className="sr-only" checked={addons.lyklabord}
+                          onChange={(e) => setAddons({ ...addons, lyklabord: e.target.checked })} />
+                        <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
+                          <span className="inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform duration-200 group-has-[:checked]:translate-x-4" />
+                        </span>
+                        Lyklaborð
+                      </label>
+                      <button type="button" onClick={() => openAccessoryModal('keyboard')} className="text-xs text-[var(--color-accent)] underline cursor-pointer">
+                        Sjá nánar
+                      </button>
+                    </div>
+                  ) : null}
+                  {/* Mús */}
+                  {mouses.length > 0 ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <label htmlFor="toggle-mus" className="group inline-flex items-center justify-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                        <input id="toggle-mus" type="checkbox" className="sr-only" checked={addons.mus}
+                          onChange={(e) => setAddons({ ...addons, mus: e.target.checked })} />
+                        <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-gray-300 transition-colors group-has-[:checked]:bg-[var(--color-accent)]">
+                          <span className="inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform duration-200 group-has-[:checked]:translate-x-4" />
+                        </span>
+                        Mús
+                      </label>
+                      <button type="button" onClick={() => openAccessoryModal('mouse')} className="text-xs text-[var(--color-accent)] underline cursor-pointer">
+                        Sjá nánar
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </div>
 
             {/* Actions */}
@@ -710,6 +886,72 @@ export default function ProductDetailPage() {
           <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-green-500/30">
             Vara tryggð
           </span>
+        </div>
+      ) : null}
+      {/* Screen-only lightbox (no specs) */}
+      {screenLightboxOpen ? (
+        <div className="fixed inset-0 z-[70]">
+          <div
+            className="absolute inset-0 bg-black/80"
+            onClick={() => setScreenLightboxOpen(false)}
+            aria-hidden="true"
+          />
+          <div role="dialog" aria-modal="true" className="relative z-[71] h-full w-full flex flex-col items-center justify-center p-4 gap-3">
+            <div className="relative max-h-[80vh] w-full max-w-5xl bg-transparent flex items-center justify-center">
+              {screenHeroImages.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setScreenLightboxIndex((i) => (i - 1 + screenHeroImages.length) % screenHeroImages.length)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 inline-flex items-center justify-center rounded-full bg-white/90 text-gray-700 hover:bg-white shadow cursor-pointer"
+                  aria-label="Fyrri mynd"
+                  title="Fyrri mynd"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M12.78 15.53a.75.75 0 01-1.06 0l-4-4a.75.75 0 010-1.06l4-4a.75.75 0 111.06 1.06L9.31 10l3.47 3.47a.75.75 0 010 1.06z"/></svg>
+                </button>
+              ) : null}
+              <img
+                src={screenHeroImages[Math.min(screenLightboxIndex, Math.max(0, screenHeroImages.length - 1))]?.signedUrl}
+                alt=""
+                className="max-h-[80vh] max-w-full object-contain"
+              />
+              {screenHeroImages.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setScreenLightboxIndex((i) => (i + 1) % screenHeroImages.length)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 inline-flex items-center justify-center rounded-full bg-white/90 text-gray-700 hover:bg-white shadow cursor-pointer"
+                  aria-label="Næsta mynd"
+                  title="Næsta mynd"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7.22 4.47a.75.75 0 011.06 0l4 4c.3.3.3.77 0 1.06l-4 4a.75.75 0 11-1.06-1.06L10.69 10 7.22 6.53a.75.75 0 010-1.06z"/></svg>
+                </button>
+              ) : null}
+            </div>
+            {screenHeroImages.length > 1 ? (
+              <div className="flex gap-2 overflow-x-auto">
+                {screenHeroImages.map((img, idx) => (
+                  <button
+                    key={img.path}
+                    type="button"
+                    onClick={() => setScreenLightboxIndex(idx)}
+                    className={`relative flex-shrink-0 h-14 w-18 rounded border ${screenLightboxIndex === idx ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/40' : 'border-white/20 hover:border-white/40'} bg-black/30 overflow-hidden cursor-pointer`}
+                    aria-label={`Velja mynd ${idx + 1}`}
+                    title={`Mynd ${idx + 1}`}
+                  >
+                    <img src={img.signedUrl} alt="" className="h-full w-full object-contain" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setScreenLightboxOpen(false)}
+              className="absolute top-4 right-4 h-9 w-9 inline-flex items-center justify-center rounded-full bg-white/90 text-gray-700 hover:bg-white shadow cursor-pointer"
+              aria-label="Loka"
+              title="Loka"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 6.22a.75.75 0 011.06 0L10 8.88l2.66-2.66a.75.75 0 111.06 1.06L11.06 9.94l2.66 2.66a.75.75 0 11-1.06 1.06L10 11l-2.66 2.66a.75.75 0 11-1.06-1.06L8.94 9.94 6.28 7.28a.75.75 0 010-1.06z"/></svg>
+            </button>
+          </div>
         </div>
       ) : null}
       {/* Accessory modal */}
@@ -850,6 +1092,14 @@ export default function ProductDetailPage() {
           </div>
         </div>
       ) : null}
+      {/* Mobile-only floating name + price bubble */}
+      <div className="sm:hidden fixed left-1/2 -translate-x-1/2" style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${bubbleBottomPx}px)` }}>
+        <div ref={bubbleRef} className="inline-flex max-w-[96vw] items-center gap-3 rounded-full bg-white/95 backdrop-blur px-6 py-3 shadow-2xl border border-white ring-2 ring-[var(--color-accent)]/60">
+          <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-accent)] shadow-sm" aria-hidden="true" />
+          <span className="text-base font-semibold text-gray-900 truncate max-w-[56vw]">{product.name}</span>
+          <span className="text-xl font-extrabold text-[var(--color-secondary)] whitespace-nowrap">{formattedPrice}/mánuði</span>
+        </div>
+      </div>
       {/* Styles for insurance animations */}
       <style jsx>{`
         @keyframes draw {

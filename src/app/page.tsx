@@ -33,20 +33,10 @@ export default function Home() {
     imageUrl?: string | null;
   }
 
-  interface ScreenItem {
-    id: string;
-    framleidandi: string;
-    skjastaerd: string;
-    upplausn: string;
-    skjataekni: string;
-    endurnyjunartidni: string;
-    verd?: string | null;
-    imageUrl?: string | null;
-  }
+ 
 
   const [items, setItems] = useState<GamingPCItem[]>([]);
   const [consoles, setConsoles] = useState<GamingConsoleItem[]>([]);
-  const [screens, setScreens] = useState<ScreenItem[]>([]);
   const { loading: authLoading, session } = useAuth();
   const router = useRouter();
 
@@ -240,85 +230,12 @@ export default function Home() {
     return () => { isMounted = false; };
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchScreens = async () => {
-      try {
-        const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
-        debug('Home/Screens/start', { hasUser: !!session?.user, order: clients.map((c) => (c === supabase ? 'authed' : 'anon')) });
-        let data: ScreenItem[] | null = null;
-        let lastError: unknown = null;
-        for (const client of clients) {
-          try {
-            const { data: d, error } = await client
-              .from('screens')
-              .select('id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni, verd')
-              .order('created_at', { ascending: false });
-            if (error) {
-              lastError = error;
-              debug('Home/Screens/error', { client: client === supabase ? 'authed' : 'anon', error });
-              continue;
-            }
-            const arr = (d as ScreenItem[]) || [];
-            data = arr;
-            debug('Home/Screens/result', { client: client === supabase ? 'authed' : 'anon', count: arr.length });
-            if (arr.length > 0) break;
-          } catch (e) {
-            lastError = e;
-            debug('Home/Screens/exception', { client: client === supabase ? 'authed' : 'anon', error: e });
-          }
-        }
-        if (!isMounted) return;
-        if (!data) {
-          console.error('Home: Error fetching screens', lastError);
-          setScreens([]);
-        } else {
-          const all = data || [];
-          if (all.length === 0) {
-            setScreens([]);
-            debug('Home/Screens/set', { count: 0 });
-            return;
-          }
-          try {
-            const ids = all.map((s) => s.id);
-            const res = await fetch('/api/images/first-generic', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ bucket: 'screens', folders: ids }),
-            });
-            if (res.ok) {
-              const j = await res.json();
-              const map: Record<string, { path: string; signedUrl: string } | null> = j?.results || {};
-              const merged = all.map((s) => ({
-                ...s,
-                imageUrl: map[s.id]?.signedUrl || null,
-              }));
-              setScreens(merged);
-              debug('Home/Screens/set', { count: merged.length, withImages: true });
-            } else {
-              setScreens(all);
-              debug('Home/Screens/set', { count: all.length, withImages: false, reason: 'images api !ok' });
-            }
-          } catch {
-            setScreens(all);
-            debug('Home/Screens/set', { count: all.length, withImages: false, reason: 'images api error' });
-          }
-        }
-      } catch (e) {
-        if (isMounted) {
-          console.error('Home: Unexpected error fetching screens', e);
-          setScreens([]);
-        }
-      }
-    };
-    fetchScreens();
-    return () => { isMounted = false; };
-  }, []);
+ 
   return (
     <div className="min-h-screen">
       {process.env.NEXT_PUBLIC_DEBUG === 'true' ? (
         <div className="fixed bottom-2 right-2 z-50 text-[10px] bg-black/70 text-white px-2 py-1 rounded">
-          <span>debug: items={items.length} consoles={consoles.length} screens={screens.length}</span>
+          <span>debug: items={items.length} consoles={consoles.length}</span>
         </div>
       ) : null}
       {/* Hero Section */}
@@ -512,60 +429,6 @@ export default function Home() {
                   </p>
                   <Link
                     href={`/console/${c.id}`}
-                    className="mt-4 inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Sjá nánar
-                  </Link>
-                </div>
-              </div>
-            ))}
-            {screens.map((s) => (
-              <div
-                key={s.id}
-                className="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer"
-                role="link"
-                tabIndex={0}
-                onClick={() => router.push(`/productscreen/${s.id}`)}
-                onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/productscreen/${s.id}`); }}
-              >
-                <div className="relative aspect-video overflow-hidden bg-gray-200">
-                  {s.imageUrl ? (
-                    <>
-                      <img
-                        src={s.imageUrl}
-                        alt={`${s.framleidandi} ${s.skjastaerd}`}
-                        className="absolute inset-0 h-full w-full object-contain transition-transform duration-300 ease-out group-hover:scale-[1.02]"
-                        loading="lazy"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-                    </>
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-                      <svg className="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5l3.75-3h10.5L21 7.5v9l-3.75 3H6.75L3 16.5v-9z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 14.25l4.5-4.5 6 6 2.25-2.25L21 16.5" />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-                <div className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900">{s.framleidandi} {s.skjastaerd}</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {s.skjastaerd} · {s.upplausn} · {s.skjataekni} · {s.endurnyjunartidni}
-                  </p>
-                  <p className="text-xl font-bold text-[var(--color-secondary)] mt-2">
-                    {(() => {
-                      const digits = (s.verd || '').toString().replace(/\D+/g, '');
-                      const base = parseInt(digits, 10) || 0;
-                      const raw = Math.round(base * 0.88);
-                      const rounded = Math.ceil(raw / 10) * 10;
-                      const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-                      return `Frá ${formatted} kr/mánuði`;
-                    })()}
-                  </p>
-                  <Link
-                    href={`/productscreen/${s.id}`}
                     className="mt-4 inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
                     onClick={(e) => e.stopPropagation()}
                   >

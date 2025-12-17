@@ -9,11 +9,10 @@ Með því að leigja tölvu eða annan búnað hjá leigusala samþykkir leigut
 Leigusali áskilur sér rétt til að breyta þessum skilmálum hvenær sem er. Breyttir skilmálar taka gildi við birtingu þeirra á vefsíðu tolvuleiga.is.</p>
 			<p className="text-black/70 dark:text-white/70">2. Leigutakar</p>
 			<p className="text-black/70 dark:text-white/70">Leigusali leigir búnað bæði til einstaklinga og fyrirtækja.
-			Leigutaki skal vera orðinn 18 ára eða hafa skriflegt samþykki forráðamanns. Fyrirtæki skulu tilgreina ábyrgðaraðila á leigutímanum.</p>
+Leigutaki skal vera orðinn 18 ára eða hafa skriflegt samþykki forráðamanns. Fyrirtæki skulu tilgreina ábyrgðaraðila á leigutímanum.</p>
 			<p className="text-black/70 dark:text-white/70">3. Leigutími og afhending</p>
 			<p className="text-black/70 dark:text-white/70">Leigutími hefst við afhendingu búnaðar til leigutaka og lýkur við skil á honum í fullkomnu ástandi.
-Leiga getur verið skammtíma (t.d. daga eða vikur) eða langtíma (mánuði eða lengur).
-Leigutaki ber ábyrgð á búnaðinum á meðan hann er í hans vörslu, þar á meðal vegna skemmda, taps eða þjófnaðar.</p>
+Leiga er eingöngu í boði til langtíma (mánuður eða lengur). Leigutaki ber ábyrgð á búnaðinum á meðan hann er í hans vörslu, þar á meðal vegna skemmda, taps eða þjófnaðar.</p>
 			<p className="text-black/70 dark:text-white/70">4. Innifalið í leigu</p>
 			<p className="text-black/70 dark:text-white/70">Í leigunni er innifalinn tölvubúnaður ásamt nauðsynlegum hugbúnaði sem leigusali útvegar.
 			Leigutaki getur valið að bæta við tryggingu gegn tjóni eða þjófnaði gegn mánaðarlegu aukagjaldi samkvæmt verðskrá leigusala.</p>
@@ -23,8 +22,7 @@ Tryggingin gildir ekki ef tjón verður vegna stórkostlegs gáleysis eða rangr
 Ef leigutaki hefur ekki tryggingu, ber hann allan kostnað sem hlýst af tjóni, tapi eða þjófnaði á búnaði.
 Leigutaki skal tafarlaust tilkynna leigusala um bilun, skemmdir eða tap á búnaði.</p>
 			<p className="text-black/70 dark:text-white/70">6. Greiðsluskilmálar</p>
-			<p className="text-black/70 dark:text-white/70">Leiga fyrir skammtímaleigu (t.d. nokkra daga) skal greidd fyrirfram við afhendingu búnaðar.
-Við langtímaleigu (t.d. mánaðarlega) skal greiða mánaðarlega fyrirfram samkvæmt útgefnum reikningi.
+			<p className="text-black/70 dark:text-white/70">Við langtímaleigu (t.d. mánaðarlega) skal greiða mánaðarlega fyrirfram samkvæmt útgefnum reikningi.
 Greiðsludráttur getur leitt til dráttarvaxta og innheimtukostnaðar samkvæmt íslenskum lögum.
 Leigusali áskilur sér rétt til að innkalla leigða vöru ef reikningur hefur ekki verið greiddur innan 7 daga frá eindaga.</p>
 			<p className="text-black/70 dark:text-white/70">7. Notkun og meðferð búnaðar</p>

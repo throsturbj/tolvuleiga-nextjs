@@ -33,10 +33,19 @@ export default function Home() {
     imageUrl?: string | null;
   }
 
+  interface Review {
+    id: string;
+    content: string;
+    reviewer_name: string;
+    rating: number;
+    created_at?: string;
+  }
+
  
 
   const [items, setItems] = useState<GamingPCItem[]>([]);
   const [consoles, setConsoles] = useState<GamingConsoleItem[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const { loading: authLoading, session } = useAuth();
   const router = useRouter();
 
@@ -230,6 +239,59 @@ export default function Home() {
     return () => { isMounted = false; };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    const fetchReviews = async () => {
+      try {
+        // Public reads should work via anon due to RLS policy
+        // Fall back to authed if needed
+        const clients = session?.user ? [supabasePublic, supabase] : [supabasePublic, supabase];
+        let data: Review[] | null = null;
+        for (const client of clients) {
+          try {
+            const { data: rows, error } = await client
+              .from("reviews")
+              .select("id, content, reviewer_name, rating, created_at")
+              .eq("is_published", true)
+              .order("created_at", { ascending: false });
+            if (!error && Array.isArray(rows)) {
+              data = rows as Review[];
+              break;
+            }
+          } catch {
+            // try next
+          }
+        }
+        if (!isMounted) return;
+        setReviews(data ?? []);
+      } catch {
+        if (isMounted) setReviews([]);
+      }
+    };
+    fetchReviews();
+    return () => { isMounted = false; };
+  }, []);
+
+  const renderStars = (rating: number) => {
+    const stars = [];
+    const clamped = Math.max(0, Math.min(5, Number(rating) || 0));
+    for (let i = 1; i <= 5; i++) {
+      const filled = i <= clamped;
+      stars.push(
+        <svg
+          key={i}
+          className={`h-4 w-4 ${filled ? 'text-yellow-500' : 'text-gray-300'}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.802 2.036a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.802-2.036a1 1 0 00-1.176 0l-2.802 2.036c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      );
+    }
+    return <div className="flex gap-1" aria-label={`${clamped} stjörnur`}>{stars}</div>;
+  };
+
  
   return (
     <div className="min-h-screen">
@@ -300,6 +362,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      
 
       {/* Featured Properties Preview */}
       <section id="products" className="bg-gray-50 py-14">
@@ -437,6 +501,42 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Reviews Section */}
+      <section className="py-14">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+              Umsagnir viðskiptavina
+            </h2>
+          </div>
+          <div className="flex flex-wrap justify-center gap-6">
+            {reviews.map((r) => (
+              <div
+                key={r.id}
+                className="w-full sm:w-80 lg:w-72 flex flex-col justify-between rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+              >
+                <p className="text-base text-gray-900">
+                  {r.content}
+                </p>
+                <div className="mt-4">
+                  <div className="text-sm text-gray-500">
+                    {r.reviewer_name}
+                  </div>
+                  <div className="mt-2">
+                    {renderStars(r.rating)}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {reviews.length === 0 ? (
+              <div className="w-full text-center text-sm text-gray-500">
+                Engar umsagnir tiltækar enn.
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

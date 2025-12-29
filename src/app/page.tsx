@@ -45,6 +45,7 @@ export default function Home() {
  
 
   const [items, setItems] = useState<GamingPCItem[]>([]);
+  const [itemsLoading, setItemsLoading] = useState<boolean>(true);
   const [consoles, setConsoles] = useState<GamingConsoleItem[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const { loading: authLoading, session } = useAuth();
@@ -54,6 +55,7 @@ export default function Home() {
     let isMounted = true;
     const fetchItems = async () => {
       try {
+        if (isMounted) setItemsLoading(true);
         // Prefer authed client if user exists; otherwise anon; fallback to the other on failure/empty
         const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
         debug('Home/PCs/start', { hasUser: !!session?.user, order: clients.map((c) => (c === supabase ? 'authed' : 'anon')) });
@@ -88,6 +90,7 @@ export default function Home() {
         if (!data) {
           console.error('Home: Error fetching products', lastError);
           setItems([]);
+          setItemsLoading(false);
         } else {
           const visible = data.filter((pc) => pc.falid === true ? false : true);
           // Sort by numeric verd ascending (smallest price first)
@@ -145,9 +148,11 @@ export default function Home() {
               price12: priceMap[p.id] ?? null,
             }));
             setItems(merged);
+              setItemsLoading(false);
             debug('Home/PCs/setItems', { count: merged.length, withImages: !!Object.keys(imageMap).length, withPrices: !!Object.keys(priceMap).length });
           } catch {
             setItems(sorted);
+              setItemsLoading(false);
             debug('Home/PCs/setItems', { count: sorted.length, withImages: false, withPrices: false, reason: 'aux fetch error' });
           }
         }
@@ -155,6 +160,7 @@ export default function Home() {
         if (isMounted) {
           console.error('Home: Unexpected error fetching products', e);
           setItems([]);
+          setItemsLoading(false);
         }
       }
     };
@@ -378,6 +384,21 @@ export default function Home() {
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {itemsLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={`sk-${i}`} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="relative aspect-video bg-gray-200 animate-pulse" />
+                  <div className="p-6 space-y-2">
+                    <div className="h-5 w-3/5 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-4 w-4/5 bg-gray-100 rounded animate-pulse" />
+                    <div className="mt-4 flex items-center gap-2">
+                      <div className="h-9 w-28 bg-gray-200 rounded animate-pulse" />
+                      <div className="h-9 w-28 bg-gray-100 rounded animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : null}
             {items.map((pc) => (
               <div
                 key={pc.id}

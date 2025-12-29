@@ -19,6 +19,7 @@ interface GamingPCRow {
   cpucooler?: string;
   ram?: string;
   uppselt?: boolean;
+  tilbod?: boolean;
 }
 
 interface ScreenItem {
@@ -436,13 +437,35 @@ export default function ProductDetailPage() {
   const fallbackDiscountRates = [0, 0.04, 0.08, 0.10, 0.12] as const; // includes 9 months fallback
   const fallbackRate = fallbackDiscountRates[durationIndex] ?? 0;
   const fallbackMonthly = Math.max(0, Math.round(basePrice * (1 - fallbackRate)));
-  const monthlyBase = Number.isFinite(monthlyFromTable ?? NaN) && (monthlyFromTable ?? 0) > 0 ? (monthlyFromTable as number) : fallbackMonthly;
+  const monthlyBaseSelected = Number.isFinite(monthlyFromTable ?? NaN) && (monthlyFromTable ?? 0) > 0 ? (monthlyFromTable as number) : fallbackMonthly;
+
+  // Helper to read monthly for a specific duration (with fallback) independent of selection
+  const getMonthlyFor = (months: 1 | 3 | 6 | 9 | 12): number => {
+    if (priceRow) {
+      const key = (months === 1 ? "1month" : months === 3 ? "3month" : months === 6 ? "6month" : months === 9 ? "9month" : "12month") as keyof NonNullable<typeof priceRow>;
+      const fromTable = parsePrice(priceRow[key] || "");
+      if (Number.isFinite(fromTable) && fromTable > 0) return fromTable;
+    }
+    const idx = [1, 3, 6, 9, 12].indexOf(months);
+    const rate = (fallbackDiscountRates[idx] ?? 0);
+    return Math.max(0, Math.round(basePrice * (1 - rate)));
+  };
+
+  // Offer logic: when tilbod is true, treat all months as 12m price
+  const offerMonthly = getMonthlyFor(12);
+  const monthlyBase = product.tilbod ? offerMonthly : monthlyBaseSelected;
 
   // Accessories are added on top (not discounted)
   const insuranceMultiplier = insured ? 1.1 : 1;
   const finalPriceRaw = Math.round((monthlyBase + addOnTotal) * insuranceMultiplier);
   const finalPrice = Math.ceil(finalPriceRaw / 10) * 10;
   const formattedPrice = `${finalPrice.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr`;
+
+  // For strike-through display (what the price would be without the offer)
+  const normalMonthlyWithoutOffer = monthlyBaseSelected;
+  const normalFinalRaw = Math.round((normalMonthlyWithoutOffer + addOnTotal) * insuranceMultiplier);
+  const normalFinal = Math.ceil(normalFinalRaw / 10) * 10;
+  const formattedNormal = `${normalFinal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr`;
 
   const openAccessoryModal = async (type: 'screen' | 'keyboard' | 'mouse') => {
     setModalType(type);
@@ -596,8 +619,17 @@ export default function ProductDetailPage() {
           <div className="bg-white rounded-lg shadow-sm p-6 space-y-6">
             <div>
               <div className="hidden sm:flex items-baseline justify-between gap-4">
-                <h1 className="text-2xl font-semibold text-gray-900">{product.name}</h1>
-                <p className="text-xl font-semibold text-[var(--color-secondary)]">{formattedPrice}/mánuði</p>
+                <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+                  {product.name}
+                </h1>
+                {product.tilbod && durationValue !== 12 ? (
+                  <div className="flex flex-col items-end leading-tight">
+                    <span className="text-sm text-gray-500 line-through">{formattedNormal}/mánuði</span>
+                    <span className="text-2xl font-extrabold text-[var(--color-secondary)]">{formattedPrice}/mánuði</span>
+                  </div>
+                ) : (
+                  <p className="text-xl font-semibold text-[var(--color-secondary)]">{formattedPrice}/mánuði</p>
+                )}
               </div>
             </div>
 
@@ -1096,8 +1128,15 @@ export default function ProductDetailPage() {
       <div className="sm:hidden fixed left-1/2 -translate-x-1/2" style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${bubbleBottomPx}px)` }}>
         <div ref={bubbleRef} className="inline-flex max-w-[96vw] items-center gap-3 rounded-full bg-white/95 backdrop-blur px-6 py-3 shadow-2xl border border-white ring-2 ring-[var(--color-accent)]/60">
           <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-accent)] shadow-sm" aria-hidden="true" />
-          <span className="text-base font-semibold text-gray-900 truncate max-w-[56vw]">{product.name}</span>
-          <span className="text-xl font-extrabold text-[var(--color-secondary)] whitespace-nowrap">{formattedPrice}/mánuði</span>
+          <span className="text-base font-semibold text-gray-900 truncate max-w-[52vw]">{product.name}</span>
+          {product.tilbod && durationValue !== 12 ? (
+            <span className="flex flex-col items-end leading-tight whitespace-nowrap">
+              <span className="text-[11px] text-gray-500 line-through">{formattedNormal}/mánuði</span>
+              <span className="text-xl font-extrabold text-[var(--color-secondary)]">{formattedPrice}/mánuði</span>
+            </span>
+          ) : (
+            <span className="text-xl font-extrabold text-[var(--color-secondary)] whitespace-nowrap">{formattedPrice}/mánuði</span>
+          )}
         </div>
       </div>
       {/* Styles for insurance animations */}

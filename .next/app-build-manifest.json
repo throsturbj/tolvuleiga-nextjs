@@ -26,10 +26,10 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/page.js"
     ],
-    "/stjornbord/page": [
+    "/vorur/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/stjornbord/page.js"
+      "static/chunks/app/vorur/page.js"
     ],
     "/product/[id]/page": [
       "static/chunks/webpack.js",
@@ -46,20 +46,10 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/images/list-generic/route.js"
     ],
-    "/api/order/delete/route": [
+    "/order/[id]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/order/delete/route.js"
-    ],
-    "/legal/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/legal/page.js"
-    ],
-    "/api/order/generate-admin-pdf/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/order/generate-admin-pdf/route.js"
+      "static/chunks/app/order/[id]/page.js"
     ]
   }
 }

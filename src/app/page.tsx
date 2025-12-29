@@ -18,6 +18,7 @@ export default function Home() {
     storage: string;
     uppselt?: boolean;
     falid?: boolean;
+    tilbod?: boolean;
     imageUrl?: string;
     price12?: string | null;
   }
@@ -62,7 +63,7 @@ export default function Home() {
           try {
             const { data: d, error } = await client
               .from("GamingPC")
-              .select("id, name, verd, cpu, gpu, storage, uppselt, falid")
+              .select("id, name, verd, cpu, gpu, storage, uppselt, falid, tilbod")
               .order("id", { ascending: false });
             if (error) {
               lastError = error;
@@ -396,6 +397,13 @@ export default function Home() {
                         loading="lazy"
                       />
                       <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+                      {pc.tilbod ? (
+                        <div className="pointer-events-none absolute top-0 left-0 z-[2] w-full h-0">
+                          <span className="absolute -left-10 top-3 w-44 rotate-[-18deg] text-center inline-block bg-gradient-to-r from-amber-600 to-orange-500 text-white text-[11px] sm:text-xs font-extrabold uppercase tracking-wide px-0 py-1.5 shadow-xl ring-1 ring-white/70">
+                            Nýárstilboð
+                          </span>
+                        </div>
+                      ) : null}
                     </>
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-gray-400">
@@ -418,14 +426,16 @@ export default function Home() {
                   <p className="text-sm text-gray-600 mt-1">
                     {pc.gpu} · {pc.cpu} · {pc.storage}
                   </p>
-                  <p className="text-xl font-bold text-[var(--color-secondary)] mt-2">
-                    {(() => {
-                      const digits = (pc.price12 || '').toString().replace(/\D+/g, '');
-                      const num = parseInt(digits, 10) || 0;
-                      const formatted = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-                      return `Frá ${formatted} kr/mánuði`;
-                    })()}
-                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xl font-bold text-[var(--color-secondary)]">
+                      {(() => {
+                        const digits = (pc.price12 || '').toString().replace(/\D+/g, '');
+                        const num = parseInt(digits, 10) || 0;
+                        const formatted = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                        return `Frá ${formatted} kr/mánuði`;
+                      })()}
+                    </span>
+                  </div>
                   <div className="mt-4 flex items-center gap-2">
                     <Link
                       href={`/product/${pc.id}`}

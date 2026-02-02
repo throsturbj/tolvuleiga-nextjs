@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { supabasePublic } from "@/lib/supabase-public";
@@ -50,6 +50,66 @@ export default function Home() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const { loading: authLoading, session } = useAuth();
   const router = useRouter();
+  // Clean native snap-scrolling carousel with center-on-card logic
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number>(0);
+  const centerToIndex = (idx: number, behavior: ScrollBehavior = 'smooth') => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const cards = Array.from(el.querySelectorAll<HTMLElement>('[data-review-card="true"]'));
+    if (cards.length === 0) return;
+    const bounded = Math.max(0, Math.min(idx, cards.length - 1));
+    const card = cards[bounded];
+    const targetLeft = card.offsetLeft - (el.clientWidth - card.clientWidth) / 2;
+    el.scrollTo({ left: Math.max(0, targetLeft), behavior });
+  };
+  const nextSlide = () => centerToIndex(Math.min(activeIndex + 1, reviews.length - 1));
+  const prevSlide = () => centerToIndex(Math.max(activeIndex - 1, 0));
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const updateActive = () => {
+      const cards = Array.from(el.querySelectorAll<HTMLElement>('[data-review-card="true"]'));
+      if (cards.length === 0) { setActiveIndex(0); return; }
+      const containerCenter = el.scrollLeft + el.clientWidth / 2;
+      let bestIdx = 0;
+      let bestDist = Number.POSITIVE_INFINITY;
+      cards.forEach((card, i) => {
+        const cardCenter = card.offsetLeft + card.clientWidth / 2;
+        const dist = Math.abs(cardCenter - containerCenter);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
+        }
+      });
+      setActiveIndex(bestIdx);
+    };
+    let ticking = false;
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(() => {
+          updateActive();
+          ticking = false;
+        });
+      }
+    };
+    el.addEventListener('scroll', onScroll, { passive: true } as AddEventListenerOptions);
+    // Center first card after layout
+    requestAnimationFrame(() => {
+      centerToIndex(0, 'auto');
+      updateActive();
+    });
+    const onResize = () => {
+      centerToIndex(activeIndex, 'auto');
+      updateActive();
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      el.removeEventListener('scroll', onScroll as EventListener);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [reviews.length]);
 
   useEffect(() => {
     let isMounted = true;
@@ -544,30 +604,87 @@ export default function Home() {
               Umsagnir viðskiptavina
             </h2>
           </div>
-          <div className="flex flex-wrap justify-center gap-6">
-            {reviews.map((r) => (
-              <div
-                key={r.id}
-                className="w-full sm:w-80 lg:w-72 flex flex-col justify-between rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-              >
-                <p className="text-base text-gray-900">
-                  {r.content}
-                </p>
-                <div className="mt-4">
-                  <div className="text-sm text-gray-500">
-                    {r.reviewer_name}
-                  </div>
-                  <div className="mt-2">
-                    {renderStars(r.rating)}
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="relative">
             {reviews.length === 0 ? (
               <div className="w-full text-center text-sm text-gray-500">
                 Engar umsagnir tiltækar enn.
               </div>
-            ) : null}
+            ) : reviews.length === 1 ? (
+              <div className="flex justify-center">
+                <div className="w-80 flex-none rounded-lg border border-gray-200 bg-white p-6 shadow-sm flex flex-col h-[22rem]">
+                  <p
+                    className="text-base text-gray-900 flex-1 overflow-hidden"
+                    style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' }}
+                  >
+                    {reviews[0].content}
+                  </p>
+                  <div className="mt-4">
+                    <div className="text-sm text-gray-500">{reviews[0].reviewer_name}</div>
+                    <div className="mt-2">{renderStars(reviews[0].rating)}</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="relative">
+                  <div
+                    ref={scrollerRef}
+                    className="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory px-2
+                    [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                  >
+                    {reviews.map((r, idx) => (
+                      <div
+                        key={r.id}
+                        data-review-card="true"
+                        className="flex-none w-80 snap-center rounded-lg border border-gray-200 bg-white p-6 shadow-sm flex flex-col h-[22rem]"
+                      >
+                        <p
+                          className="text-base text-gray-900 flex-1 overflow-hidden"
+                          style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' }}
+                        >
+                          {r.content}
+                        </p>
+                        <div className="mt-4">
+                          <div className="text-sm text-gray-500">{r.reviewer_name}</div>
+                          <div className="mt-2">{renderStars(r.rating)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Fyrri umsögn"
+                    onClick={prevSlide}
+                    className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 h-9 w-9 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-black/5 hover:bg-gray-50"
+                  >
+                    <svg className="h-5 w-5 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M12.78 15.53a.75.75 0 01-1.06 0l-5-5a.75.75 0 010-1.06l5-5a.75.75 0 111.06 1.06L8.31 10l4.47 4.47a.75.75 0 010 1.06z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Næsta umsögn"
+                    onClick={nextSlide}
+                    className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 h-9 w-9 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-black/5 hover:bg-gray-50"
+                  >
+                    <svg className="h-5 w-5 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M7.22 4.47a.75.75 0 011.06 0l5 5c.3.3.3.77 0 1.06l-5 5a.75.75 0 11-1.06-1.06L11.69 10 7.22 5.53a.75.75 0 010-1.06z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="mt-6 flex items-center justify-center gap-2">
+                  {reviews.map((_, i) => (
+                    <button
+                      key={`dot-${i}`}
+                      type="button"
+                      aria-label={`Fara á umsögn ${i + 1}`}
+                      onClick={() => centerToIndex(i)}
+                      className={`h-2.5 rounded-full transition-all ${activeIndex === i ? 'w-5 bg-[var(--color-accent)]' : 'w-2.5 bg-gray-300 hover:bg-gray-400'}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </section>

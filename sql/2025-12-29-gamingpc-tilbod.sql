@@ -7,3 +7,4 @@ alter table public."GamingPC"
 comment on column public."GamingPC".tilbod is 'Nýárstilboð flag; when true, treat all monthly prices as the 12-month price for the campaign.';
 
 
+

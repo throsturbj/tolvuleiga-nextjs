@@ -18,7 +18,7 @@ export default function AboutPage() {
 				Tölvuleiga er sveigjanleg og örugg lausn fyrir þá sem vilja frammistöðu, einfaldleika og þjónustu í hæsta gæðaflokki.
 			</p>
 			<p className="text-black/80 dark:text-white/80">
-				Tölvuleiga var stofnuð af þremur einstaklingum með brennandi áhuga á tölvum, leikjum og nýjustu tækni. Við deilum sameiginlegri sýn um að gera öflugan tölvubúnað aðgengilegan fyrir alla, hvort sem um er að ræða leikjaspilun, verkefnavinnu eða aðra tæknitengda starfsemi.
+				Tölvuleigaa var stofnuð af þremur einstaklingum með brennandi áhuga á tölvum, leikjum og nýjustu tækni. Við deilum sameiginlegri sýn um að gera öflugan tölvubúnað aðgengilegan fyrir alla, hvort sem um er að ræða leikjaspilun, verkefnavinnu eða aðra tæknitengda starfsemi.
 			</p>
 		</section>
 	);

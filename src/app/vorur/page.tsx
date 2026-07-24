@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -58,6 +58,33 @@ interface ImageItem {
   originalName: string;
 }
 
+interface LaptopRow {
+  id: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  active: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+type NewLaptopRow = { name: string; description: string; image_url: string; active: boolean };
+
+interface LaptopVariantRow {
+  id: string;
+  laptop_id: string;
+  storage_gb: number;
+  price: number;
+  sku: string | null;
+  stock_quantity: number | null;
+  created_at?: string | null;
+}
+
+type NewLaptopVariant = { storage_gb: string; price: string; sku: string; stock_quantity: string };
+
+const emptyLaptopForm: NewLaptopRow = { name: "", description: "", image_url: "", active: true };
+const emptyVariantForm: NewLaptopVariant = { storage_gb: "", price: "", sku: "", stock_quantity: "" };
+
 export default function VorurAdminPage() {
   const { user, session, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -71,7 +98,7 @@ export default function VorurAdminPage() {
   const [editForm, setEditForm] = useState<NewRow | null>(null);
 
   // Screens state
-  const [activeTab, setActiveTab] = useState<"gaming" | "screens" | "keyboards" | "mouses" | "consoles">("gaming");
+  const [activeTab, setActiveTab] = useState<"gaming" | "screens" | "keyboards" | "mouses" | "consoles" | "laptops">("gaming");
   const [screens, setScreens] = useState<ScreenRow[]>([]);
   const [screensLoading, setScreensLoading] = useState<boolean>(false);
   const [screenCreating, setScreenCreating] = useState<boolean>(false);
@@ -147,12 +174,32 @@ export default function VorurAdminPage() {
   const [createMsMenuPos, setCreateMsMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [editMsMenuPos, setEditMsMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
+  // Laptops state
+  const [laptops, setLaptops] = useState<LaptopRow[]>([]);
+  const [laptopsLoading, setLaptopsLoading] = useState<boolean>(false);
+  const [laptopCreating, setLaptopCreating] = useState<boolean>(false);
+  const [laptopDeletingId, setLaptopDeletingId] = useState<string | null>(null);
+  const [laptopUpdatingId, setLaptopUpdatingId] = useState<string | null>(null);
+  const [laptopEditingId, setLaptopEditingId] = useState<string | null>(null);
+  const [laptopForm, setLaptopForm] = useState<NewLaptopRow>(emptyLaptopForm);
+  const [laptopEditForm, setLaptopEditForm] = useState<NewLaptopRow | null>(null);
+  // Variants keyed by laptop_id
+  const [laptopVariants, setLaptopVariants] = useState<Record<string, LaptopVariantRow[]>>({});
+  const [expandedLaptopId, setExpandedLaptopId] = useState<string | null>(null);
+  const [variantForm, setVariantForm] = useState<NewLaptopVariant>(emptyVariantForm);
+  const [variantCreating, setVariantCreating] = useState<boolean>(false);
+  const [variantDeletingId, setVariantDeletingId] = useState<string | null>(null);
+  const [variantUpdatingId, setVariantUpdatingId] = useState<string | null>(null);
+  const [variantEditingId, setVariantEditingId] = useState<string | null>(null);
+  const [variantEditForm, setVariantEditForm] = useState<NewLaptopVariant | null>(null);
+
   // Images modal state
   const [imagesEditingPcId, setImagesEditingPcId] = useState<number | null>(null);
   const [imagesEditingScreenId, setImagesEditingScreenId] = useState<string | null>(null);
   const [imagesEditingKeyboardId, setImagesEditingKeyboardId] = useState<string | null>(null);
   const [imagesEditingMouseId, setImagesEditingMouseId] = useState<string | number | null>(null);
   const [imagesEditingConsoleId, setImagesEditingConsoleId] = useState<string | null>(null);
+  const [imagesEditingLaptopId, setImagesEditingLaptopId] = useState<string | null>(null);
   const [imagesItems, setImagesItems] = useState<ImageItem[]>([]);
   const [imagesBusy, setImagesBusy] = useState<boolean>(false);
   const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
@@ -376,6 +423,58 @@ export default function VorurAdminPage() {
       }
     };
     fetchMouses();
+  }, [activeTab, session?.user, isAdmin]);
+
+  // Load laptops (and their variants) when switching to laptops tab
+  useEffect(() => {
+    const fetchLaptops = async () => {
+      if (activeTab !== "laptops") return;
+      if (!session?.user || !isAdmin) return;
+      setLaptopsLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from("laptops")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (error) {
+          setError(error.message);
+          setLaptops([]);
+          setLaptopVariants({});
+        } else {
+          const list = (data as LaptopRow[]) ?? [];
+          setLaptops(list);
+          const ids = list.map((l) => l.id);
+          if (ids.length > 0) {
+            const { data: variantRows, error: vErr } = await supabase
+              .from("laptop_variants")
+              .select("*")
+              .in("laptop_id", ids)
+              .order("price", { ascending: true });
+            if (!vErr && Array.isArray(variantRows)) {
+              const map: Record<string, LaptopVariantRow[]> = {};
+              (variantRows as LaptopVariantRow[]).forEach((v) => {
+                if (!map[v.laptop_id]) map[v.laptop_id] = [];
+                map[v.laptop_id].push(v);
+              });
+              setLaptopVariants(map);
+            } else {
+              setLaptopVariants({});
+            }
+          } else {
+            setLaptopVariants({});
+          }
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setError(message);
+        setLaptops([]);
+        setLaptopVariants({});
+      } finally {
+        setLaptopsLoading(false);
+      }
+    };
+    fetchLaptops();
   }, [activeTab, session?.user, isAdmin]);
 
   const onChange = (field: keyof NewRow, value: string) => {
@@ -737,6 +836,53 @@ export default function VorurAdminPage() {
       setImagesBusy(false);
     }
   };
+  // Load existing images for a laptop folder into the modal
+  const loadLaptopImages = async (laptopId: string) => {
+    setImagesBusy(true);
+    // Revoke any previews currently shown before swapping
+    imagesItems.forEach((it) => { try { URL.revokeObjectURL(it.previewUrl); } catch {} });
+    setImagesItems([]);
+    try {
+      const res = await fetch("/api/images/list-generic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bucket: "laptopimages", folder: laptopId }),
+      });
+      if (!res.ok) {
+        setImagesItems([]);
+        return;
+      }
+      const j = await res.json();
+      const files: { name: string; path: string; signedUrl: string }[] = j?.files || [];
+      if (!files || files.length === 0) {
+        setImagesItems([]);
+        return;
+      }
+      const items: ImageItem[] = await Promise.all(
+        files.map(async (f) => {
+          const blob = await fetch(f.signedUrl).then((r) => r.blob());
+          const baseName = f.name.replace(/^\d{3}-/, "");
+          const file = new File([blob], baseName, { type: blob.type || "image/*" });
+          const url = URL.createObjectURL(blob);
+          return {
+            id: `${f.path}`,
+            file,
+            previewUrl: url,
+            originalName: baseName,
+          };
+        })
+      );
+      setImagesItems(items);
+    } catch {
+      setImagesItems([]);
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+  const openLaptopImagesModal = async (laptopId: string) => {
+    setImagesEditingLaptopId(laptopId);
+    await loadLaptopImages(laptopId);
+  };
   const closeImagesModal = () => {
     // Revoke any object URLs
     imagesItems.forEach((it) => {
@@ -748,6 +894,7 @@ export default function VorurAdminPage() {
     setImagesEditingKeyboardId(null);
     setImagesEditingMouseId(null);
     setImagesEditingConsoleId(null);
+    setImagesEditingLaptopId(null);
     setDragFromIndex(null);
     setImagesBusy(false);
   };
@@ -848,10 +995,11 @@ export default function VorurAdminPage() {
     const isKeyboard = !isGaming && !isScreen && imagesEditingKeyboardId !== null;
     const isMouse = !isGaming && !isScreen && !isKeyboard && imagesEditingMouseId !== null;
     const isConsole = !isGaming && !isScreen && !isKeyboard && !isMouse && imagesEditingConsoleId !== null;
+    const isLaptop = !isGaming && !isScreen && !isKeyboard && !isMouse && !isConsole && imagesEditingLaptopId !== null;
     const pcId = imagesEditingPcId as number | null;
     const folder = imagesEditingScreenId as string | null;
-    const bucket = isGaming ? "gamingpcimages" : isScreen ? "screens" : isKeyboard ? "keyboards" : isMouse ? "mouses" : isConsole ? "consoles" : "";
-    const genericFolder = isScreen ? imagesEditingScreenId : isKeyboard ? imagesEditingKeyboardId : isMouse ? String(imagesEditingMouseId) : isConsole ? imagesEditingConsoleId : null;
+    const bucket = isGaming ? "gamingpcimages" : isScreen ? "screens" : isKeyboard ? "keyboards" : isMouse ? "mouses" : isConsole ? "consoles" : isLaptop ? "laptopimages" : "";
+    const genericFolder = isScreen ? imagesEditingScreenId : isKeyboard ? imagesEditingKeyboardId : isMouse ? String(imagesEditingMouseId) : isConsole ? imagesEditingConsoleId : isLaptop ? imagesEditingLaptopId : null;
     try {
       // Clean folder server-side (service role) to avoid policy issues
       if (isGaming) {
@@ -865,7 +1013,7 @@ export default function VorurAdminPage() {
             throw new Error(j?.error || "Tókst ekki að hreinsa möppu");
           }
         });
-      } else if ((isScreen || isKeyboard || isMouse || isConsole) && genericFolder) {
+      } else if ((isScreen || isKeyboard || isMouse || isConsole || isLaptop) && genericFolder) {
         await fetch("/api/images/clean-folder-generic", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1558,6 +1706,245 @@ export default function VorurAdminPage() {
     }
   };
 
+  // ===== Laptops CRUD =====
+  const formatPrice = (n: number): string =>
+    Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+  const handleCreateLaptop = async () => {
+    if (!isAdmin) return;
+    if (!laptopForm.name.trim()) {
+      setError("Nafn er nauðsynlegt");
+      return;
+    }
+    setLaptopCreating(true);
+    setError(null);
+    try {
+      const payload = {
+        name: laptopForm.name.trim(),
+        description: laptopForm.description.trim() || null,
+        image_url: laptopForm.image_url.trim() || null,
+        active: laptopForm.active,
+      };
+      const { data, error } = await supabase.from("laptops").insert([payload]).select("*").single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        const created = data as LaptopRow;
+        setLaptops((prev) => [created, ...prev]);
+        setLaptopVariants((prev) => ({ ...prev, [created.id]: [] }));
+        setLaptopForm(emptyLaptopForm);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setLaptopCreating(false);
+    }
+  };
+
+  const handleStartLaptopEdit = (row: LaptopRow) => {
+    if (!isAdmin) return;
+    setLaptopEditingId(row.id);
+    setLaptopEditForm({
+      name: row.name,
+      description: row.description || "",
+      image_url: row.image_url || "",
+      active: row.active ?? true,
+    });
+  };
+
+  const handleCancelLaptopEdit = () => {
+    setLaptopEditingId(null);
+    setLaptopEditForm(null);
+  };
+
+  const handleUpdateLaptop = async (id: string) => {
+    if (!isAdmin || !laptopEditForm) return;
+    if (!laptopEditForm.name.trim()) {
+      setError("Nafn er nauðsynlegt");
+      return;
+    }
+    setLaptopUpdatingId(id);
+    setError(null);
+    try {
+      const payload = {
+        name: laptopEditForm.name.trim(),
+        description: laptopEditForm.description.trim() || null,
+        image_url: laptopEditForm.image_url.trim() || null,
+        active: laptopEditForm.active,
+        updated_at: new Date().toISOString(),
+      };
+      const { data, error } = await supabase.from("laptops").update(payload).eq("id", id).select("*").single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        const updated = data as LaptopRow;
+        setLaptops((prev) => prev.map((l) => (l.id === id ? updated : l)));
+        setLaptopEditingId(null);
+        setLaptopEditForm(null);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setLaptopUpdatingId(null);
+    }
+  };
+
+  const handleDeleteLaptop = async (id: string) => {
+    if (!isAdmin) return;
+    const ok = typeof window !== "undefined" ? window.confirm("Eyða þessari fartölvu og öllum tilbrigðum hennar?") : false;
+    if (!ok) return;
+    setLaptopDeletingId(id);
+    try {
+      const { error } = await supabase.from("laptops").delete().eq("id", id);
+      if (!error) {
+        setLaptops((prev) => prev.filter((l) => l.id !== id));
+        setLaptopVariants((prev) => {
+          const copy = { ...prev };
+          delete copy[id];
+          return copy;
+        });
+        if (expandedLaptopId === id) setExpandedLaptopId(null);
+      } else {
+        setError(error.message);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setLaptopDeletingId(null);
+    }
+  };
+
+  const toggleLaptopExpand = (id: string) => {
+    setExpandedLaptopId((prev) => (prev === id ? null : id));
+    setVariantForm(emptyVariantForm);
+    setVariantEditingId(null);
+    setVariantEditForm(null);
+  };
+
+  // ===== Laptop variants CRUD =====
+  const validateVariant = (v: NewLaptopVariant): string[] => {
+    const errs: string[] = [];
+    if (!v.storage_gb.trim() || !Number.isFinite(Number(v.storage_gb))) errs.push("Geymsla (GB) verður að vera tala");
+    if (!v.price.trim() || !Number.isFinite(Number(v.price))) errs.push("Verð verður að vera tala");
+    return errs;
+  };
+
+  const sortVariants = (list: LaptopVariantRow[]) => [...list].sort((a, b) => Number(a.price) - Number(b.price));
+
+  const handleCreateVariant = async (laptopId: string) => {
+    if (!isAdmin) return;
+    const errs = validateVariant(variantForm);
+    if (errs.length > 0) {
+      setError(errs.join(" · "));
+      return;
+    }
+    setVariantCreating(true);
+    setError(null);
+    try {
+      const payload = {
+        laptop_id: laptopId,
+        storage_gb: Math.trunc(Number(variantForm.storage_gb)),
+        price: Number(variantForm.price),
+        sku: variantForm.sku.trim() || null,
+        stock_quantity: variantForm.stock_quantity.trim() ? Math.trunc(Number(variantForm.stock_quantity)) : 0,
+      };
+      const { data, error } = await supabase.from("laptop_variants").insert([payload]).select("*").single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        const created = data as LaptopVariantRow;
+        setLaptopVariants((prev) => ({
+          ...prev,
+          [laptopId]: sortVariants([...(prev[laptopId] || []), created]),
+        }));
+        setVariantForm(emptyVariantForm);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setVariantCreating(false);
+    }
+  };
+
+  const handleStartVariantEdit = (v: LaptopVariantRow) => {
+    if (!isAdmin) return;
+    setVariantEditingId(v.id);
+    setVariantEditForm({
+      storage_gb: String(v.storage_gb ?? ""),
+      price: String(v.price ?? ""),
+      sku: v.sku || "",
+      stock_quantity: String(v.stock_quantity ?? 0),
+    });
+  };
+
+  const handleCancelVariantEdit = () => {
+    setVariantEditingId(null);
+    setVariantEditForm(null);
+  };
+
+  const handleUpdateVariant = async (laptopId: string, id: string) => {
+    if (!isAdmin || !variantEditForm) return;
+    const errs = validateVariant(variantEditForm);
+    if (errs.length > 0) {
+      setError(errs.join(" · "));
+      return;
+    }
+    setVariantUpdatingId(id);
+    setError(null);
+    try {
+      const payload = {
+        storage_gb: Math.trunc(Number(variantEditForm.storage_gb)),
+        price: Number(variantEditForm.price),
+        sku: variantEditForm.sku.trim() || null,
+        stock_quantity: variantEditForm.stock_quantity.trim() ? Math.trunc(Number(variantEditForm.stock_quantity)) : 0,
+      };
+      const { data, error } = await supabase.from("laptop_variants").update(payload).eq("id", id).select("*").single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        const updated = data as LaptopVariantRow;
+        setLaptopVariants((prev) => ({
+          ...prev,
+          [laptopId]: sortVariants((prev[laptopId] || []).map((x) => (x.id === id ? updated : x))),
+        }));
+        setVariantEditingId(null);
+        setVariantEditForm(null);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setVariantUpdatingId(null);
+    }
+  };
+
+  const handleDeleteVariant = async (laptopId: string, id: string) => {
+    if (!isAdmin) return;
+    const ok = typeof window !== "undefined" ? window.confirm("Eyða þessu tilbrigði?") : false;
+    if (!ok) return;
+    setVariantDeletingId(id);
+    try {
+      const { error } = await supabase.from("laptop_variants").delete().eq("id", id);
+      if (!error) {
+        setLaptopVariants((prev) => ({
+          ...prev,
+          [laptopId]: (prev[laptopId] || []).filter((x) => x.id !== id),
+        }));
+      } else {
+        setError(error.message);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setVariantDeletingId(null);
+    }
+  };
+
   const handleStartKeyboardEdit = (row: KeyboardRow) => {
     if (!isAdmin) return;
     setKeyboardEditingId(row.id);
@@ -1837,6 +2224,14 @@ export default function VorurAdminPage() {
               >
                 Mouses
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("laptops")}
+                className={`px-3 py-1.5 text-sm rounded-t ${activeTab === "laptops" ? "bg-white border border-b-transparent border-gray-200 font-medium" : "text-gray-600 hover:text-gray-800"}`}
+                aria-current={activeTab === "laptops" ? "page" : undefined}
+              >
+                Fartölvur
+              </button>
             </div>
             <div className="flex items-center justify-between py-2">
               <div className="text-sm text-gray-600">
@@ -1848,7 +2243,9 @@ export default function VorurAdminPage() {
                       ? (keyboardsLoading ? "Sæki gögn…" : `${keyboards.length} lyklaborð`)
                       : activeTab === "consoles"
                         ? (consolesLoading ? "Sæki gögn…" : `${consoles.length} consoles`)
-                        : (mousesLoading ? "Sæki gögn…" : `${mouses.length} mýs`)}
+                        : activeTab === "laptops"
+                          ? (laptopsLoading ? "Sæki gögn…" : `${laptops.length} fartölvur`)
+                          : (mousesLoading ? "Sæki gögn…" : `${mouses.length} mýs`)}
               </div>
             </div>
           </div>
@@ -2495,6 +2892,258 @@ export default function VorurAdminPage() {
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
                       Engar leikjatölvur fundust.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+            ) : activeTab === "laptops" ? (
+            <table className="w-full text-sm table-fixed">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-40">Nafn</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-72">Lýsing</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-28">Tilbrigði</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Virk</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-56">Aðgerðir</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <td className="px-2 py-3 align-top">
+                    <input value={laptopForm.name} onChange={(e) => setLaptopForm((f) => ({ ...f, name: e.target.value }))} placeholder="Nafn" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={laptopForm.description} onChange={(e) => setLaptopForm((f) => ({ ...f, description: e.target.value }))} placeholder="Lýsing (valfrjálst)" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top text-xs text-gray-400">
+                    Bæta við fyrst
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <label className="inline-flex items-center gap-1 text-xs text-gray-700">
+                      <input type="checkbox" checked={laptopForm.active} onChange={(e) => setLaptopForm((f) => ({ ...f, active: e.target.checked }))} className="h-3 w-3" />
+                      Virk
+                    </label>
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <button
+                      type="button"
+                      disabled={laptopCreating}
+                      onClick={handleCreateLaptop}
+                      className="inline-flex items-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50"
+                    >
+                      Bæta við
+                    </button>
+                  </td>
+                </tr>
+                {laptops.map((l) => {
+                  const variants = laptopVariants[l.id] || [];
+                  const isEditing = laptopEditingId === l.id;
+                  const isExpanded = expandedLaptopId === l.id;
+                  return (
+                    <Fragment key={l.id}>
+                      <tr className="border-b border-gray-100 hover:bg-gray-50/60">
+                        <td className="px-2 py-3 align-top text-gray-800">
+                          {isEditing && laptopEditForm ? (
+                            <input value={laptopEditForm.name} onChange={(e) => setLaptopEditForm((f) => (f ? { ...f, name: e.target.value } : f))} className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                          ) : (
+                            <div className="truncate leading-6" title={l.name}>{l.name}</div>
+                          )}
+                        </td>
+                        <td className="px-2 py-3 align-top text-gray-800">
+                          {isEditing && laptopEditForm ? (
+                            <input value={laptopEditForm.description} onChange={(e) => setLaptopEditForm((f) => (f ? { ...f, description: e.target.value } : f))} className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                          ) : (
+                            <div className="truncate leading-6" title={l.description || ""}>{l.description || "—"}</div>
+                          )}
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          <button
+                            type="button"
+                            onClick={() => toggleLaptopExpand(l.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 text-xs"
+                          >
+                            Tilbrigði ({variants.length})
+                            <svg className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z"/></svg>
+                          </button>
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          {isEditing && laptopEditForm ? (
+                            <label className="inline-flex items-center gap-1 text-xs text-gray-700">
+                              <input type="checkbox" checked={laptopEditForm.active} onChange={(e) => setLaptopEditForm((f) => (f ? { ...f, active: e.target.checked } : f))} className="h-3 w-3" />
+                              Virk
+                            </label>
+                          ) : (
+                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${l.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                              {l.active ? "Virk" : "Óvirk"}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          {isEditing ? (
+                            <div className="grid grid-cols-2 gap-2 w-48">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateLaptop(l.id)}
+                                disabled={laptopUpdatingId === l.id}
+                                className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50 w-full"
+                              >
+                                Vista
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancelLaptopEdit}
+                                className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs w-full"
+                              >
+                                Hætta
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-3 gap-2 w-56">
+                              <button
+                                type="button"
+                                onClick={() => handleStartLaptopEdit(l)}
+                                disabled={laptopUpdatingId === l.id}
+                                className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50 w-full"
+                              >
+                                Uppfæra
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openLaptopImagesModal(l.id)}
+                                disabled={laptopUpdatingId === l.id}
+                                className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-purple-500 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 w-full"
+                              >
+                                Myndir
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLaptop(l.id)}
+                                disabled={laptopDeletingId === l.id}
+                                className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 text-xs disabled:opacity-50 w-full"
+                              >
+                                Eyða
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr className="border-b border-gray-200 bg-gray-50/70">
+                          <td colSpan={5} className="px-4 py-4">
+                            <div className="text-xs font-semibold text-gray-700 mb-2">Tilbrigði – {l.name}</div>
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="text-gray-500">
+                                  <th className="text-left px-2 py-1 font-medium w-24">Geymsla (GB)</th>
+                                  <th className="text-left px-2 py-1 font-medium w-28">Verð</th>
+                                  <th className="text-left px-2 py-1 font-medium w-32">SKU</th>
+                                  <th className="text-left px-2 py-1 font-medium w-40">Aðgerðir</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr className="bg-white">
+                                  <td className="px-2 py-2 align-top">
+                                    <input value={variantForm.storage_gb} onChange={(e) => setVariantForm((f) => ({ ...f, storage_gb: e.target.value }))} placeholder="t.d. 512" inputMode="numeric" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                  </td>
+                                  <td className="px-2 py-2 align-top">
+                                    <input value={variantForm.price} onChange={(e) => setVariantForm((f) => ({ ...f, price: e.target.value }))} placeholder="t.d. 14990" inputMode="decimal" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                  </td>
+                                  <td className="px-2 py-2 align-top">
+                                    <input value={variantForm.sku} onChange={(e) => setVariantForm((f) => ({ ...f, sku: e.target.value }))} placeholder="SKU (valfrjálst)" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                  </td>
+                                  <td className="px-2 py-2 align-top">
+                                    <button
+                                      type="button"
+                                      disabled={variantCreating}
+                                      onClick={() => handleCreateVariant(l.id)}
+                                      className="inline-flex items-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 disabled:opacity-50"
+                                    >
+                                      Bæta við
+                                    </button>
+                                  </td>
+                                </tr>
+                                {variants.map((v) => {
+                                  const vEditing = variantEditingId === v.id;
+                                  return (
+                                    <tr key={v.id} className="border-t border-gray-100 bg-white">
+                                      <td className="px-2 py-2 align-top text-gray-800">
+                                        {vEditing && variantEditForm ? (
+                                          <input value={variantEditForm.storage_gb} onChange={(e) => setVariantEditForm((f) => (f ? { ...f, storage_gb: e.target.value } : f))} inputMode="numeric" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                        ) : v.storage_gb}
+                                      </td>
+                                      <td className="px-2 py-2 align-top text-gray-800">
+                                        {vEditing && variantEditForm ? (
+                                          <input value={variantEditForm.price} onChange={(e) => setVariantEditForm((f) => (f ? { ...f, price: e.target.value } : f))} inputMode="decimal" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                        ) : `${formatPrice(Number(v.price))} kr`}
+                                      </td>
+                                      <td className="px-2 py-2 align-top text-gray-800">
+                                        {vEditing && variantEditForm ? (
+                                          <input value={variantEditForm.sku} onChange={(e) => setVariantEditForm((f) => (f ? { ...f, sku: e.target.value } : f))} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                        ) : (v.sku || "—")}
+                                      </td>
+                                      <td className="px-2 py-2 align-top">
+                                        {vEditing ? (
+                                          <div className="grid grid-cols-2 gap-2 w-36">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleUpdateVariant(l.id, v.id)}
+                                              disabled={variantUpdatingId === v.id}
+                                              className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 disabled:opacity-50 w-full"
+                                            >
+                                              Vista
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={handleCancelVariantEdit}
+                                              className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 w-full"
+                                            >
+                                              Hætta
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="grid grid-cols-2 gap-2 w-36">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleStartVariantEdit(v)}
+                                              disabled={variantUpdatingId === v.id}
+                                              className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 disabled:opacity-50 w-full"
+                                            >
+                                              Uppfæra
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleDeleteVariant(l.id, v.id)}
+                                              disabled={variantDeletingId === v.id}
+                                              className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 disabled:opacity-50 w-full"
+                                            >
+                                              Eyða
+                                            </button>
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {variants.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={5} className="px-2 py-3 text-center text-gray-400">
+                                      Engin tilbrigði enn. Bættu við hér að ofan.
+                                    </td>
+                                  </tr>
+                                ) : null}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+                {!laptopsLoading && laptops.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-10 text-center text-gray-500">
+                      Engar fartölvur fundust.
                     </td>
                   </tr>
                 ) : null}
@@ -3226,7 +3875,7 @@ export default function VorurAdminPage() {
           </div>
         </div>
       ) : null}
-      {(imagesEditingPcId !== null || imagesEditingScreenId !== null || imagesEditingKeyboardId !== null || imagesEditingMouseId !== null || imagesEditingConsoleId !== null) ? (
+      {(imagesEditingPcId !== null || imagesEditingScreenId !== null || imagesEditingKeyboardId !== null || imagesEditingMouseId !== null || imagesEditingConsoleId !== null || imagesEditingLaptopId !== null) ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={imagesBusy ? undefined : closeImagesModal} />
           <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4">
@@ -3242,6 +3891,8 @@ export default function VorurAdminPage() {
                         ? `Myndir fyrir mús ${imagesEditingMouseId}`
                         : imagesEditingConsoleId !== null
                           ? `Myndir fyrir console ${imagesEditingConsoleId}`
+                          : imagesEditingLaptopId !== null
+                            ? `Myndir fyrir fartölvu`
                       : 'Myndir'}
               </h2>
               <button type="button" onClick={imagesBusy ? undefined : closeImagesModal} className="text-gray-500 hover:text-gray-700 text-sm">Loka</button>

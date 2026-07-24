@@ -8,6 +8,42 @@ import { supabasePublic } from "@/lib/supabase-public";
 import { useAuth } from "@/contexts/AuthContext";
 import { debug } from "@/lib/debug";
 
+function LaptopImageCarousel({ images, alt }: { images: string[]; alt: string }) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const t = setInterval(() => {
+      setIdx((i) => (i + 1) % images.length);
+    }, 3000);
+    return () => clearInterval(t);
+  }, [images.length]);
+
+  if (images.length === 0) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-white/25">
+        <svg className="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5l3.75-3h10.5L21 7.5v9l-3.75 3H6.75L3 16.5v-9z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 14.25l4.5-4.5 6 6 2.25-2.25L21 16.5" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {images.map((src, i) => (
+        <img
+          key={i}
+          src={src}
+          alt={alt}
+          loading="lazy"
+          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-1000 ease-in-out ${i === idx ? "opacity-100" : "opacity-0"}`}
+        />
+      ))}
+    </>
+  );
+}
+
 export default function Home() {
   interface GamingPCItem {
     id: number;
@@ -34,6 +70,12 @@ export default function Home() {
     imageUrl?: string | null;
   }
 
+  interface LaptopItem {
+    id: string;
+    name: string;
+    images: string[];
+  }
+
   interface Review {
     id: string;
     content: string;
@@ -47,6 +89,8 @@ export default function Home() {
   const [items, setItems] = useState<GamingPCItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState<boolean>(true);
   const [consoles, setConsoles] = useState<GamingConsoleItem[]>([]);
+  const [laptops, setLaptops] = useState<LaptopItem[]>([]);
+  const [laptopsLoading, setLaptopsLoading] = useState<boolean>(true);
   const [reviews, setReviews] = useState<Review[]>([]);
   const { loading: authLoading, session } = useAuth();
   const router = useRouter();
@@ -308,6 +352,76 @@ export default function Home() {
 
   useEffect(() => {
     let isMounted = true;
+    const fetchLaptops = async () => {
+      try {
+        if (isMounted) setLaptopsLoading(true);
+        const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
+        debug('Home/Laptops/start', { hasUser: !!session?.user });
+        // 1) Fetch laptops (id + name + active)
+        let laptopRows: { id: string; name: string; active: boolean | null }[] | null = null;
+        for (const client of clients) {
+          try {
+            const { data, error } = await client
+              .from("laptops")
+              .select("id, name, active")
+              .order("created_at", { ascending: false });
+            if (error) {
+              debug('Home/Laptops/error', { client: client === supabase ? 'authed' : 'anon', error });
+              continue;
+            }
+            laptopRows = (data as { id: string; name: string; active: boolean | null }[]) || [];
+            debug('Home/Laptops/result', { client: client === supabase ? 'authed' : 'anon', count: laptopRows.length });
+            if (laptopRows.length > 0) break;
+          } catch (e) {
+            debug('Home/Laptops/exception', { error: e });
+          }
+        }
+        if (!isMounted) return;
+        const visible = (laptopRows || []).filter((l) => l.active !== false);
+        if (visible.length === 0) {
+          setLaptops([]);
+          setLaptopsLoading(false);
+          return;
+        }
+        // 2) For each laptop, list images under laptopimages/<id>/ and cycle through them
+        const merged: LaptopItem[] = await Promise.all(
+          visible.map(async (l) => {
+            try {
+              const res = await fetch("/api/images/list-generic", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bucket: "laptopimages", folder: l.id }),
+              });
+              if (res.ok) {
+                const j = await res.json();
+                const files: { signedUrl: string }[] = j?.files || [];
+                return { id: l.id, name: l.name, images: files.map((f) => f.signedUrl).filter(Boolean) };
+              }
+            } catch {
+              // ignore
+            }
+            return { id: l.id, name: l.name, images: [] as string[] };
+          })
+        );
+        if (isMounted) {
+          setLaptops(merged);
+          setLaptopsLoading(false);
+          debug('Home/Laptops/set', { count: merged.length });
+        }
+      } catch (e) {
+        if (isMounted) {
+          console.error('Home: Unexpected error fetching laptops', e);
+          setLaptops([]);
+          setLaptopsLoading(false);
+        }
+      }
+    };
+    fetchLaptops();
+    return () => { isMounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
     const fetchReviews = async () => {
       try {
         // Public reads should work via anon due to RLS policy
@@ -375,7 +489,7 @@ export default function Home() {
               <span className="text-[var(--color-secondary)]">Tölvuleiga</span>
             </h1>
             <p className="mt-6 text-lg leading-8 text-gray-600 max-w-2xl mx-auto">
-              Við bjóðum upp á hágæða leikjatölvur á sanngjörnu verði – fyrir þá sem vilja afköst, gæði og áreiðanleika í einni vél.
+              Við bjóðum upp á hágæða tölvubúnað á sanngjörnu verði – allt frá leikjatölvum og fartölvum til aukahluta – fyrir þá sem vilja afköst, gæði og áreiðanleika.
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6">
               <button
@@ -405,17 +519,17 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Nýjar tölvur</h3>
-              <p className="mt-2 text-gray-600">Nýjar tölvur með nýjustu tækni, öflugustu örgjörvunum og glæsilegustu íhlutunum – tilbúnar fyrir allt sem þú krefst.</p>
+              <h3 className="mt-4 text-lg font-semibold text-gray-900">Nýjasti búnaðurinn</h3>
+              <p className="mt-2 text-gray-600">Nýjasti tölvubúnaðurinn með öflugustu tækninni og glæsilegustu hönnuninni leikjatölvur, fartölvur og aukahlutir fyrir allt sem þú krefst.</p>
             </div>
             <div className="text-center">
               <div className="mx-auto h-12 w-12 rounded-md bg-[var(--color-primary)] flex items-center justify-center">
                 <svg className="h-6 w-6 text-[var(--color-secondary)]" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
                 </svg>
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Auðveldar uppfærslur</h3>
-              <p className="mt-2 text-gray-600">Auðvelt er að uppfæra íhluti samkvæmt samningi, svo tölvan þín heldur alltaf í við nýjustu tækni.</p>
+              <h3 className="mt-4 text-lg font-semibold text-gray-900">Fjölbreytt úrval</h3>
+              <p className="mt-2 text-gray-600">Leikjatölvur, fartölvur og aukahlutir – allt á einum stað. Þú finnur búnað sem hentar þínum þörfum, hvort sem það er fyrir leikjaspilun eða skólavinnu</p>
             </div>
             <div className="text-center">
               <div className="mx-auto h-12 w-12 rounded-md bg-[var(--color-primary)] flex items-center justify-center">
@@ -430,7 +544,67 @@ export default function Home() {
         </div>
       </section>
 
-      
+      {/* Laptops Section */}
+      <section id="laptops" className="relative overflow-hidden bg-gradient-to-br from-[#0b0b12] via-[#11121c] to-[#1a0f1e] py-20">
+        {/* Poppy glow accents to make the new launch pop */}
+        <div className="pointer-events-none absolute -top-32 -left-24 h-80 w-80 rounded-full bg-[var(--color-accent)]/30 blur-[120px]" />
+        <div className="pointer-events-none absolute -bottom-32 -right-24 h-80 w-80 rounded-full bg-fuchsia-500/20 blur-[120px]" />
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+              Fartölvur og iPadar
+            </h2>
+            <p className="mt-4 text-lg text-white/70 max-w-2xl mx-auto">
+              Fartölvur og iPadar til leigu fullkomnar fyrir vinnu, leik og allt þar á milli.
+            </p>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {laptopsLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={`lap-sk-${i}`} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+                  <div className="aspect-[4/3] w-full bg-white/10 animate-pulse" />
+                  <div className="p-6">
+                    <div className="h-6 w-3/5 bg-white/10 rounded animate-pulse" />
+                  </div>
+                </div>
+              ))
+            ) : laptops.length === 0 ? (
+              <div className="col-span-full text-center text-white/60">
+                Fartölvur væntanlegar fljótlega.
+              </div>
+            ) : (
+              laptops.map((l) => (
+                <div
+                  key={l.id}
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => router.push(`/laptop/${l.id}`)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/laptop/${l.id}`); }}
+                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-[var(--color-accent)]/60 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_var(--color-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+                >
+                  <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-px bg-gradient-to-r from-transparent via-[var(--color-accent)]/70 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-black/30">
+                    <LaptopImageCarousel images={l.images} alt={l.name} />
+                  </div>
+                  <div className="p-6">
+                    <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white via-white to-[var(--color-accent)] bg-clip-text text-transparent transition-all duration-300 group-hover:from-[var(--color-accent)] group-hover:to-white">
+                      {l.name}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); router.push(`/laptop/${l.id}`); }}
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_-8px_var(--color-accent)] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+                    >
+                      Sjá nánar
+                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M7.22 4.47a.75.75 0 011.06 0l4 4c.3.3.3.77 0 1.06l-4 4a.75.75 0 11-1.06-1.06L10.69 10 7.22 6.53a.75.75 0 010-1.06z" /></svg>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* Featured Properties Preview */}
       <section id="products" className="bg-gray-50 py-14">

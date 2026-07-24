@@ -67,7 +67,7 @@ export default function Header() {
 						<Image src={logo} alt="TL" width={48} height={48} priority />
 							<div className="leading-tight">
 							<span className="block font-semibold tracking-tight text-xl sm:text-1xl">Tölvuleiga</span>
-							<span className="block text-[var(--color-accent)] text-[10px] sm:text-xs opacity-80 mt-0 ml-0.5 sm:ml-1">Leigja · Spila · Skila</span>
+							<span className="block text-[var(--color-accent)] text-[10px] sm:text-xs opacity-80 mt-0 ml-0.5 sm:ml-1">Leigja · Njóta · Skila</span>
 							</div>
 						</Link>
 					</div>

@@ -26,8 +26,15 @@ interface Order {
   gamingpc_uuid?: number | null;
   gamingconsole_uuid?: string | null;
   screen_uuid?: string | null;
+  laptop_variant_uuid?: string | null;
   numberofextracon?: number | null;
   pdf_url?: string | null;
+}
+
+interface LaptopVariantInfo {
+  laptopId: string;
+  name: string;
+  storageGb: number;
 }
 
 interface GamingPCItem {
@@ -63,8 +70,11 @@ export default function DashboardPage() {
   const [pcById, setPcById] = useState<Record<number, GamingPCItem>>({});
   const [consoleNamesById, setConsoleNamesById] = useState<Record<string, string>>({});
   const [screenNamesById, setScreenNamesById] = useState<Record<string, string>>({});
+  const [laptopVariantInfoById, setLaptopVariantInfoById] = useState<Record<string, LaptopVariantInfo>>({});
   const [openPcId, setOpenPcId] = useState<number | null>(null);
   const [busyOpenPdfById, setBusyOpenPdfById] = useState<Record<string, boolean>>({});
+  const [busyCancelById, setBusyCancelById] = useState<Record<string, boolean>>({});
+  const [cancelErrorById, setCancelErrorById] = useState<Record<string, string | null>>({});
   const [pcFirstImages, setPcFirstImages] = useState<Record<number, { path: string; signedUrl: string } | null>>({});
   const [openConsoleId, setOpenConsoleId] = useState<string | null>(null);
   const [consoleById, setConsoleById] = useState<Record<string, { id: string; nafn?: string | null; geymsluplass?: string | null; tengi?: string | null }>>({});
@@ -306,6 +316,9 @@ export default function DashboardPage() {
         const screenIds = Array.from(
           new Set((ordersData || []).map(o => o.screen_uuid).filter((v: unknown): v is string => typeof v === 'string' && v.length > 0))
         )
+        const laptopVariantIds = Array.from(
+          new Set((ordersData || []).map(o => o.laptop_variant_uuid).filter((v: unknown): v is string => typeof v === 'string' && v.length > 0))
+        )
         if (ids.length > 0) {
           try {
             const { data: pcRows } = await supabase
@@ -356,6 +369,37 @@ export default function DashboardPage() {
           }
         } else {
           setScreenNamesById({})
+        }
+
+        if (laptopVariantIds.length > 0) {
+          try {
+            const { data: vRows } = await supabase
+              .from('laptop_variants')
+              .select('id, laptop_id, storage_gb')
+              .in('id', laptopVariantIds as string[])
+            const laptopIds = Array.from(new Set((vRows || []).map((r: { laptop_id: string }) => r.laptop_id)))
+            const nameByLaptop: Record<string, string> = {}
+            if (laptopIds.length > 0) {
+              const { data: lRows } = await supabase
+                .from('laptops')
+                .select('id, name')
+                .in('id', laptopIds as string[])
+              ;(lRows || []).forEach((r: { id: string; name: string }) => { nameByLaptop[r.id] = r.name })
+            }
+            const lmap: Record<string, LaptopVariantInfo> = {}
+            ;(vRows || []).forEach((r: { id: string; laptop_id: string; storage_gb: number }) => {
+              lmap[r.id] = {
+                laptopId: r.laptop_id,
+                name: nameByLaptop[r.laptop_id] || 'Fartölva',
+                storageGb: r.storage_gb,
+              }
+            })
+            setLaptopVariantInfoById(lmap)
+          } catch {
+            setLaptopVariantInfoById({})
+          }
+        } else {
+          setLaptopVariantInfoById({})
         }
 
         setOrders(ordersData || [])
@@ -635,8 +679,54 @@ export default function DashboardPage() {
         return { step: 2, badge: accentBadge, progress };
       case 'Hætt við':
         return { step: 2, badge: neutralBadge, progress };
+      case 'Uppsögn í gangi':
+        return { step: 1, badge: neutralBadge, progress };
+      case 'Bíður greiðslu':
+        return { step: 0, badge: neutralBadge, progress };
       default:
         return { step: 0, badge: neutralBadge, progress };
+    }
+  };
+
+  const handleRequestCancellation = async (order: Order) => {
+    if (busyCancelById[order.id] || order.status === 'Uppsögn í gangi') return;
+    setBusyCancelById((prev) => ({ ...prev, [order.id]: true }));
+    setCancelErrorById((prev) => ({ ...prev, [order.id]: null }));
+    try {
+      const info = order.laptop_variant_uuid ? laptopVariantInfoById[order.laptop_variant_uuid] : null;
+      const productLabel = info
+        ? `${info.name} · ${formatStorageGb(info.storageGb)}`
+        : 'Fartölva';
+      const res = await fetch('/api/order/request-cancellation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          userName: user?.full_name || session?.user?.email || 'Viðskiptavinur',
+          userEmail: session?.user?.email || null,
+          kennitala: user?.kennitala || null,
+          phone: user?.phone || null,
+          productLabel,
+          price: order.verd,
+          timabilFra: order.timabilFra,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCancelErrorById((prev) => ({ ...prev, [order.id]: json?.error || 'Ekki tókst að senda ósk um uppsögn.' }));
+        return;
+      }
+      setOrders((prev) =>
+        prev.map((o) => (o.id === order.id ? { ...o, status: 'Uppsögn í gangi' } : o))
+      );
+    } catch (e) {
+      setCancelErrorById((prev) => ({
+        ...prev,
+        [order.id]: e instanceof Error ? e.message : 'Ekki tókst að senda ósk um uppsögn.',
+      }));
+    } finally {
+      setBusyCancelById((prev) => ({ ...prev, [order.id]: false }));
     }
   };
 
@@ -645,6 +735,9 @@ export default function DashboardPage() {
     if (!Number.isFinite(n)) return null;
     return `${n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr/mánuði`;
   };
+
+  const formatStorageGb = (gb: number) =>
+    gb >= 1024 && gb % 1024 === 0 ? `${gb / 1024}TB` : `${gb}GB`;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('is-IS', {
@@ -867,6 +960,22 @@ export default function DashboardPage() {
                                 >
                                   {screenNamesById[order.screen_uuid] || 'Skjár'}
                                 </button>
+                              ) : order.laptop_variant_uuid ? (
+                                (() => {
+                                  const info = laptopVariantInfoById[order.laptop_variant_uuid];
+                                  const label = info
+                                    ? `${info.name} · ${formatStorageGb(info.storageGb)}`
+                                    : 'Fartölva';
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => info && router.push(`/laptop/${info.laptopId}`)}
+                                      className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium min-w-0 max-w-[75%] overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer"
+                                    >
+                                      {label}
+                                    </button>
+                                  );
+                                })()
                               ) : 'Vara'}
                               {(() => { const p = formatPrice(order.verd); return p ? (<span className="ml-1 text-gray-900 font-semibold whitespace-nowrap flex-shrink-0">{p}</span>) : null; })()}
                             </div>
@@ -905,98 +1014,132 @@ export default function DashboardPage() {
                           </div>
                         </div>
 
-                        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs items-stretch">
-                          <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-200 h-full flex flex-col justify-between">
-                            <p className="text-gray-500 whitespace-nowrap">Byrjun tímabils</p>
-                            <p className="mt-1 font-semibold text-gray-900 text-sm">{formatDateOnly(order.timabilFra)}</p>
-                          </div>
-                          <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-200 h-full flex flex-col justify-between">
-                            <p className="text-gray-500 whitespace-nowrap">Tímabil lýkur</p>
-                            <p className="mt-1 font-semibold text-gray-900 text-sm">{formatDateOnly(order.timabilTil)}</p>
-                          </div>
-                        </div>
+                        {(() => {
+                          const isLaptop = !!order.laptop_variant_uuid;
+                          return (
+                            <>
+                              <div className={`mt-5 grid grid-cols-1 ${isLaptop ? '' : 'sm:grid-cols-2'} gap-3 text-xs items-stretch`}>
+                                <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-200 h-full flex flex-col justify-between">
+                                  <p className="text-gray-500 whitespace-nowrap">Byrjun tímabils</p>
+                                  <p className="mt-1 font-semibold text-gray-900 text-sm">{formatDateOnly(order.timabilFra)}</p>
+                                </div>
+                                {!isLaptop ? (
+                                  <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-200 h-full flex flex-col justify-between">
+                                    <p className="text-gray-500 whitespace-nowrap">Tímabil lýkur</p>
+                                    <p className="mt-1 font-semibold text-gray-900 text-sm">{formatDateOnly(order.timabilTil)}</p>
+                                  </div>
+                                ) : null}
+                              </div>
 
-                        {/* Addons label above created line */}
-                        <div className="mt-3 text-xs md:text-sm text-gray-700 text-center">
-                          <span className="text-gray-500">Aukahlutir:</span> <span className="font-medium text-gray-900">{addonsText || '—'}</span>
-                        </div>
+                              {!isLaptop ? (
+                                <div className="mt-3 text-xs md:text-sm text-gray-700 text-center">
+                                  <span className="text-gray-500">Aukahlutir:</span> <span className="font-medium text-gray-900">{addonsText || '—'}</span>
+                                </div>
+                              ) : null}
 
-                        {/* Created line between boxes and buttons */}
-                        <div className="mt-4 text-xs md:text-sm text-gray-600 text-center">Stofnað: {formatDate(order.created_at)}</div>
+                              <div className="mt-4 text-xs md:text-sm text-gray-600 text-center">Stofnað: {formatDate(order.created_at)}</div>
 
-                        {/* Insurance label inside card */}
-                        {order.trygging ? (
-                          <div className="mt-3 text-center">
-                            <span className="inline-block text-[10px] md:text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-green-500/30">
-                              Þessi pöntun er tryggð
-                            </span>
-                          </div>
-                        ) : null}
+                              {!isLaptop && order.trygging ? (
+                                <div className="mt-3 text-center">
+                                  <span className="inline-block text-[10px] md:text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-green-500/30">
+                                    Þessi pöntun er tryggð
+                                  </span>
+                                </div>
+                              ) : null}
 
-                        <div className="mt-auto pt-5 flex items-center justify-center gap-3">
-                          {order.pdf_url || order.orderNumber ? (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenPdf(order.id, order.pdf_url, order.orderNumber)}
-                              disabled={!!busyOpenPdfById[order.id]}
-                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-white bg-[var(--color-accent)] hover:brightness-110 disabled:opacity-50 cursor-pointer"
-                            >
-                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 11v8m0 0l-3-3m3 3l3-3M5 7h14"/></svg>
-                              Sækja reikning
-                            </button>
-                          ) : null}
-                          {order.gamingpc_uuid ? (
-                            <button
-                              type="button"
-                              onClick={() => setOpenPcId(order.gamingpc_uuid!)}
-                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
-                            >
-                              Sjá vöru
-                            </button>
-                          ) : order.gamingconsole_uuid ? (
-                            <button
-                              type="button"
-                              onClick={() => setOpenConsoleId(order.gamingconsole_uuid!)}
-                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
-                            >
-                              Sjá vöru
-                            </button>
-                          ) : order.screen_uuid ? (
-                            <button
-                              type="button"
-                              onClick={() => setOpenScreenId(order.screen_uuid!)}
-                              className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
-                            >
-                              Sjá vöru
-                            </button>
-                          ) : null}
-                          {(() => {
-                            const fr = framlengingarByOrderId[order.id];
-                            if (!fr) {
-                              return (
-                                <button
-                                  type="button"
-                                  onClick={() => { setExtendOrderId(order.id); setExtendMonths(1); setExtendError(null); }}
-                                  className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
-                                >
-                                  Framlengja
-                                </button>
-                              );
-                            }
-                            if (fr.approved) {
-                              return (
-                                <span className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-green-700 bg-white ring-1 ring-green-500/40">
-                                  Framlenging staðfest
-                                </span>
-                              );
-                            }
-                            return (
-                              <span className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-red-700 bg-white ring-1 ring-red-500/40">
-                                Í skoðun
-                              </span>
-                            );
-                          })()}
-                        </div>
+                              <div className="mt-auto pt-5 flex flex-wrap items-center justify-center gap-3">
+                                {!isLaptop && (order.pdf_url || order.orderNumber) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenPdf(order.id, order.pdf_url, order.orderNumber)}
+                                    disabled={!!busyOpenPdfById[order.id]}
+                                    className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-white bg-[var(--color-accent)] hover:brightness-110 disabled:opacity-50 cursor-pointer"
+                                  >
+                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 11v8m0 0l-3-3m3 3l3-3M5 7h14"/></svg>
+                                    Sækja reikning
+                                  </button>
+                                ) : null}
+                                {order.gamingpc_uuid ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenPcId(order.gamingpc_uuid!)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
+                                  >
+                                    Sjá vöru
+                                  </button>
+                                ) : order.gamingconsole_uuid ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenConsoleId(order.gamingconsole_uuid!)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
+                                  >
+                                    Sjá vöru
+                                  </button>
+                                ) : order.screen_uuid ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenScreenId(order.screen_uuid!)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
+                                  >
+                                    Sjá vöru
+                                  </button>
+                                ) : order.laptop_variant_uuid && laptopVariantInfoById[order.laptop_variant_uuid] ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(`/laptop/${laptopVariantInfoById[order.laptop_variant_uuid!].laptopId}`)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
+                                  >
+                                    Sjá vöru
+                                  </button>
+                                ) : null}
+                                {isLaptop ? (
+                                  order.status === 'Uppsögn í gangi' ? (
+                                    <span className="inline-flex items-center justify-center gap-2 rounded-full min-w-40 px-3 py-2 text-xs font-semibold text-orange-700 bg-white ring-1 ring-orange-500/40">
+                                      Uppsögn í gangi
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRequestCancellation(order)}
+                                      disabled={!!busyCancelById[order.id]}
+                                      className="inline-flex items-center justify-center gap-2 rounded-full min-w-40 px-3 py-2 text-xs font-semibold text-red-700 bg-white ring-1 ring-red-500/40 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
+                                    >
+                                      {busyCancelById[order.id] ? 'Sendi…' : 'Óska eftir uppsögn'}
+                                    </button>
+                                  )
+                                ) : (() => {
+                                  const fr = framlengingarByOrderId[order.id];
+                                  if (!fr) {
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => { setExtendOrderId(order.id); setExtendMonths(1); setExtendError(null); }}
+                                        className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
+                                      >
+                                        Framlengja
+                                      </button>
+                                    );
+                                  }
+                                  if (fr.approved) {
+                                    return (
+                                      <span className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-green-700 bg-white ring-1 ring-green-500/40">
+                                        Framlenging staðfest
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-red-700 bg-white ring-1 ring-red-500/40">
+                                      Í skoðun
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                              {isLaptop && cancelErrorById[order.id] ? (
+                                <p className="mt-2 text-center text-xs text-red-600">{cancelErrorById[order.id]}</p>
+                              ) : null}
+                            </>
+                          );
+                        })()}
                       </div>
                       </div>
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase-server'
 
-const ALLOWED_BUCKETS = new Set(['screens', 'keyboards', 'mouses', 'consoles'])
+const ALLOWED_BUCKETS = new Set(['screens', 'keyboards', 'mouses', 'consoles', 'laptopimages'])
 
 export async function POST(req: NextRequest) {
   try {

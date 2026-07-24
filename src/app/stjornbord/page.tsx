@@ -22,8 +22,15 @@ interface AdminOrderRow {
   gamingpc_uuid?: number | null;
   gamingconsole_uuid?: string | null;
   screen_uuid?: string | null;
+  laptop_variant_uuid?: string | null;
   numberofextracon?: number | null;
   pdf_url?: string | null;
+}
+
+interface LaptopVariantInfo {
+  laptopId: string;
+  name: string;
+  storageGb: number;
 }
 
 export default function AdminDashboardPage() {
@@ -65,7 +72,8 @@ export default function AdminDashboardPage() {
   const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
 
   const isAdmin = !!user?.isAdmin;
-  const [activeTab, setActiveTab] = useState<'orders' | 'preorders'>('orders');
+  const [activeTab, setActiveTab] = useState<'gamingpc' | 'laptops' | 'preorders'>('gamingpc');
+  const [laptopVariantInfoById, setLaptopVariantInfoById] = useState<Record<string, LaptopVariantInfo>>({});
   const [preorders, setPreorders] = useState<Array<{ id: string; auth_uid: string | null; created_at: string; gamingpc_uuid?: number | null }>>([]);
   const [preorderUserNameByUid, setPreorderUserNameByUid] = useState<Record<string, string>>({});
   const [preorderEmailByUid, setPreorderEmailByUid] = useState<Record<string, string>>({});
@@ -170,6 +178,36 @@ export default function AdminDashboardPage() {
             setPcNamesById(mapPc);
           } else {
             setPcNamesById({});
+          }
+          // Fetch laptop variant info (name/color/storage) for laptop orders
+          const laptopVariantIds = Array.from(
+            new Set(rows.map(r => r.laptop_variant_uuid).filter((v): v is string => typeof v === 'string' && v.length > 0))
+          );
+          if (laptopVariantIds.length > 0) {
+            try {
+              const { data: vRows } = await supabase
+                .from('laptop_variants')
+                .select('id, laptop_id, storage_gb')
+                .in('id', laptopVariantIds);
+              const laptopIds = Array.from(new Set((vRows || []).map((r: { laptop_id: string }) => r.laptop_id)));
+              const nameByLaptop: Record<string, string> = {};
+              if (laptopIds.length > 0) {
+                const { data: lRows } = await supabase
+                  .from('laptops')
+                  .select('id, name')
+                  .in('id', laptopIds);
+                (lRows || []).forEach((r: { id: string; name: string }) => { nameByLaptop[r.id] = r.name; });
+              }
+              const lmap: Record<string, LaptopVariantInfo> = {};
+              (vRows || []).forEach((r: { id: string; laptop_id: string; storage_gb: number }) => {
+                lmap[r.id] = { laptopId: r.laptop_id, name: nameByLaptop[r.laptop_id] || 'Fartölva', storageGb: r.storage_gb };
+              });
+              setLaptopVariantInfoById(lmap);
+            } catch {
+              setLaptopVariantInfoById({});
+            }
+          } else {
+            setLaptopVariantInfoById({});
           }
           // Fetch all product lists for modal selection
           try {
@@ -307,7 +345,14 @@ export default function AdminDashboardPage() {
   };
 
   const tableRows = useMemo(() => {
-    return orders.map((o) => {
+    const filtered = orders.filter((o) =>
+      activeTab === 'laptops'
+        ? !!o.laptop_variant_uuid
+        : activeTab === 'gamingpc'
+          ? !!o.gamingpc_uuid
+          : true
+    );
+    return filtered.map((o) => {
       const nowMs = Date.now();
       const tilMs = o.timabilTil ? new Date(o.timabilTil).getTime() : NaN;
       const daysLeft = Number.isFinite(tilMs) ? Math.ceil((tilMs - nowMs) / (1000 * 60 * 60 * 24)) : null;
@@ -317,11 +362,18 @@ export default function AdminDashboardPage() {
         periodFmt:
           o.timabilFra && o.timabilTil
             ? `${formatDate(o.timabilFra)} → ${formatDate(o.timabilTil)}`
-            : "—",
+            : o.timabilFra
+              ? formatDate(o.timabilFra)
+              : o.timabilTil
+                ? formatDate(o.timabilTil)
+                : "—",
         expiringSoon,
       };
     });
-  }, [orders]);
+  }, [orders, activeTab]);
+
+  const formatStorageGb = (gb: number) =>
+    gb >= 1024 && gb % 1024 === 0 ? `${gb / 1024}TB` : `${gb}GB`;
 
   const formatPrice = (value: unknown) => {
     const n = typeof value === 'number' ? value : parseInt((value as string | undefined || '').toString().replace(/\D+/g, ''), 10);
@@ -329,7 +381,7 @@ export default function AdminDashboardPage() {
     return `${n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr/mánuði`;
   };
 
-  const allowedStatuses = ["Undirbúningur", "Í gangi", "Í vinnslu", "Lokið", "Hætt við"] as const;
+  const allowedStatuses = ["Bíður greiðslu", "Undirbúningur", "Í gangi", "Í vinnslu", "Uppsögn í gangi", "Lokið", "Hætt við"] as const;
 
   const isoToLocalInput = (iso?: string | null) => {
     if (!iso) return '';
@@ -634,14 +686,25 @@ export default function AdminDashboardPage() {
           <nav className="-mb-px flex gap-4" aria-label="Tabs">
             <button
               type="button"
-              onClick={() => setActiveTab('orders')}
+              onClick={() => setActiveTab('gamingpc')}
               className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
-                activeTab === 'orders'
+                activeTab === 'gamingpc'
                   ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Pantanir
+              Leikjatölvur
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('laptops')}
+              className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
+                activeTab === 'laptops'
+                  ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Fartölvur
             </button>
             <button
               type="button"
@@ -656,11 +719,11 @@ export default function AdminDashboardPage() {
             </button>
           </nav>
         </div>
-        {activeTab === 'orders' ? (
+        {activeTab !== 'preorders' ? (
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <div className="text-sm text-gray-600">
-              {loading ? "Sæki gögn…" : `${orders.length} pantanir fundust`}
+              {loading ? "Sæki gögn…" : `${tableRows.length} pantanir fundust`}
               {error ? (
                 <span className="ml-3 text-red-600">Villa: {error}</span>
               ) : null}
@@ -675,11 +738,15 @@ export default function AdminDashboardPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Staða</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Notandi</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Kennitala</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Vara</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[16rem]">Vara</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Verð</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[20rem]">Tímabil</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Aukahlutir</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Trygging</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[14rem]">Tímabil</th>
+                  {activeTab !== 'laptops' ? (
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Aukahlutir</th>
+                  ) : null}
+                  {activeTab !== 'laptops' ? (
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Trygging</th>
+                  ) : null}
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Aðgerðir</th>
                 </tr>
               </thead>
@@ -698,37 +765,44 @@ export default function AdminDashboardPage() {
                       <div className="text-[13px] text-gray-700">{o.auth_uid ? (ownersByUid[o.auth_uid] || "—") : "—"}</div>
                     </td>
                     <td className="px-4 py-3 align-top text-gray-700">{o.auth_uid ? (kennitalaByUid[o.auth_uid] || '—') : '—'}</td>
-                    <td className="px-4 py-3 align-top text-gray-700 min-w-[6rem] pr-3">
-                      {o.gamingpc_uuid ? (pcNamesById[o.gamingpc_uuid] || '—') : '—'}
+                    <td className="px-4 py-3 align-top text-gray-700 min-w-[16rem] pr-3">
+                      {o.laptop_variant_uuid ? (() => {
+                        const info = laptopVariantInfoById[o.laptop_variant_uuid!];
+                        return info ? `${info.name} · ${formatStorageGb(info.storageGb)}` : 'Fartölva';
+                      })() : o.gamingpc_uuid ? (pcNamesById[o.gamingpc_uuid] || '—') : '—'}
                     </td>
                     <td className="px-4 py-3 align-top text-gray-700">
                       {(() => { const p = formatPrice(o.verd); return p ? p : '—'; })()}
                     </td>
-                    <td className="px-4 py-3 align-top text-gray-700 min-w-[20rem] whitespace-nowrap">{o.periodFmt}</td>
-                    <td className="px-4 py-3 align-top text-gray-700">
-                      <div className="flex flex-wrap gap-2">
-                        {o.skjar ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Skjár</span>
-                        ) : null}
-                        {o.lyklabord ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Lyklaborð</span>
-                        ) : null}
-                        {o.mus ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Mús</span>
-                        ) : null}
-                        {!o.skjar && !o.lyklabord && !o.mus ? <span className="text-xs text-gray-400">—</span> : null}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 align-top text-gray-700">
-                      {o.trygging ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs">Já</span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Nei</span>
-                      )}
-                    </td>
+                    <td className="px-4 py-3 align-top text-gray-700 min-w-[14rem] whitespace-nowrap">{o.periodFmt}</td>
+                    {activeTab !== 'laptops' ? (
+                      <td className="px-4 py-3 align-top text-gray-700">
+                        <div className="flex flex-wrap gap-2">
+                          {o.skjar ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Skjár</span>
+                          ) : null}
+                          {o.lyklabord ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Lyklaborð</span>
+                          ) : null}
+                          {o.mus ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Mús</span>
+                          ) : null}
+                          {!o.skjar && !o.lyklabord && !o.mus ? <span className="text-xs text-gray-400">—</span> : null}
+                        </div>
+                      </td>
+                    ) : null}
+                    {activeTab !== 'laptops' ? (
+                      <td className="px-4 py-3 align-top text-gray-700">
+                        {o.trygging ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs">Já</span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Nei</span>
+                        )}
+                      </td>
+                    ) : null}
                     <td className="px-4 py-3 align-top">
                       <div className="flex items-center gap-2">
-                        {o.pdf_url || o.orderNumber ? (
+                        {activeTab !== 'laptops' && (o.pdf_url || o.orderNumber) ? (
                           <button
                             type="button"
                             onClick={() => handleOpenPdf(o.id, o.pdf_url, o.orderNumber)}
@@ -749,14 +823,16 @@ export default function AdminDashboardPage() {
                         >
                           Uppfæra
                         </button>
-                        <button
-                          type="button"
-                          disabled={!!busyRemindById[o.id]}
-                          onClick={() => handleSendReminder(o.id)}
-                          className="inline-flex items-center px-2.5 py-1.5 rounded border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs disabled:opacity-50 whitespace-nowrap"
-                        >
-                          Minna á
-                        </button>
+                        {activeTab !== 'laptops' ? (
+                          <button
+                            type="button"
+                            disabled={!!busyRemindById[o.id]}
+                            onClick={() => handleSendReminder(o.id)}
+                            className="inline-flex items-center px-2.5 py-1.5 rounded border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs disabled:opacity-50 whitespace-nowrap"
+                          >
+                            Minna á
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           disabled={!!busyDeleteById[o.id]}
@@ -765,15 +841,17 @@ export default function AdminDashboardPage() {
                         >
                           Eyða
                         </button>
-                        <button
-                          type="button"
-                          disabled={!!busyGeneratePdfById[o.id]}
-                          onClick={() => handleGenerateAdminPdf(o.id)}
-                          className="inline-flex items-center px-2.5 py-1.5 rounded border border-purple-600 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 whitespace-nowrap"
-                          title="Endurskapa PDF og senda á admin"
-                        >
-                          PDF
-                        </button>
+                        {activeTab !== 'laptops' ? (
+                          <button
+                            type="button"
+                            disabled={!!busyGeneratePdfById[o.id]}
+                            onClick={() => handleGenerateAdminPdf(o.id)}
+                            className="inline-flex items-center px-2.5 py-1.5 rounded border border-purple-600 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 whitespace-nowrap"
+                            title="Endurskapa PDF og senda á admin"
+                          >
+                            PDF
+                          </button>
+                        ) : null}
                         {framlengingarByOrderId[o.id] ? (
                           <button
                             type="button"
@@ -788,9 +866,9 @@ export default function AdminDashboardPage() {
                     </td>
                   </tr>
                 ))}
-                {!loading && orders.length === 0 ? (
+                {!loading && tableRows.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={activeTab === 'laptops' ? 8 : 10} className="px-4 py-10 text-center text-gray-500">
                       Engar pantanir fundust.
                     </td>
                   </tr>

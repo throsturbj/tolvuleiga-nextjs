@@ -192,10 +192,20 @@ export async function POST(req: NextRequest) {
     }
     if (!authUid && customerEmail) {
       try {
-        const { data: byEmail, error: emailErr } = await supabase.auth.admin.getUserByEmail(customerEmail)
-        if (!emailErr && byEmail?.user?.id) {
-          authUid = byEmail.user.id
-          console.log('[repeat-webhook] matched user via email', customerEmail)
+        const normalizedEmail = customerEmail.trim().toLowerCase()
+        let page = 1
+        const perPage = 200
+        while (page <= 20 && !authUid) {
+          const { data: pageData, error: emailErr } = await supabase.auth.admin.listUsers({ page, perPage })
+          if (emailErr || !pageData?.users?.length) break
+          const match = pageData.users.find((u) => (u.email || '').toLowerCase() === normalizedEmail)
+          if (match?.id) {
+            authUid = match.id
+            console.log('[repeat-webhook] matched user via email', customerEmail)
+            break
+          }
+          if (pageData.users.length < perPage) break
+          page += 1
         }
       } catch (e) {
         console.warn('[repeat-webhook] email lookup failed', e instanceof Error ? e.message : e)

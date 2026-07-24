@@ -147,14 +147,8 @@ export default function LaptopDetailPage() {
     setActiveImageIndex(0);
   }, [images.length]);
 
-  const generateOrderNumber = () => {
-    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let out = "";
-    for (let i = 0; i < 8; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
-    return out;
-  };
-
-  const handlePanta = async () => {
+  // Only hand off to Repeat — the order is created by the webhook after payment succeeds.
+  const handlePanta = () => {
     if (ordering) return;
     if (!selectedVariant?.repeat_url) return;
 
@@ -166,29 +160,9 @@ export default function LaptopDetailPage() {
     setOrderError(null);
     setOrdering(true);
     try {
-      const orderNumber = generateOrderNumber();
-      const { error } = await supabase.from("orders").insert([
-        {
-          auth_uid: session.user.id,
-          status: "Bíður greiðslu",
-          orderNumber,
-          verd: String(selectedVariant.price),
-          timabilFra: new Date().toISOString(),
-          laptop_variant_uuid: selectedVariant.id,
-        },
-      ]);
-
-      if (error) {
-        setOrderError("Ekki tókst að stofna pöntun. Reyndu aftur.");
-        setOrdering(false);
-        return;
-      }
-
-      const url = new URL(selectedVariant.repeat_url);
-      url.searchParams.set("reference", orderNumber);
-      window.location.href = url.toString();
+      window.location.href = selectedVariant.repeat_url;
     } catch {
-      setOrderError("Ekki tókst að stofna pöntun. Reyndu aftur.");
+      setOrderError("Ekki tókst að opna greiðslusíðu. Reyndu aftur.");
       setOrdering(false);
     }
   };

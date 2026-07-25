@@ -75,15 +75,15 @@ interface LaptopVariantRow {
   laptop_id: string;
   storage_gb: number;
   price: number;
-  sku: string | null;
+  repeat_url: string | null;
   stock_quantity: number | null;
   created_at?: string | null;
 }
 
-type NewLaptopVariant = { storage_gb: string; price: string; sku: string; stock_quantity: string };
+type NewLaptopVariant = { storage_gb: string; price: string; repeat_url: string; stock_quantity: string };
 
 const emptyLaptopForm: NewLaptopRow = { name: "", description: "", image_url: "", active: true };
-const emptyVariantForm: NewLaptopVariant = { storage_gb: "", price: "", sku: "", stock_quantity: "" };
+const emptyVariantForm: NewLaptopVariant = { storage_gb: "", price: "", repeat_url: "", stock_quantity: "" };
 
 export default function VorurAdminPage() {
   const { user, session, loading: authLoading } = useAuth();
@@ -1848,7 +1848,7 @@ export default function VorurAdminPage() {
         laptop_id: laptopId,
         storage_gb: Math.trunc(Number(variantForm.storage_gb)),
         price: Number(variantForm.price),
-        sku: variantForm.sku.trim() || null,
+        repeat_url: variantForm.repeat_url.trim() || null,
         stock_quantity: variantForm.stock_quantity.trim() ? Math.trunc(Number(variantForm.stock_quantity)) : 0,
       };
       const { data, error } = await supabase.from("laptop_variants").insert([payload]).select("*").single();
@@ -1876,7 +1876,7 @@ export default function VorurAdminPage() {
     setVariantEditForm({
       storage_gb: String(v.storage_gb ?? ""),
       price: String(v.price ?? ""),
-      sku: v.sku || "",
+      repeat_url: v.repeat_url || "",
       stock_quantity: String(v.stock_quantity ?? 0),
     });
   };
@@ -1899,7 +1899,7 @@ export default function VorurAdminPage() {
       const payload = {
         storage_gb: Math.trunc(Number(variantEditForm.storage_gb)),
         price: Number(variantEditForm.price),
-        sku: variantEditForm.sku.trim() || null,
+        repeat_url: variantEditForm.repeat_url.trim() || null,
         stock_quantity: variantEditForm.stock_quantity.trim() ? Math.trunc(Number(variantEditForm.stock_quantity)) : 0,
       };
       const { data, error } = await supabase.from("laptop_variants").update(payload).eq("id", id).select("*").single();
@@ -3037,7 +3037,7 @@ export default function VorurAdminPage() {
                                 <tr className="text-gray-500">
                                   <th className="text-left px-2 py-1 font-medium w-24">Geymsla (GB)</th>
                                   <th className="text-left px-2 py-1 font-medium w-28">Verð</th>
-                                  <th className="text-left px-2 py-1 font-medium w-32">SKU</th>
+                                  <th className="text-left px-2 py-1 font-medium w-48">URL</th>
                                   <th className="text-left px-2 py-1 font-medium w-40">Aðgerðir</th>
                                 </tr>
                               </thead>
@@ -3050,7 +3050,7 @@ export default function VorurAdminPage() {
                                     <input value={variantForm.price} onChange={(e) => setVariantForm((f) => ({ ...f, price: e.target.value }))} placeholder="t.d. 14990" inputMode="decimal" className="border border-gray-300 rounded px-2 py-1 w-full" />
                                   </td>
                                   <td className="px-2 py-2 align-top">
-                                    <input value={variantForm.sku} onChange={(e) => setVariantForm((f) => ({ ...f, sku: e.target.value }))} placeholder="SKU (valfrjálst)" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                    <input value={variantForm.repeat_url} onChange={(e) => setVariantForm((f) => ({ ...f, repeat_url: e.target.value }))} placeholder="https://…" className="border border-gray-300 rounded px-2 py-1 w-full" />
                                   </td>
                                   <td className="px-2 py-2 align-top">
                                     <button
@@ -3079,8 +3079,12 @@ export default function VorurAdminPage() {
                                       </td>
                                       <td className="px-2 py-2 align-top text-gray-800">
                                         {vEditing && variantEditForm ? (
-                                          <input value={variantEditForm.sku} onChange={(e) => setVariantEditForm((f) => (f ? { ...f, sku: e.target.value } : f))} className="border border-gray-300 rounded px-2 py-1 w-full" />
-                                        ) : (v.sku || "—")}
+                                          <input value={variantEditForm.repeat_url} onChange={(e) => setVariantEditForm((f) => (f ? { ...f, repeat_url: e.target.value } : f))} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                        ) : (v.repeat_url ? (
+                                          <a href={v.repeat_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
+                                            {v.repeat_url}
+                                          </a>
+                                        ) : "—")}
                                       </td>
                                       <td className="px-2 py-2 align-top">
                                         {vEditing ? (

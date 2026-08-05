@@ -9,6 +9,12 @@ interface GamingPCRow {
   id: number;
   name: string;
   verd: string;
+  trygging?: string | null;
+  innifalid?: string | null;
+  repeat_url?: string | null;
+  repeat_url_trygging?: string | null;
+  repeat_url_screen?: string | null;
+  repeat_url_screen_trygging?: string | null;
   motherboard: string;
   powersupply: string;
   cpu: string;
@@ -20,6 +26,13 @@ interface GamingPCRow {
   falid?: boolean;
   created_at?: string;
 }
+
+type GamingPcUrlsForm = {
+  repeat_url: string;
+  repeat_url_trygging: string;
+  repeat_url_screen: string;
+  repeat_url_screen_trygging: string;
+};
 
 type NewRow = Omit<GamingPCRow, "id" | "created_at">;
 
@@ -62,28 +75,31 @@ interface LaptopRow {
   id: string;
   name: string;
   description: string | null;
+  innifalid?: string | null;
   image_url: string | null;
   active: boolean | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
 
-type NewLaptopRow = { name: string; description: string; image_url: string; active: boolean };
+type NewLaptopRow = { name: string; description: string; innifalid: string; image_url: string; active: boolean };
 
 interface LaptopVariantRow {
   id: string;
   laptop_id: string;
   storage_gb: number;
   price: number;
+  trygging: number | null;
   repeat_url: string | null;
+  repeat_url_trygging: string | null;
   stock_quantity: number | null;
   created_at?: string | null;
 }
 
-type NewLaptopVariant = { storage_gb: string; price: string; repeat_url: string; stock_quantity: string };
+type NewLaptopVariant = { storage_gb: string; price: string; trygging: string; repeat_url: string; repeat_url_trygging: string; stock_quantity: string };
 
-const emptyLaptopForm: NewLaptopRow = { name: "", description: "", image_url: "", active: true };
-const emptyVariantForm: NewLaptopVariant = { storage_gb: "", price: "", repeat_url: "", stock_quantity: "" };
+const emptyLaptopForm: NewLaptopRow = { name: "", description: "", innifalid: "", image_url: "", active: true };
+const emptyVariantForm: NewLaptopVariant = { storage_gb: "", price: "", trygging: "", repeat_url: "", repeat_url_trygging: "", stock_quantity: "" };
 
 export default function VorurAdminPage() {
   const { user, session, loading: authLoading } = useAuth();
@@ -96,6 +112,10 @@ export default function VorurAdminPage() {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<NewRow | null>(null);
+  const [actionsPcId, setActionsPcId] = useState<number | null>(null);
+  const [urlsPcId, setUrlsPcId] = useState<number | null>(null);
+  const [urlsForm, setUrlsForm] = useState<GamingPcUrlsForm | null>(null);
+  const [urlsSaving, setUrlsSaving] = useState<boolean>(false);
 
   // Screens state
   const [activeTab, setActiveTab] = useState<"gaming" | "screens" | "keyboards" | "mouses" | "consoles" | "laptops">("gaming");
@@ -226,6 +246,12 @@ export default function VorurAdminPage() {
   const [form, setForm] = useState<NewRow>({
     name: "",
     verd: "",
+    trygging: "",
+    innifalid: "",
+    repeat_url: "",
+    repeat_url_trygging: "",
+    repeat_url_screen: "",
+    repeat_url_screen_trygging: "",
     motherboard: "",
     powersupply: "",
     cpu: "",
@@ -257,7 +283,7 @@ export default function VorurAdminPage() {
       try {
         const { data, error } = await supabase
           .from("GamingPC")
-          .select("*")
+          .select("id, name, verd, trygging, innifalid, repeat_url, repeat_url_trygging, repeat_url_screen, repeat_url_screen_trygging, motherboard, powersupply, cpu, cpucooler, ram, storage, gpu, uppselt, falid, created_at")
           .order("created_at", { ascending: false });
         if (error) {
           setError(error.message);
@@ -435,7 +461,7 @@ export default function VorurAdminPage() {
       try {
         const { data, error } = await supabase
           .from("laptops")
-          .select("*")
+          .select("id, name, description, innifalid, image_url, active, created_at, updated_at")
           .order("created_at", { ascending: false });
         if (error) {
           setError(error.message);
@@ -1316,14 +1342,33 @@ export default function VorurAdminPage() {
     try {
       const { data, error } = await supabase
         .from("GamingPC")
-        .insert([{ ...form }])
-        .select("*")
+        .insert([{
+          ...form,
+          innifalid: (form.innifalid || "").trim() || null,
+        }])
+        .select("id, name, verd, trygging, innifalid, repeat_url, repeat_url_trygging, repeat_url_screen, repeat_url_screen_trygging, motherboard, powersupply, cpu, cpucooler, ram, storage, gpu, uppselt, falid, created_at")
         .single();
       if (error) {
         setError(error.message);
       } else if (data) {
         setRows((prev) => [data as GamingPCRow, ...prev]);
-        setForm({ name: "", verd: "", motherboard: "", powersupply: "", cpu: "", cpucooler: "", ram: "", storage: "", gpu: "" });
+        setForm({
+          name: "",
+          verd: "",
+          trygging: "",
+          innifalid: "",
+          repeat_url: "",
+          repeat_url_trygging: "",
+          repeat_url_screen: "",
+          repeat_url_screen_trygging: "",
+          motherboard: "",
+          powersupply: "",
+          cpu: "",
+          cpucooler: "",
+          ram: "",
+          storage: "",
+          gpu: "",
+        });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -1395,6 +1440,12 @@ export default function VorurAdminPage() {
     setEditForm({
       name: row.name,
       verd: row.verd,
+      trygging: row.trygging || "",
+      innifalid: row.innifalid || "",
+      repeat_url: row.repeat_url || "",
+      repeat_url_trygging: row.repeat_url_trygging || "",
+      repeat_url_screen: row.repeat_url_screen || "",
+      repeat_url_screen_trygging: row.repeat_url_screen_trygging || "",
       motherboard: row.motherboard,
       powersupply: row.powersupply,
       cpu: row.cpu,
@@ -1408,6 +1459,54 @@ export default function VorurAdminPage() {
   const handleCancelEdit = () => {
     setEditingId(null);
     setEditForm(null);
+  };
+
+  const handleOpenUrls = (row: GamingPCRow) => {
+    if (!isAdmin) return;
+    setUrlsPcId(row.id);
+    setUrlsForm({
+      repeat_url: row.repeat_url || "",
+      repeat_url_trygging: row.repeat_url_trygging || "",
+      repeat_url_screen: row.repeat_url_screen || "",
+      repeat_url_screen_trygging: row.repeat_url_screen_trygging || "",
+    });
+  };
+
+  const handleCancelUrls = () => {
+    setUrlsPcId(null);
+    setUrlsForm(null);
+  };
+
+  const handleSaveUrls = async () => {
+    if (!isAdmin || urlsPcId === null || !urlsForm) return;
+    setUrlsSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        repeat_url: urlsForm.repeat_url.trim() || null,
+        repeat_url_trygging: urlsForm.repeat_url_trygging.trim() || null,
+        repeat_url_screen: urlsForm.repeat_url_screen.trim() || null,
+        repeat_url_screen_trygging: urlsForm.repeat_url_screen_trygging.trim() || null,
+      };
+      const { data, error } = await supabase
+        .from("GamingPC")
+        .update(payload)
+        .eq("id", urlsPcId)
+        .select("*")
+        .single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        setRows((prev) => prev.map((r) => (r.id === urlsPcId ? (data as GamingPCRow) : r)));
+        setUrlsPcId(null);
+        setUrlsForm(null);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setUrlsSaving(false);
+    }
   };
 
   const handleStartScreenEdit = (row: ScreenRow) => {
@@ -1444,9 +1543,12 @@ export default function VorurAdminPage() {
     try {
       const { data, error } = await supabase
         .from("GamingPC")
-        .update({ ...editForm })
+        .update({
+          ...editForm,
+          innifalid: (editForm.innifalid || "").trim() || null,
+        })
         .eq("id", id)
-        .select("*")
+        .select("id, name, verd, trygging, innifalid, repeat_url, repeat_url_trygging, repeat_url_screen, repeat_url_screen_trygging, motherboard, powersupply, cpu, cpucooler, ram, storage, gpu, uppselt, falid, created_at")
         .single();
       if (error) {
         setError(error.message);
@@ -1722,10 +1824,11 @@ export default function VorurAdminPage() {
       const payload = {
         name: laptopForm.name.trim(),
         description: laptopForm.description.trim() || null,
+        innifalid: laptopForm.innifalid.trim() || null,
         image_url: laptopForm.image_url.trim() || null,
         active: laptopForm.active,
       };
-      const { data, error } = await supabase.from("laptops").insert([payload]).select("*").single();
+      const { data, error } = await supabase.from("laptops").insert([payload]).select("id, name, description, innifalid, image_url, active, created_at, updated_at").single();
       if (error) {
         setError(error.message);
       } else if (data) {
@@ -1748,6 +1851,7 @@ export default function VorurAdminPage() {
     setLaptopEditForm({
       name: row.name,
       description: row.description || "",
+      innifalid: row.innifalid || "",
       image_url: row.image_url || "",
       active: row.active ?? true,
     });
@@ -1770,11 +1874,12 @@ export default function VorurAdminPage() {
       const payload = {
         name: laptopEditForm.name.trim(),
         description: laptopEditForm.description.trim() || null,
+        innifalid: laptopEditForm.innifalid.trim() || null,
         image_url: laptopEditForm.image_url.trim() || null,
         active: laptopEditForm.active,
         updated_at: new Date().toISOString(),
       };
-      const { data, error } = await supabase.from("laptops").update(payload).eq("id", id).select("*").single();
+      const { data, error } = await supabase.from("laptops").update(payload).eq("id", id).select("id, name, description, innifalid, image_url, active, created_at, updated_at").single();
       if (error) {
         setError(error.message);
       } else if (data) {
@@ -1829,6 +1934,7 @@ export default function VorurAdminPage() {
     const errs: string[] = [];
     if (!v.storage_gb.trim() || !Number.isFinite(Number(v.storage_gb))) errs.push("Geymsla (GB) verður að vera tala");
     if (!v.price.trim() || !Number.isFinite(Number(v.price))) errs.push("Verð verður að vera tala");
+    if (!v.trygging.trim() || !Number.isFinite(Number(v.trygging))) errs.push("Trygging verður að vera tala");
     return errs;
   };
 
@@ -1848,7 +1954,9 @@ export default function VorurAdminPage() {
         laptop_id: laptopId,
         storage_gb: Math.trunc(Number(variantForm.storage_gb)),
         price: Number(variantForm.price),
+        trygging: Number(variantForm.trygging),
         repeat_url: variantForm.repeat_url.trim() || null,
+        repeat_url_trygging: variantForm.repeat_url_trygging.trim() || null,
         stock_quantity: variantForm.stock_quantity.trim() ? Math.trunc(Number(variantForm.stock_quantity)) : 0,
       };
       const { data, error } = await supabase.from("laptop_variants").insert([payload]).select("*").single();
@@ -1876,7 +1984,9 @@ export default function VorurAdminPage() {
     setVariantEditForm({
       storage_gb: String(v.storage_gb ?? ""),
       price: String(v.price ?? ""),
+      trygging: String(v.trygging ?? ""),
       repeat_url: v.repeat_url || "",
+      repeat_url_trygging: v.repeat_url_trygging || "",
       stock_quantity: String(v.stock_quantity ?? 0),
     });
   };
@@ -1899,7 +2009,9 @@ export default function VorurAdminPage() {
       const payload = {
         storage_gb: Math.trunc(Number(variantEditForm.storage_gb)),
         price: Number(variantEditForm.price),
+        trygging: Number(variantEditForm.trygging),
         repeat_url: variantEditForm.repeat_url.trim() || null,
+        repeat_url_trygging: variantEditForm.repeat_url_trygging.trim() || null,
         stock_quantity: variantEditForm.stock_quantity.trim() ? Math.trunc(Number(variantEditForm.stock_quantity)) : 0,
       };
       const { data, error } = await supabase.from("laptop_variants").update(payload).eq("id", id).select("*").single();
@@ -2264,7 +2376,9 @@ export default function VorurAdminPage() {
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">RAM</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Storage</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">GPU</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-64">Aðgerðir</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Verð</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Trygging</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-40">Aðgerðir</th>
                 </tr>
               </thead>
               <tbody>
@@ -2292,6 +2406,12 @@ export default function VorurAdminPage() {
                   </td>
                   <td className="px-2 py-3 align-top">
                     <input value={form.gpu} onChange={(e) => onChange("gpu", e.target.value)} placeholder="GPU" className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={form.verd} onChange={(e) => onChange("verd", e.target.value)} placeholder="Verð" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={form.trygging || ""} onChange={(e) => onChange("trygging", e.target.value)} placeholder="Trygging" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
                   </td>
                   <td className="px-2 py-3 align-top">
                     <button
@@ -2330,56 +2450,30 @@ export default function VorurAdminPage() {
                     <td className="px-2 py-3 align-top text-gray-800 w-16">
                       <div className="truncate max-w-[4rem] leading-6" title={r.gpu}>{r.gpu}</div>
                     </td>
+                    <td className="px-2 py-3 align-top text-gray-800 w-20">
+                      <div className="truncate leading-6" title={r.verd}>{r.verd}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800 w-20">
+                      <div className="truncate leading-6" title={r.trygging || ""}>{r.trygging || "—"}</div>
+                    </td>
                     <td className="px-2 py-3 align-top">
-                      <div className="grid grid-cols-6 gap-2 w-85">
+                      <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => openPricesModal(r.id)}
-                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-green-500 text-green-600 hover:bg-green-50 text-xs w-full"
-                          title="Verð (tímabil)"
+                          onClick={() => setActionsPcId(r.id)}
+                          className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-xs cursor-pointer"
                         >
-                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v3m0 12v3m5-12a5 5 0 00-5-5h-1a4 4 0 000 8h2a4 4 0 010 8h-1a5 5 0 01-5-5" />
+                          Aðgerðir
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                           </svg>
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleToggleFalid(r.id, r.falid)}
-                          disabled={updatingId === r.id}
-                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-blue-500 text-blue-600 hover:bg-blue-50 text-xs disabled:opacity-50 w-full"
+                          onClick={() => handleOpenUrls(r)}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-sky-500 text-sky-600 hover:bg-sky-50 text-xs cursor-pointer"
                         >
-                          {r.falid ? "Sýna" : "Fela"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleUppselt(r.id, r.uppselt)}
-                          disabled={updatingId === r.id}
-                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-blue-500 text-blue-600 hover:bg-blue-50 text-xs disabled:opacity-50 w-full"
-                        >
-                          {r.uppselt ? "Til" : "Ekki til"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleStartEdit(r)}
-                          disabled={updatingId === r.id}
-                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50 w-full"
-                        >
-                          Uppfæra
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(r.id)}
-                          disabled={deletingId === r.id}
-                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 text-xs disabled:opacity-50 w-full"
-                        >
-                          Eyða
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openImagesModal(r.id)}
-                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-purple-500 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 w-full"
-                        >
-                          Myndir
+                          URLs
                         </button>
                       </div>
                     </td>
@@ -2387,7 +2481,7 @@ export default function VorurAdminPage() {
                 ))}
                 {!loading && rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={11} className="px-4 py-10 text-center text-gray-500">
                       Engar vörur fundust.
                     </td>
                   </tr>
@@ -2901,8 +2995,9 @@ export default function VorurAdminPage() {
             <table className="w-full text-sm table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-40">Nafn</th>
-                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-72">Lýsing</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-36">Nafn</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-48">Lýsing</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-48">Innifalið</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-28">Tilbrigði</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Virk</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-56">Aðgerðir</th>
@@ -2915,6 +3010,9 @@ export default function VorurAdminPage() {
                   </td>
                   <td className="px-2 py-3 align-top">
                     <input value={laptopForm.description} onChange={(e) => setLaptopForm((f) => ({ ...f, description: e.target.value }))} placeholder="Lýsing (valfrjálst)" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={laptopForm.innifalid} onChange={(e) => setLaptopForm((f) => ({ ...f, innifalid: e.target.value }))} placeholder="Mús, Lyklaborð, …" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
                   </td>
                   <td className="px-2 py-3 align-top text-xs text-gray-400">
                     Bæta við fyrst
@@ -2955,6 +3053,13 @@ export default function VorurAdminPage() {
                             <input value={laptopEditForm.description} onChange={(e) => setLaptopEditForm((f) => (f ? { ...f, description: e.target.value } : f))} className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
                           ) : (
                             <div className="truncate leading-6" title={l.description || ""}>{l.description || "—"}</div>
+                          )}
+                        </td>
+                        <td className="px-2 py-3 align-top text-gray-800">
+                          {isEditing && laptopEditForm ? (
+                            <input value={laptopEditForm.innifalid} onChange={(e) => setLaptopEditForm((f) => (f ? { ...f, innifalid: e.target.value } : f))} placeholder="Mús, Lyklaborð, …" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                          ) : (
+                            <div className="truncate leading-6" title={l.innifalid || ""}>{l.innifalid || "—"}</div>
                           )}
                         </td>
                         <td className="px-2 py-3 align-top">
@@ -3030,14 +3135,16 @@ export default function VorurAdminPage() {
                       </tr>
                       {isExpanded ? (
                         <tr className="border-b border-gray-200 bg-gray-50/70">
-                          <td colSpan={5} className="px-4 py-4">
+                          <td colSpan={6} className="px-4 py-4">
                             <div className="text-xs font-semibold text-gray-700 mb-2">Tilbrigði – {l.name}</div>
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="text-gray-500">
                                   <th className="text-left px-2 py-1 font-medium w-24">Geymsla (GB)</th>
                                   <th className="text-left px-2 py-1 font-medium w-28">Verð</th>
-                                  <th className="text-left px-2 py-1 font-medium w-48">URL</th>
+                                  <th className="text-left px-2 py-1 font-medium w-28">Trygging</th>
+                                  <th className="text-left px-2 py-1 font-medium w-32">URL</th>
+                                  <th className="text-left px-2 py-1 font-medium w-32">URL Trygging</th>
                                   <th className="text-left px-2 py-1 font-medium w-40">Aðgerðir</th>
                                 </tr>
                               </thead>
@@ -3050,7 +3157,13 @@ export default function VorurAdminPage() {
                                     <input value={variantForm.price} onChange={(e) => setVariantForm((f) => ({ ...f, price: e.target.value }))} placeholder="t.d. 14990" inputMode="decimal" className="border border-gray-300 rounded px-2 py-1 w-full" />
                                   </td>
                                   <td className="px-2 py-2 align-top">
+                                    <input value={variantForm.trygging} onChange={(e) => setVariantForm((f) => ({ ...f, trygging: e.target.value }))} placeholder="t.d. 990" inputMode="decimal" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                  </td>
+                                  <td className="px-2 py-2 align-top">
                                     <input value={variantForm.repeat_url} onChange={(e) => setVariantForm((f) => ({ ...f, repeat_url: e.target.value }))} placeholder="https://…" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                  </td>
+                                  <td className="px-2 py-2 align-top">
+                                    <input value={variantForm.repeat_url_trygging} onChange={(e) => setVariantForm((f) => ({ ...f, repeat_url_trygging: e.target.value }))} placeholder="https://…" className="border border-gray-300 rounded px-2 py-1 w-full" />
                                   </td>
                                   <td className="px-2 py-2 align-top">
                                     <button
@@ -3079,10 +3192,24 @@ export default function VorurAdminPage() {
                                       </td>
                                       <td className="px-2 py-2 align-top text-gray-800">
                                         {vEditing && variantEditForm ? (
+                                          <input value={variantEditForm.trygging} onChange={(e) => setVariantEditForm((f) => (f ? { ...f, trygging: e.target.value } : f))} inputMode="decimal" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                        ) : (v.trygging != null ? `${formatPrice(Number(v.trygging))} kr` : "—")}
+                                      </td>
+                                      <td className="px-2 py-2 align-top text-gray-800">
+                                        {vEditing && variantEditForm ? (
                                           <input value={variantEditForm.repeat_url} onChange={(e) => setVariantEditForm((f) => (f ? { ...f, repeat_url: e.target.value } : f))} className="border border-gray-300 rounded px-2 py-1 w-full" />
                                         ) : (v.repeat_url ? (
                                           <a href={v.repeat_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
                                             {v.repeat_url}
+                                          </a>
+                                        ) : "—")}
+                                      </td>
+                                      <td className="px-2 py-2 align-top text-gray-800">
+                                        {vEditing && variantEditForm ? (
+                                          <input value={variantEditForm.repeat_url_trygging} onChange={(e) => setVariantEditForm((f) => (f ? { ...f, repeat_url_trygging: e.target.value } : f))} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                        ) : (v.repeat_url_trygging ? (
+                                          <a href={v.repeat_url_trygging} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
+                                            {v.repeat_url_trygging}
                                           </a>
                                         ) : "—")}
                                       </td>
@@ -3131,7 +3258,7 @@ export default function VorurAdminPage() {
                                 })}
                                 {variants.length === 0 ? (
                                   <tr>
-                                    <td colSpan={5} className="px-2 py-3 text-center text-gray-400">
+                                    <td colSpan={6} className="px-2 py-3 text-center text-gray-400">
                                       Engin tilbrigði enn. Bættu við hér að ofan.
                                     </td>
                                   </tr>
@@ -3146,7 +3273,7 @@ export default function VorurAdminPage() {
                 })}
                 {!laptopsLoading && laptops.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
                       Engar fartölvur fundust.
                     </td>
                   </tr>
@@ -3327,6 +3454,175 @@ export default function VorurAdminPage() {
           </div>
         </div>
       </div>
+      {actionsPcId !== null ? (() => {
+        const actionsRow = rows.find((r) => r.id === actionsPcId) || null;
+        if (!actionsRow) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setActionsPcId(null)} />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gaming-actions-title"
+              className="relative bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 overflow-hidden"
+            >
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <div className="min-w-0">
+                  <h2 id="gaming-actions-title" className="text-base font-semibold text-gray-900">Aðgerðir</h2>
+                  <p className="text-xs text-gray-500 truncate" title={actionsRow.name}>{actionsRow.name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActionsPcId(null)}
+                  className="text-gray-500 hover:text-gray-700 text-sm cursor-pointer"
+                >
+                  Loka
+                </button>
+              </div>
+              <div className="p-4 grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleToggleFalid(actionsRow.id, actionsRow.falid);
+                    setActionsPcId(null);
+                  }}
+                  disabled={updatingId === actionsRow.id}
+                  className="inline-flex items-center justify-center px-3 py-2.5 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 text-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {actionsRow.falid ? "Sýna" : "Fela"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleToggleUppselt(actionsRow.id, actionsRow.uppselt);
+                    setActionsPcId(null);
+                  }}
+                  disabled={updatingId === actionsRow.id}
+                  className="inline-flex items-center justify-center px-3 py-2.5 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 text-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {actionsRow.uppselt ? "Til" : "Ekki til"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleStartEdit(actionsRow);
+                    setActionsPcId(null);
+                  }}
+                  disabled={updatingId === actionsRow.id}
+                  className="inline-flex items-center justify-center px-3 py-2.5 rounded-lg border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm disabled:opacity-50 cursor-pointer"
+                >
+                  Uppfæra
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    openImagesModal(actionsRow.id);
+                    setActionsPcId(null);
+                  }}
+                  className="inline-flex items-center justify-center px-3 py-2.5 rounded-lg border border-purple-500 text-purple-600 hover:bg-purple-50 text-sm cursor-pointer"
+                >
+                  Myndir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionsPcId(null);
+                    handleDelete(actionsRow.id);
+                  }}
+                  disabled={deletingId === actionsRow.id}
+                  className="inline-flex items-center justify-center px-3 py-2.5 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 text-sm disabled:opacity-50 cursor-pointer"
+                >
+                  Eyða
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
+      {urlsPcId !== null && urlsForm ? (() => {
+        const urlsRow = rows.find((r) => r.id === urlsPcId) || null;
+        if (!urlsRow) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40" onClick={handleCancelUrls} />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gaming-urls-title"
+              className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden"
+            >
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <div className="min-w-0">
+                  <h2 id="gaming-urls-title" className="text-base font-semibold text-gray-900">URLs</h2>
+                  <p className="text-xs text-gray-500 truncate" title={urlsRow.name}>{urlsRow.name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelUrls}
+                  className="text-gray-500 hover:text-gray-700 text-sm cursor-pointer"
+                >
+                  Loka
+                </button>
+              </div>
+              <div className="p-4 space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">repeat_url</label>
+                  <input
+                    value={urlsForm.repeat_url}
+                    onChange={(e) => setUrlsForm((prev) => (prev ? { ...prev, repeat_url: e.target.value } : prev))}
+                    placeholder="https://…"
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">repeat_url_trygging</label>
+                  <input
+                    value={urlsForm.repeat_url_trygging}
+                    onChange={(e) => setUrlsForm((prev) => (prev ? { ...prev, repeat_url_trygging: e.target.value } : prev))}
+                    placeholder="https://…"
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">repeat_url_screen</label>
+                  <input
+                    value={urlsForm.repeat_url_screen}
+                    onChange={(e) => setUrlsForm((prev) => (prev ? { ...prev, repeat_url_screen: e.target.value } : prev))}
+                    placeholder="https://…"
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">repeat_url_screen_trygging</label>
+                  <input
+                    value={urlsForm.repeat_url_screen_trygging}
+                    onChange={(e) => setUrlsForm((prev) => (prev ? { ...prev, repeat_url_screen_trygging: e.target.value } : prev))}
+                    placeholder="https://…"
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleCancelUrls}
+                  className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm cursor-pointer"
+                >
+                  Hætta við
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveUrls}
+                  disabled={urlsSaving}
+                  className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-sky-500 text-sky-600 hover:bg-sky-50 text-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {urlsSaving ? "Vista…" : "Vista"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
       {editingId !== null && editForm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={handleCancelEdit} />
@@ -3345,6 +3641,20 @@ export default function VorurAdminPage() {
                   <label className="block text-xs text-gray-600 mb-1">Verð</label>
                   <input value={editForm.verd} onChange={(e) => onChangeEdit("verd", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Trygging</label>
+                <input value={editForm.trygging || ""} onChange={(e) => onChangeEdit("trygging", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Innifalið</label>
+                <input
+                  value={editForm.innifalid || ""}
+                  onChange={(e) => onChangeEdit("innifalid", e.target.value)}
+                  placeholder="Mús, Lyklaborð, HDMI snúra"
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                />
+                <p className="mt-1 text-[11px] text-gray-400">Aðskildu atriði með kommu</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

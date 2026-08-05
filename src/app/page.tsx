@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { supabasePublic } from "@/lib/supabase-public";
 import { useAuth } from "@/contexts/AuthContext";
 import { debug } from "@/lib/debug";
+import heroImage from "../../img/forsidumynd1.jpg";
 
 function LaptopImageCarousel({ images, alt }: { images: string[]; alt: string }) {
   const [idx, setIdx] = useState(0);
@@ -56,7 +58,6 @@ export default function Home() {
     falid?: boolean;
     tilbod?: boolean;
     imageUrl?: string;
-    price12?: string | null;
   }
 
   interface GamingConsoleItem {
@@ -206,13 +207,11 @@ export default function Home() {
             return aNum - bNum;
           });
           debug('Home/PCs/visible', { count: sorted.length });
-          // Batch fetch auxiliary data (images + 12-month prices)
+          // Batch fetch first images; card price comes from GamingPC.verd
           try {
             const ids = sorted.map((p) => p.id);
             let imageMap: Record<number, { path: string; signedUrl: string } | null> = {};
-            let priceMap: Record<number, string | null> = {};
             if (ids.length > 0) {
-              // 1) Images via server route
               try {
                 const res = await fetch("/api/images/first", {
                   method: "POST",
@@ -226,38 +225,18 @@ export default function Home() {
               } catch {
                 // ignore, keep empty map
               }
-              // 2) Prices from Supabase (try authed/anon in same order)
-              const clientsForPrices = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
-              for (const c of clientsForPrices) {
-                try {
-                  const { data: pricesRows, error: pricesErr } = await c
-                    .from("prices")
-                    .select('gamingpc_id, "12month"')
-                    .in("gamingpc_id", ids);
-                  if (!pricesErr && Array.isArray(pricesRows)) {
-                    priceMap = {};
-                    for (const row of pricesRows as Array<{ gamingpc_id: number; "12month": string | null }>) {
-                      priceMap[row.gamingpc_id] = row["12month"] ?? null;
-                    }
-                    break;
-                  }
-                } catch {
-                  // try next client
-                }
-              }
             }
             const merged = sorted.map((p) => ({
               ...p,
               imageUrl: imageMap[p.id]?.signedUrl,
-              price12: priceMap[p.id] ?? null,
             }));
             setItems(merged);
-              setItemsLoading(false);
-            debug('Home/PCs/setItems', { count: merged.length, withImages: !!Object.keys(imageMap).length, withPrices: !!Object.keys(priceMap).length });
+            setItemsLoading(false);
+            debug('Home/PCs/setItems', { count: merged.length, withImages: !!Object.keys(imageMap).length });
           } catch {
             setItems(sorted);
-              setItemsLoading(false);
-            debug('Home/PCs/setItems', { count: sorted.length, withImages: false, withPrices: false, reason: 'aux fetch error' });
+            setItemsLoading(false);
+            debug('Home/PCs/setItems', { count: sorted.length, withImages: false, reason: 'aux fetch error' });
           }
         }
       } catch (e) {
@@ -482,26 +461,38 @@ export default function Home() {
         </div>
       ) : null}
       {/* Hero Section */}
-      <section className="bg-[var(--color-primary)] py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h1 className="text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
-              <span className="text-[var(--color-secondary)]">Tölvuleiga</span>
+      <section className="relative isolate min-h-[min(88vh,920px)] overflow-hidden bg-[#0a0f0c]">
+        <Image
+          src={heroImage}
+          alt="Nemendur að vinna á fartölvum"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-[center_35%] hero-image-zoom"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/45 to-black/15" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-black/25" />
+
+        <div className="relative mx-auto flex min-h-[min(88vh,920px)] max-w-7xl flex-col justify-end px-4 pb-16 pt-28 sm:px-6 sm:pb-20 lg:px-8 lg:pb-24">
+          <div className="max-w-xl">
+            <h1 className="hero-fade-up text-5xl font-semibold tracking-tight text-white sm:text-6xl lg:text-7xl">
+              Tölvuleiga
             </h1>
-            <p className="mt-6 text-lg leading-8 text-gray-600 max-w-2xl mx-auto">
-              Við bjóðum upp á hágæða tölvubúnað á sanngjörnu verði – allt frá leikjatölvum og fartölvum til aukahluta – fyrir þá sem vilja afköst, gæði og áreiðanleika.
+            <p className="hero-fade-up hero-delay-1 mt-5 max-w-md text-base leading-relaxed text-white/85 sm:text-lg">
+              Hágæða tölvubúnaður fyrir leik, vinnu og nám.
             </p>
-            <div className="mt-10 flex items-center justify-center gap-x-6">
+            <div className="hero-fade-up hero-delay-2 mt-8">
               <button
                 onClick={() => {
-                  const el = document.getElementById('laptops');
-                  if (el && typeof el.scrollIntoView === 'function') {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  const el = document.getElementById("laptops");
+                  if (el && typeof el.scrollIntoView === "function") {
+                    el.scrollIntoView({ behavior: "smooth", block: "start" });
                   } else {
-                    window.location.hash = '#laptops';
+                    window.location.hash = "#laptops";
                   }
                 }}
-                className="rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white shadow-sm hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]">
+                className="rounded-md bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_30px_-12px_var(--color-accent)] transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+              >
                 Sjá Vörur
               </button>
             </div>
@@ -510,35 +501,35 @@ export default function Home() {
       </section>
 
       {/* Features Section */}
-      <section className="py-14">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="text-center">
-              <div className="mx-auto h-12 w-12 rounded-md bg-[var(--color-primary)] flex items-center justify-center">
-                <svg className="h-6 w-6 text-[var(--color-secondary)]" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Nýjasti búnaðurinn</h3>
-              <p className="mt-2 text-gray-600">Nýjasti tölvubúnaðurinn með öflugustu tækninni og glæsilegustu hönnuninni leikjatölvur, fartölvur og aukahlutir fyrir allt sem þú krefst.</p>
+      <section className="py-14 sm:py-16">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-12 sm:grid-cols-3 sm:gap-10">
+            <div className="flex flex-col items-center text-center">
+              <svg className="h-14 w-14 text-[var(--color-accent)] sm:h-16 sm:w-16" fill="none" viewBox="0 0 24 24" strokeWidth="1.25" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="mt-5 block h-px w-8 bg-[var(--color-accent)]/70" aria-hidden="true" />
+              <h3 className="mt-4 text-xs font-medium uppercase tracking-[0.28em] text-foreground/85 sm:text-sm">
+                Nýjasti búnaðurinn
+              </h3>
             </div>
-            <div className="text-center">
-              <div className="mx-auto h-12 w-12 rounded-md bg-[var(--color-primary)] flex items-center justify-center">
-                <svg className="h-6 w-6 text-[var(--color-secondary)]" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Fjölbreytt úrval</h3>
-              <p className="mt-2 text-gray-600">Leikjatölvur, fartölvur og aukahlutir – allt á einum stað. Þú finnur búnað sem hentar þínum þörfum, hvort sem það er fyrir leikjaspilun eða skólavinnu</p>
+            <div className="flex flex-col items-center text-center">
+              <svg className="h-14 w-14 text-[var(--color-accent)] sm:h-16 sm:w-16" fill="none" viewBox="0 0 24 24" strokeWidth="1.25" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              </svg>
+              <span className="mt-5 block h-px w-8 bg-[var(--color-accent)]/70" aria-hidden="true" />
+              <h3 className="mt-4 text-xs font-medium uppercase tracking-[0.28em] text-foreground/85 sm:text-sm">
+                Fjölbreytt úrval
+              </h3>
             </div>
-            <div className="text-center">
-              <div className="mx-auto h-12 w-12 rounded-md bg-[var(--color-primary)] flex items-center justify-center">
-                <svg className="h-6 w-6 text-[var(--color-secondary)]" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Besta verðið</h3>
-              <p className="mt-2 text-gray-600">Það er engin þörf á að eyða fúlgum fjár í nýja tölvu. Leigðu hjá okkur á sanngjörnu verði og fáðu hámarksafköst án þess að tæma veskið.</p>
+            <div className="flex flex-col items-center text-center">
+              <svg className="h-14 w-14 text-[var(--color-accent)] sm:h-16 sm:w-16" fill="none" viewBox="0 0 24 24" strokeWidth="1.25" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
+              </svg>
+              <span className="mt-5 block h-px w-8 bg-[var(--color-accent)]/70" aria-hidden="true" />
+              <h3 className="mt-4 text-xs font-medium uppercase tracking-[0.28em] text-foreground/85 sm:text-sm">
+                Hagkvæm lausn
+              </h3>
             </div>
           </div>
         </div>
@@ -611,10 +602,10 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-              Tölvur
+              Borðtölvur
             </h2>
             <p className="mt-4 text-lg text-gray-600">
-              Finndu tölvu sem hentar þér best.
+              Þær allra öflugustu tölvurnar.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -684,10 +675,10 @@ export default function Home() {
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-xl font-bold text-[var(--color-secondary)]">
                       {(() => {
-                        const digits = (pc.price12 || '').toString().replace(/\D+/g, '');
+                        const digits = (pc.verd || '').toString().replace(/\D+/g, '');
                         const num = parseInt(digits, 10) || 0;
                         const formatted = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-                        return `Frá ${formatted} kr/mánuði`;
+                        return `${formatted} kr/mánuði`;
                       })()}
                     </span>
                   </div>

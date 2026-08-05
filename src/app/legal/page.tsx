@@ -2,68 +2,47 @@ export default function LegalPage() {
 	return (
 		<section className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10 space-y-4">
 			<h1 className="text-2xl font-semibold tracking-tight">SKILMÁLI</h1>
-			<p className="text-black/70 dark:text-white/70">Leiguskilmálar BGÞ ehf. - Leiga á tölvubúnaði og tengdum þjónustu</p>
+			<p className="text-black/70 dark:text-white/70">Leiguskilmálar BGÞ ehf. - Leiga á tölvum, fartölvum, leikjatölvum, skjám og tengdum búnaði.</p>
 			<p className="text-black/70 dark:text-white/70">1. Almenn ákvæði</p>
-			<p className="text-black/70 dark:text-white/70">Þessir skilmálar gilda um leigu á tölvum og tengdum búnaði frá BGÞ ehf., kt. 490925-0820, netfang: tolvuleiga@tolvuleiga.is (hér eftir nefnt „Leigusali“).
-Með því að leigja tölvu eða annan búnað hjá leigusala samþykkir leigutaki þessa skilmála og skuldbindur sig til að fylgja þeim í hvívetna.
-Leigusali áskilur sér rétt til að breyta þessum skilmálum hvenær sem er. Breyttir skilmálar taka gildi við birtingu þeirra á vefsíðu tolvuleiga.is.</p>
+			<p className="text-black/70 dark:text-white/70">Þessir skilmálar gilda um leigu á tölvum og tengdum búnaði frá BGÞ ehf., kt. 490925-0820, netfang: tolvuleiga@tolvuleiga.is (hér eftir nefnt „Leigusali“). Með því að leigja tölvu eða annan búnað hjá leigusala samþykkir leigutaki þessa skilmála og skuldbindur sig til að fylgja þeim í hvívetna. Leigusali áskilur sér rétt til að breyta þessum skilmálum hvenær sem er. Breyttir skilmálar taka gildi við birtingu þeirra á vefsíðu tolvuleiga.is.</p>
 			<p className="text-black/70 dark:text-white/70">2. Leigutakar</p>
-			<p className="text-black/70 dark:text-white/70">Leigusali leigir búnað bæði til einstaklinga og fyrirtækja.
-			Leigutaki skal vera orðinn 18 ára eða hafa skriflegt samþykki forráðamanns. Fyrirtæki skulu tilgreina ábyrgðaraðila á leigutímanum.</p>
+			<p className="text-black/70 dark:text-white/70">Leigusali leigir búnað bæði til einstaklinga og fyrirtækja. Leigutaki skal vera orðinn 18 ára eða hafa skriflegt samþykki forráðamanns. Fyrirtæki skulu tilgreina ábyrgðaraðila á leigutímanum.</p>
 			<p className="text-black/70 dark:text-white/70">3. Afhending, leigutímabil og lágmarksleiga </p>
-			<p className="text-black/70 dark:text-white/70">Leigutími hefst við afhendingu búnaðar til leigutaka og lýkur við skil á honum í fullkomnu ástandi. Leigutaki ber ábyrgð á búnaðinum á meðan hann er í hans vörslu, þar á meðal vegna skemmda taps eða þjófnaðar. 
-Lágmarksleigutími á tölvum er einn (1) mánuður. Staðlaðir leigutímar eru 1, 3, 6, 9 eða 12 mánuðir, með mismunandi verði eftir vali leigutíma. 
-Þrátt fyrir framangreint getur leigusali, að eigin mati, samþykkt leigu til skemmri tíma en eins mánaðar (t.d. í nokkra daga). Slík leiga telst þó alltaf gjaldskyld sem eins (1) mánaðar leiga, óháð raunverulegri lengd leigutímans. 
-Enginn afsláttur eða endurgreiðsla fæst vegna styttri notkunar. Leiga til skemmri tíma en eins mánaðar er ekki tryggð þjónusta og er eingöngu í boði ef tölvur eru lausar og aðstæður leyfa. Leigusali áskilur sér fullan rétt til að hafna slíkum beiðnum án frekari skýringa. 
-Þrátt fyrir að staðlaðir leigutímar séu einungis 1, 3, 6, 9 eða 12 mánuðir er leigutaka ávallt heimilt að hafa samband við leigusala og óska eftir leigu til annarra tímabila (t.d. 2, 7 eða 10 mánuðir). 
-Slíkar beiðnir eru metnar sérstaklega og kann leigusali, að eigin mati, að gera sérstakt tilboð í samræmi við aðstæður, framboð og verðskrá hverju sinni. Slík tilboð eru ekki bindandi fyrr en þau hafa verið samþykkt og staðfest af leigusala.</p>
-            <p className="text-black/70 dark:text-white/70">4. Framboð og samþykki pantana </p>
+			<p className="text-black/70 dark:text-white/70">Leigutími hefst við afhendingu búnaðar til leigutaka og lýkur þegar búnaðinum hefur verið skilað til leigusala, hann hefur verið yfirfarinn og er í fullkomnu standi. Leigutaki ber ábyrgð á búnaðinum á meðan hann er í hans vörslu, þar á meðal vegna skemmda, taps eða þjófnaðar. Lágmarksleigutími á tölvum er einn (1) mánuður. Þrátt fyrir framangreint getur leigusali, að eigin mati, samþykkt leigu til skemmri tíma en eins mánaðar (t.d. í nokkra daga). Slík leiga telst þó alltaf gjaldskyld sem eins (1) mánaðar leiga, óháð raunverulegri lengd leigutímans. Enginn afsláttur eða endurgreiðsla fæst vegna styttri notkunar. Leiga til skemmri tíma en eins mánaðar er ekki tryggð þjónusta og er eingöngu í boði ef tölvur eru lausar og aðstæður leyfa. Leigusali áskilur sér fullan rétt til að hafna slíkum beiðnum án frekari skýringa. Leiga er í formi mánaðarlegrar áskriftarleigu og er greidd mánaðarlega með skráðu greiðslukorti. Leigan heldur áfram sjálfkrafa frá mánuði til mánaðar þar til henni er sagt upp samkvæmt grein 15. Uppsagnarákvæði. Leigutaki getur, við upphaf leigu, tilgreint áætlaðan leigutíma ef hann hefur ákveðinn leigutíma í huga. Slík tilgreining er ekki bindandi og breytir ekki því að leigan er ótímabundin áskriftarleiga. Óski leigutaki eftir að segja leigunni upp áður en hinn áætlaði leigutími er liðinn, fer uppsögn samkvæmt ákvæðum 15. greinar þessara skilmála.</p>
+            <p className="text-black/70 dark:text-white/70">4. Eignarréttur að búnaði</p>
+			<p className="text-black/70 dark:text-white/70">Allur búnaður sem leigusali afhendir samkvæmt leigusamningi, þar á meðal borðtölvur, fartölvur, leikjatölvur, skjáir, fylgihlutir og annar búnaður, er og skal ávallt vera eign BGÞ ehf., nema annað sé sérstaklega samið skriflega. Leigutaki öðlast engan eignarrétt að búnaðinum með greiðslu leigugjalda eða með öðrum hætti. Við lok leigusamnings skal búnaði skilað til leigusala án tafar í samræmi við skilmála þessa samnings.</p>
+			<p className="text-black/70 dark:text-white/70">5. Framboð og samþykki pantana</p>
 			<p className="text-black/70 dark:text-white/70">Allar pantanir eru háðar framboði og teljast ekki bindandi fyrr en þær hafa verið staðfestar af leigusala. Leigusali áskilur sér rétt til að hafna pöntun, hvort sem er vegna mikillar eftirspurnar, takmarkaðs framboðs, rekstrarlegra ástæðna eða annarra aðstæðna, án bótaskyldu.</p>
-			<p className="text-black/70 dark:text-white/70">5. Innifalið í leigu</p>
-			<p className="text-black/70 dark:text-white/70">Í leigunni er innifalinn tölvubúnaður ásamt nauðsynlegum hugbúnaði sem leigusali útvegar.
-			Leigutaki getur valið að bæta við tryggingu gegn tjóni eða þjófnaði gegn mánaðarlegu aukagjaldi samkvæmt verðskrá leigusala.</p>
-			<p className="text-black/70 dark:text-white/70">6. Trygging og ábyrgð</p>
-			<p className="text-black/70 dark:text-white/70">Ef leigutaki hefur keypt tryggingu samkvæmt grein 4, nær hún yfir tiltekið tjón samkvæmt nánari skilmálum tryggingarinnar.
-Tryggingin gildir ekki ef tjón verður vegna stórkostlegs gáleysis eða rangrar meðferðar á búnaðinum.
-Ef leigutaki hefur ekki tryggingu, ber hann allan kostnað sem hlýst af tjóni, tapi eða þjófnaði á búnaði.
-Leigutaki skal tafarlaust tilkynna leigusala um bilun, skemmdir eða tap á búnaði.</p>
-			<p className="text-black/70 dark:text-white/70">7. Greiðsluskilmálar</p>
-			<p className="text-black/70 dark:text-white/70">Leiga fyrir skammtímaleigu (t.d. nokkra daga) skal greidd fyrirfram við afhendingu búnaðar.
-Við langtímaleigu (t.d. mánaðarlega) skal greiða mánaðarlega fyrirfram samkvæmt útgefnum reikningi.
-Greiðsludráttur getur leitt til dráttarvaxta og innheimtukostnaðar samkvæmt íslenskum lögum.
-Leigusali áskilur sér rétt til að innkalla leigða vöru ef reikningur hefur ekki verið greiddur innan 7 daga frá eindaga.</p>
-			<p className="text-black/70 dark:text-white/70">8. Notkun og meðferð búnaðar</p>
-			<p className="text-black/70 dark:text-white/70">Leigutaki skuldbindur sig til að fara vel með búnaðinn og nota hann í samræmi við leiðbeiningar leigusala.
-Óheimilt er að setja upp, fjarlægja eða breyta hugbúnaði, eða nota búnaðinn í ólögmætum tilgangi.
-Leigusali ber ekki ábyrgð á gögnum eða hugbúnaði sem leigutaki setur upp eða geymir á búnaðinum.
-Leigusali áskilur sér rétt til að loka aðgangi að búnaði eða endurkalla hann ef grunur vaknar um misnotkun eða brot á þessum skilmálum.</p>
-			<p className="text-black/70 dark:text-white/70">9. Viðhald og tækniaðstoð</p>
-			<p className="text-black/70 dark:text-white/70">Ef bilanir koma upp sem ekki má rekja til gáleysis eða mistaka leigutaka, mun leigusali veita viðgerð eða skipta út búnaði án aukakostnaðar.
-			Ef bilun stafar af röngum notum eða vanhirðu, getur kostnaður vegna viðgerðar eða skipta verið innheimtur af leigutaka.</p>
-			<p className="text-black/70 dark:text-white/70">10. Skil á búnaði</p>
-			<p className="text-black/70 dark:text-white/70">Við lok leigutíma skal búnaður afhentur í sama ástandi og við afhendingu, að teknu tilliti til eðlilegs slits.
-			Leigusali framkvæmir úttekt á búnaðinum við skil og áskilur sér rétt til að innheimta kostnað vegna skemmda, vöntunar eða óhreininda.</p>
-			<p className="text-black/70 dark:text-white/70">11. Persónuvernd og gagnavarsla</p>
-			<p className="text-black/70 dark:text-white/70">Leigutaki ber ábyrgð á eigin gögnum og skal eyða þeim áður en búnaði er skilað.
-			Leigusali tekur ekki ábyrgð á glötuðum gögnum né geymir gögn eftir að búnaður hefur verið skilaður.</p>
-			<p className="text-black/70 dark:text-white/70">12. Lög og varnarþing</p>
-			<p className="text-black/70 dark:text-white/70">Samningur þessi fellur undir íslensk lög.
-			Rísi ágreiningur vegna leigusamnings eða skilmála skal hann rekin fyrir Héraðsdómi Reykjavíkur, nema annað sé ákveðið með samkomulagi.</p>
-			<p className="text-black/70 dark:text-white/70">13. Seinkunargjald</p>
+			<p className="text-black/70 dark:text-white/70">6. Innifalið í leigu</p>
+			<p className="text-black/70 dark:text-white/70">Í leigunni er innifalinn sá búnaður sem leigutaki hefur valið, svo sem borðtölva, fartölva, leikjatölva (t.d. PlayStation 5), tölvuskjár eða annar búnaður samkvæmt pöntun, ásamt þeim fylgihlutum og hugbúnaði sem leigusali útvegar. Leigutaki getur valið að bæta við tryggingu gegn tjóni eða þjófnaði gegn mánaðarlegu aukagjaldi samkvæmt verðskrá leigusala.</p>
+			<p className="text-black/70 dark:text-white/70">7. Trygging og ábyrgð</p>
+			<p className="text-black/70 dark:text-white/70">Ef leigutaki hefur keypt tryggingu samkvæmt gildandi verðskrá leigusala, nær hún yfir tiltekið tjón samkvæmt nánari skilmálum tryggingarinnar. Tryggingin gildir ekki ef tjón verður vegna stórkostlegs gáleysis eða rangrar meðferðar á búnaðinum. Ef leigutaki hefur ekki tryggingu, ber hann allan kostnað sem hlýst af tjóni, tapi eða þjófnaði á búnaði. Leigutaki skal tafarlaust tilkynna leigusala um bilun, skemmdir eða tap á búnaði.</p>
+			<p className="text-black/70 dark:text-white/70">8. Greiðsluskilmálar</p>
+			<p className="text-black/70 dark:text-white/70">Leiga er greidd mánaðarlega fyrirfram með greiðslukorti sem leigutaki skráir við gerð leigusamnings. Leigutaki ber ábyrgð á að greiðslukort sé gilt og að næg heimild sé til staðar fyrir mánaðarlegri greiðslu. Takist greiðsla ekki áskilur leigusali sér rétt til að reyna innheimtu á ný, innheimta dráttarvexti og innheimtukostnað samkvæmt lögum, stöðva þjónustu eða innkalla leigðan búnað. Ef greiðsla hefur ekki borist innan 7 daga frá gjalddaga áskilur leigusali sér rétt til að rifta samningi og krefjast tafarlausra skila á búnaði.</p>
+			<p className="text-black/70 dark:text-white/70">Leiga fyrir skammtímaleigu (t.d. nokkra daga) skal greidd fyrirfram við afhendingu búnaðar.</p>
+			<p className="text-black/70 dark:text-white/70">9. Notkun og meðferð búnaðar</p>
+			<p className="text-black/70 dark:text-white/70">Leigutaki skuldbindur sig til að fara vel með búnaðinn og nota hann í samræmi við leiðbeiningar leigusala. Óheimilt er að setja upp, fjarlægja eða breyta hugbúnaði, eða nota búnaðinn í ólögmætum tilgangi. Leigusali ber ekki ábyrgð á gögnum eða hugbúnaði sem leigutaki setur upp eða geymir á búnaðinum. Leigusali áskilur sér rétt til að loka aðgangi að búnaði eða endurkalla hann ef grunur vaknar um misnotkun eða brot á þessum skilmálum.</p>
+			<p className="text-black/70 dark:text-white/70">10. Viðhald og tækniaðstoð</p>
+			<p className="text-black/70 dark:text-white/70">Ef bilanir koma upp sem ekki má rekja til gáleysis eða mistaka leigutaka, mun leigusali veita viðgerð eða skipta út búnaði án aukakostnaðar. Ef bilun stafar af röngum notum eða vanhirðu, getur kostnaður vegna viðgerðar eða skipta verið innheimtur af leigutaka.</p>
+			<p className="text-black/70 dark:text-white/70">11. Skil á búnaði</p>
+			<p className="text-black/70 dark:text-white/70">Við lok leigutíma skal búnaður afhentur í sama ástandi og við afhendingu, að teknu tilliti til eðlilegs slits. Leigusali framkvæmir úttekt á búnaðinum við skil og áskilur sér rétt til að innheimta kostnað vegna skemmda, vöntunar eða óhreininda.</p>
+			<p className="text-black/70 dark:text-white/70">12. Persónuvernd og gagnavarsla</p>
+			<p className="text-black/70 dark:text-white/70">Leigutaki ber ábyrgð á að taka afrit af sínum gögnum áður en búnaði er skilað. Leigusali getur endurstillt eða eytt öllum gögnum af búnaði áður en hann er afhentur næsta leigutaka. Leigusali ber enga ábyrgð á gögnum sem glatast við slíka endurstillingu.</p>
+			<p className="text-black/70 dark:text-white/70">13. Lög og varnarþing</p>
+			<p className="text-black/70 dark:text-white/70">Samningur þessi fellur undir íslensk lög. Rísi ágreiningur vegna leigusamnings eða skilmála skal hann rekin fyrir Héraðsdómi Reykjavíkur, nema annað sé ákveðið með samkomulagi.</p>
+			<p className="text-black/70 dark:text-white/70">14. Seinkunargjald</p>
 			<p className="text-black/70 dark:text-white/70">Ef búnaði er ekki skilað á umsömdum skiladegi áskilur leigusali sér rétt til að innheimta seinkunargjald að upphæð 2.500 kr. fyrir hvern dag sem liður frá samningsbundnum skiladegi og þar til búnaður er skilaður. Seinkunargjald kemur til viðbótar við venjulega leigu.</p>
-			<p className="text-black/70 dark:text-white/70">14. Uppsagnarákvæði</p>
-			<p className="text-black/70 dark:text-white/70">Ef leigjandi er með áskriftarleigu og óskar eftir að segja henni upp, gildir tveggja mánaða uppsagnarfrestur frá og með næstu mánaðamótum. Samningnum verður ekki slitið á leigutíma nema með skriflegu samþykki báða aðila.</p>
-			<p className="text-black/70 dark:text-white/70">15. Óheimil notkun á tölvubúnaði</p>
-			<p className="text-black/70 dark:text-white/70">Uppsetning ólöglegs hugbúnaðar - Þar á meðal óleyfileg afrit, sprakkar, “crack” forrit eða hugbúnaður sem brýtur höfundarrétt. 
-															Niðurhal eða dreifing ólöglegs efnis T.d. höfundarréttarvarið efni, klámfengið efni sem brýtur lög, eða annað ólöglegt stafrænt efni. 
-															Uppsetning spilliforrita eða áhættusamra forrita - Þar með talið forrit sem geta valdið tjóni á kerfinu, neti eða búnaði. 
-															Breytingar á hugbúnaði eða stýrikerfi án leyfir - Óheimilt er að fjarlægja stýrikerfi, framkvæma “factory reset”, eða breyta kerfisstillingum sem hafa áhrif á virkni tölvunnar. 
-															Netaðgangur í ólögmætum tilgangi T.d. tölvuinnbrot, skönnun á netkerfum, dreifing árása (DDoS), svikastarfsemi eða önnur refsinæm nethegðun. 
-															Lán eða framleiga búnaðar til þriðja aðila - Búnaður skal eingöngu nota af skráðum leigutaka nema annað sé samþykkt skriflega af leigusala. 
-															Líkamleg misnotkun búnaðar - T.d. högg, raki, vökvi, yfirhitun eða önnur meðferð sem telst ekki eðlileg notkun. 
-															Fjarlæging merkimiða, raðnúmera eða öryggiseininga - Allt slíkt er bannað. 
-															Öryggisráðstafanir - Leigutaki skal ekki afvirkja vírusvörn, eldveggi eða aðrar öryggisvarnir sem leigusali setur upp. 
-															Viðurlög við brotum – Innheimta kostnað vegna viðgerða, enduruppsetningar eða tjóns. Innheimta búnað tafarlaust. Segja upp leigusamningi samkvæmt skilmálum. Vísa máli til viðeigandi stjórnvalda ef lögbrot eiga sér stað. </p>
+			<p className="text-black/70 dark:text-white/70">15. Uppsagnarákvæði</p>
+			<p className="text-black/70 dark:text-white/70">Leiga er ótímabundin áskriftarleiga. Leigutaki getur sagt leigunni upp hvenær sem er með skriflegri uppsögn. Tveggja (2) mánaða uppsagnarfrestur gildir og miðast hann við næstu mánaðamót eftir að uppsögn berst. Á uppsagnarfresti heldur leigutaki áfram að greiða mánaðarlega leigu samkvæmt samningi og ber ábyrgð á búnaðinum þar til honum hefur verið skilað.</p>
+			<p className="text-black/70 dark:text-white/70">Leigusali getur, að eigin mati og með skriflegu samþykki, fallist á styttri uppsagnarfrest en kveðið er á um í þessari grein, ef leigusali telji að aðstæður réttlæti slíkt. Slík undanþága telst ekki fordæmisgefandi og hefur ekki áhrif á rétt leigusala til að krefjast tveggja (2) mánaða uppsagnarfrests í öðrum tilvikum.</p>
+			<p className="text-black/70 dark:text-white/70">16. Óheimil notkun á tölvubúnaði</p>
+			<p className="text-black/70 dark:text-white/70">Uppsetning ólöglegs hugbúnaðar - Þar á meðal óleyfileg afrit, sprakkar, “crack” forrit eða hugbúnaður sem brýtur höfundarrétt. Niðurhal eða dreifing ólöglegs efnis T.d. höfundarréttarvarið efni, klámfengið efni sem brýtur lög, eða annað ólöglegt stafrænt efni. Óheimilt er að tengja PlayStation 5 við ólöglegan breyttan hugbúnað (&quot;jailbreak&quot;) eða framkvæma slíkar breytingar.</p>
+			<p className="text-black/70 dark:text-white/70">Uppsetning spilliforrita eða áhættusamra forrita - Þar með talið forrit sem geta valdið tjóni á kerfinu, neti eða búnaði.</p>
+			<p className="text-black/70 dark:text-white/70">Breytingar á hugbúnaði eða stýrikerfi án leyfis - Óheimilt er að fjarlægja stýrikerfi, framkvæma “factory reset”, eða breyta kerfisstillingum sem hafa áhrif á virkni tölvunnar. Netaðgangur í ólögmætum tilgangi T.d. tölvuinnbrot, skönnun á netkerfum, dreifing árása (DDoS), svikastarfsemi eða önnur refsinæm nethegðun. Óheimilt er að breyta BIOS, UEFI eða öðrum vélbúnaðarastillingum án leyfis frá leigusala. Óheimilt er að opna, taka í sundur eða gera við búnað án skriflegs samþykkis leigusala. Óheimilt er að fjarlægja eða skipta út íhlutum, svo sem SSD, vinnsluminni eða öðrum vélbúnaði.</p>
+			<p className="text-black/70 dark:text-white/70">Lán eða framleiga búnaðar til þriðja aðila - Búnaður skal eingöngu nota af skráðum leigutaka nema annað sé samþykkt skriflega af leigusala.</p>
+			<p className="text-black/70 dark:text-white/70">Líkamleg misnotkun búnaðar - T.d. högg, raki, vökvi, yfirhitun eða önnur meðferð sem telst ekki eðlileg notkun.</p>
+			<p className="text-black/70 dark:text-white/70">Fjarlæging merkimiða, raðnúmera eða öryggiseininga - Allt slíkt er bannað. Öryggisráðstafanir - Leigutaki skal ekki afvirkja vírusvörn, eldveggi eða aðrar öryggisvarnir sem leigusali setur upp.</p>
+			<p className="text-black/70 dark:text-white/70">Viðurlög við brotum – Innheimta kostnað vegna viðgerða, enduruppsetningar eða tjóns. Innheimta búnað tafarlaust. Segja upp leigusamningi samkvæmt skilmálum. Vísa máli til viðeigandi stjórnvalda ef lögbrot eiga sér stað.</p>
 		</section>
 	);
 }

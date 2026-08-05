@@ -91,6 +91,55 @@ body {
   }
 }
 
+/* Hero entrance & motion */
+@keyframes hero-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hero-image-zoom {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.hero-fade-up {
+  opacity: 0;
+  animation: hero-fade-up 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.hero-delay-1 {
+  animation-delay: 0.12s;
+}
+
+.hero-delay-2 {
+  animation-delay: 0.24s;
+}
+
+.hero-image-zoom {
+  animation: hero-image-zoom 1.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes included-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Reduce motion if user prefers */
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -98,5 +147,9 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .hero-fade-up {
+    opacity: 1;
   }
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import logo from "../../img/logo.png";
+import logo from "../../img/logo-header.png";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { debug } from "@/lib/debug";
@@ -61,14 +61,19 @@ export default function Header() {
 				Skip to content
 			</a>
 			<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-				<div className="flex h-14 items-center justify-between">
-					<div className="flex items-center gap-3">
-					<Link href="/" className="flex items-center gap-2">
-						<Image src={logo} alt="TL" width={48} height={48} priority />
-							<div className="leading-tight">
-							<span className="block font-semibold tracking-tight text-xl sm:text-1xl">Tölvuleiga</span>
-							<span className="block text-[var(--color-accent)] text-[10px] sm:text-xs opacity-80 mt-0 ml-0.5 sm:ml-1">Leigja · Njóta · Skila</span>
-							</div>
+				<div className="flex h-20 sm:h-24 items-center justify-between">
+					<div className="flex items-center">
+						<Link href="/" className="flex items-center" aria-label="Tölvuleiga — forsíða">
+							<Image
+								src={logo}
+								alt="Tölvuleiga"
+								width={515}
+								height={311}
+								quality={100}
+								priority
+								sizes="(max-width: 640px) 180px, 240px"
+								className="h-14 w-auto sm:h-[4.5rem] object-contain"
+							/>
 						</Link>
 					</div>
 					<nav aria-label="Primary" className="hidden md:flex items-center gap-5">

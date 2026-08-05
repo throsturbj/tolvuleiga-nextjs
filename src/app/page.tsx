@@ -77,6 +77,17 @@ export default function Home() {
     images: string[];
   }
 
+  interface ScreenItem {
+    id: string;
+    framleidandi: string;
+    skjastaerd: string;
+    upplausn: string;
+    skjataekni: string;
+    endurnyjunartidni: string;
+    verd?: string | null;
+    imageUrl?: string | null;
+  }
+
   interface Review {
     id: string;
     content: string;
@@ -92,6 +103,8 @@ export default function Home() {
   const [consoles, setConsoles] = useState<GamingConsoleItem[]>([]);
   const [laptops, setLaptops] = useState<LaptopItem[]>([]);
   const [laptopsLoading, setLaptopsLoading] = useState<boolean>(true);
+  const [screens, setScreens] = useState<ScreenItem[]>([]);
+  const [screensLoading, setScreensLoading] = useState<boolean>(true);
   const [reviews, setReviews] = useState<Review[]>([]);
   const { loading: authLoading, session } = useAuth();
   const router = useRouter();
@@ -401,6 +414,84 @@ export default function Home() {
 
   useEffect(() => {
     let isMounted = true;
+    const fetchScreens = async () => {
+      try {
+        if (isMounted) setScreensLoading(true);
+        const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
+        debug('Home/Screens/start', { hasUser: !!session?.user });
+        let data: ScreenItem[] | null = null;
+        let lastError: unknown = null;
+        for (const client of clients) {
+          try {
+            const { data: d, error } = await client
+              .from("screens")
+              .select("id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni, verd")
+              .order("created_at", { ascending: false });
+            if (error) {
+              lastError = error;
+              debug('Home/Screens/error', { client: client === supabase ? 'authed' : 'anon', error });
+              continue;
+            }
+            const arr = (d as ScreenItem[]) || [];
+            data = arr;
+            debug('Home/Screens/result', { client: client === supabase ? 'authed' : 'anon', count: arr.length });
+            if (arr.length > 0) break;
+          } catch (e) {
+            lastError = e;
+            debug('Home/Screens/exception', { error: e });
+          }
+        }
+        if (!isMounted) return;
+        if (!data) {
+          console.error('Home: Error fetching screens', lastError);
+          setScreens([]);
+          setScreensLoading(false);
+          return;
+        }
+        if (data.length === 0) {
+          setScreens([]);
+          setScreensLoading(false);
+          return;
+        }
+        try {
+          const ids = data.map((s) => s.id);
+          const res = await fetch("/api/images/first-generic", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bucket: "screens", folders: ids }),
+          });
+          if (res.ok) {
+            const j = await res.json();
+            const map: Record<string, { path: string; signedUrl: string } | null> = j?.results || {};
+            const merged = data.map((s) => ({
+              ...s,
+              imageUrl: map[s.id]?.signedUrl || null,
+            }));
+            setScreens(merged);
+            debug('Home/Screens/set', { count: merged.length, withImages: true });
+          } else {
+            setScreens(data);
+            debug('Home/Screens/set', { count: data.length, withImages: false, reason: 'images api !ok' });
+          }
+        } catch {
+          setScreens(data);
+          debug('Home/Screens/set', { count: data.length, withImages: false, reason: 'images api error' });
+        }
+        if (isMounted) setScreensLoading(false);
+      } catch (e) {
+        if (isMounted) {
+          console.error('Home: Unexpected error fetching screens', e);
+          setScreens([]);
+          setScreensLoading(false);
+        }
+      }
+    };
+    fetchScreens();
+    return () => { isMounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
     const fetchReviews = async () => {
       try {
         // Public reads should work via anon due to RLS policy
@@ -457,7 +548,7 @@ export default function Home() {
     <div className="min-h-screen">
       {process.env.NEXT_PUBLIC_DEBUG === 'true' ? (
         <div className="fixed bottom-2 right-2 z-50 text-[10px] bg-black/70 text-white px-2 py-1 rounded">
-          <span>debug: items={items.length} consoles={consoles.length}</span>
+          <span>debug: items={items.length} consoles={consoles.length} screens={screens.length}</span>
         </div>
       ) : null}
       {/* Hero Section */}
@@ -757,6 +848,96 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Screens Section */}
+      <section id="screens" className="relative overflow-hidden bg-gradient-to-br from-[#0c1216] via-[#101820] to-[#0e1a1c] py-20">
+        <div className="pointer-events-none absolute -top-32 -right-24 h-80 w-80 rounded-full bg-teal-500/20 blur-[120px]" />
+        <div className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-sky-600/15 blur-[120px]" />
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+              Skjáir
+            </h2>
+            <p className="mt-4 text-lg text-white/70 max-w-2xl mx-auto">
+              Flottir skjáir fyrir auka vinnu.
+            </p>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {screensLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={`scr-sk-${i}`} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+                  <div className="aspect-[4/3] w-full bg-white/10 animate-pulse" />
+                  <div className="p-6 space-y-2">
+                    <div className="h-6 w-3/5 bg-white/10 rounded animate-pulse" />
+                    <div className="h-4 w-4/5 bg-white/5 rounded animate-pulse" />
+                    <div className="h-5 w-2/5 bg-white/10 rounded animate-pulse mt-2" />
+                  </div>
+                </div>
+              ))
+            ) : screens.length === 0 ? (
+              <div className="col-span-full text-center text-white/60">
+                Skjáir væntanlegir fljótlega.
+              </div>
+            ) : (
+              screens.map((s) => (
+                <div
+                  key={s.id}
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => router.push(`/productscreen/${s.id}`)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/productscreen/${s.id}`); }}
+                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-teal-400/50 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_rgba(45,212,191,0.45)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400"
+                >
+                  <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-px bg-gradient-to-r from-transparent via-teal-400/70 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-black/30">
+                    {s.imageUrl ? (
+                      <img
+                        src={s.imageUrl}
+                        alt={`${s.framleidandi} ${s.skjastaerd}`}
+                        className="absolute inset-0 h-full w-full object-contain transition-transform duration-300 ease-out group-hover:scale-[1.02]"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-white/25">
+                        <svg className="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25A1.5 1.5 0 015.25 3.75h13.5a1.5 1.5 0 011.5 1.5v10.5a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V5.25z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 20.25h7.5M12 17.25v3" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-6">
+                    <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white via-white to-teal-300 bg-clip-text text-transparent transition-all duration-300 group-hover:from-teal-300 group-hover:to-white">
+                      {s.framleidandi} {s.skjastaerd}
+                    </h3>
+                    <p className="mt-1 text-sm text-white/60">
+                      {[s.upplausn, s.skjataekni, s.endurnyjunartidni].filter(Boolean).join(' · ')}
+                    </p>
+                    {s.verd ? (
+                      <p className="mt-2 text-lg font-bold text-teal-300/90">
+                        {(() => {
+                          const digits = (s.verd || '').toString().replace(/\D+/g, '');
+                          const num = parseInt(digits, 10) || 0;
+                          const formatted = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                          return `${formatted} kr/mánuði`;
+                        })()}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); router.push(`/productscreen/${s.id}`); }}
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_-8px_rgba(13,148,136,0.7)] hover:bg-teal-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400"
+                    >
+                      Sjá nánar
+                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M7.22 4.47a.75.75 0 011.06 0l4 4c.3.3.3.77 0 1.06l-4 4a.75.75 0 11-1.06-1.06L10.69 10 7.22 6.53a.75.75 0 010-1.06z" /></svg>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>

@@ -44,6 +44,8 @@ interface ScreenRow {
   skjataekni: string;
   endurnyjunartidni: string;
   verd?: string;
+  repeat_url?: string | null;
+  repeat_url_trygging?: string | null;
   gamingPC_id: number;
   falid?: boolean | null;
   uppselt?: boolean | null;
@@ -132,6 +134,8 @@ export default function VorurAdminPage() {
     skjataekni: "",
     endurnyjunartidni: "",
     verd: "",
+    repeat_url: "",
+    repeat_url_trygging: "",
     gamingPC_id: 0,
   });
   const [screenEditForm, setScreenEditForm] = useState<NewScreenRow | null>(null);
@@ -1396,6 +1400,8 @@ export default function VorurAdminPage() {
         skjataekni: screenForm.skjataekni,
         endurnyjunartidni: screenForm.endurnyjunartidni,
         verd: screenForm.verd || "",
+        repeat_url: (screenForm.repeat_url || "").trim() || null,
+        repeat_url_trygging: (screenForm.repeat_url_trygging || "").trim() || null,
       };
       const { data, error } = await supabase.from("screens").insert([insertPayload]).select("*").single();
       if (error) {
@@ -1421,6 +1427,8 @@ export default function VorurAdminPage() {
           skjataekni: "",
           endurnyjunartidni: "",
           verd: "",
+          repeat_url: "",
+          repeat_url_trygging: "",
           gamingPC_id: 0,
         });
         setScreenFormPcIds([]);
@@ -1519,6 +1527,8 @@ export default function VorurAdminPage() {
       skjataekni: row.skjataekni,
       endurnyjunartidni: row.endurnyjunartidni,
       verd: row.verd || "",
+      repeat_url: row.repeat_url || "",
+      repeat_url_trygging: row.repeat_url_trygging || "",
       gamingPC_id: row.gamingPC_id,
     });
     const selected = screenIdToPcIds[row.id] || [];
@@ -1582,6 +1592,8 @@ export default function VorurAdminPage() {
         skjataekni: screenEditForm.skjataekni,
         endurnyjunartidni: screenEditForm.endurnyjunartidni,
         verd: screenEditForm.verd || "",
+        repeat_url: (screenEditForm.repeat_url || "").trim() || null,
+        repeat_url_trygging: (screenEditForm.repeat_url_trygging || "").trim() || null,
       };
       const { data, error } = await supabase
         .from("screens")
@@ -2498,6 +2510,8 @@ export default function VorurAdminPage() {
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Skjátækni</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Endurnýjunartíðni</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-16">Verð</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-28">URL</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-28">URL Trygging</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">GamingPC</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-20">Consoles</th>
                   <th className="text-left px-2 py-3 font-medium text-gray-600 w-70">Aðgerðir</th>
@@ -2522,6 +2536,12 @@ export default function VorurAdminPage() {
                   </td>
                   <td className="px-2 py-3 align-top">
                     <input value={screenForm.verd || ""} onChange={(e) => onChangeScreen("verd", e.target.value)} placeholder="Verð" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={screenForm.repeat_url || ""} onChange={(e) => onChangeScreen("repeat_url", e.target.value)} placeholder="https://…" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={screenForm.repeat_url_trygging || ""} onChange={(e) => onChangeScreen("repeat_url_trygging", e.target.value)} placeholder="https://…" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
                   </td>
                   <td className="px-2 py-3 align-top w-16">
                     <div className="relative inline-block">
@@ -2657,6 +2677,24 @@ export default function VorurAdminPage() {
                       <div className="truncate leading-6" title={r.verd || ""}>{r.verd || ""}</div>
                     </td>
                     <td className="px-2 py-3 align-top text-gray-800">
+                      {r.repeat_url ? (
+                        <a href={r.repeat_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all text-xs" title={r.repeat_url}>
+                          {r.repeat_url}
+                        </a>
+                      ) : (
+                        <div className="truncate leading-6 text-gray-400">—</div>
+                      )}
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      {r.repeat_url_trygging ? (
+                        <a href={r.repeat_url_trygging} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all text-xs" title={r.repeat_url_trygging}>
+                          {r.repeat_url_trygging}
+                        </a>
+                      ) : (
+                        <div className="truncate leading-6 text-gray-400">—</div>
+                      )}
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
                       <div className="truncate leading-6">
                         {(() => {
                           const ids = screenIdToPcIds[r.id] || [];
@@ -2718,7 +2756,7 @@ export default function VorurAdminPage() {
                 ))}
                 {!screensLoading && screens.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={11} className="px-4 py-10 text-center text-gray-500">
                       Engir skjáir fundust.
                     </td>
                   </tr>
@@ -3737,6 +3775,16 @@ export default function VorurAdminPage() {
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Verð</label>
                 <input value={screenEditForm.verd || ""} onChange={(e) => onChangeScreenEdit("verd", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">URL (repeat_url)</label>
+                  <input value={screenEditForm.repeat_url || ""} onChange={(e) => onChangeScreenEdit("repeat_url", e.target.value)} placeholder="https://…" className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">URL Trygging (repeat_url_trygging)</label>
+                  <input value={screenEditForm.repeat_url_trygging || ""} onChange={(e) => onChangeScreenEdit("repeat_url_trygging", e.target.value)} placeholder="https://…" className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

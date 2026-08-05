@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import type React from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 
@@ -15,7 +14,12 @@ interface ScreenRow {
   skjataekni: string;
   endurnyjunartidni: string;
   verd?: string | null;
+  repeat_url?: string | null;
+  repeat_url_trygging?: string | null;
 }
+
+const formatKr = (n: number) =>
+  n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
 export default function ProductScreenDetailPage() {
   const params = useParams();
@@ -28,8 +32,9 @@ export default function ProductScreenDetailPage() {
   const [imagesLoading, setImagesLoading] = useState<boolean>(false);
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
   const [zoomImageSrc, setZoomImageSrc] = useState<string | null>(null);
-  const [insured, setInsured] = useState<boolean>(false);
-  const [animatingInsurance, setAnimatingInsurance] = useState<boolean>(false);
+  const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
+  const [ordering, setOrdering] = useState<boolean>(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -42,7 +47,7 @@ export default function ProductScreenDetailPage() {
       try {
         const { data, error } = await supabase
           .from("screens")
-          .select("id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni, verd")
+          .select("id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni, verd, repeat_url, repeat_url_trygging")
           .eq("id", screenId)
           .single();
         if (!isMounted) return;
@@ -91,43 +96,53 @@ export default function ProductScreenDetailPage() {
     return () => { alive = false; };
   }, [screenId]);
 
-  const durations = [1, 3, 6, 12] as const;
-  const [durationIndex, setDurationIndex] = useState<number>(0);
-  const sliderProgress = (durationIndex / (durations.length - 1)) * 100;
-  type ProgressStyle = React.CSSProperties & { ['--progress']?: string };
-  const progressStyle: ProgressStyle = { '--progress': `${sliderProgress}%` };
-
   const basePrice = (() => {
-    const digits = (item?.verd || '').toString().replace(/\D+/g, '');
+    const digits = (item?.verd || "").toString().replace(/\D+/g, "");
     const n = parseInt(digits, 10);
     return Number.isFinite(n) ? n : 0;
   })();
-  const discountRates = [0, 0.04, 0.08, 0.12] as const;
-  const discountRate = discountRates[durationIndex] ?? 0;
-  const discountedPriceRaw = Math.max(0, Math.round(basePrice * (1 - discountRate)));
-  const insuranceMultiplier = insured ? 1.1 : 1;
-  const finalPriceRaw = Math.round(discountedPriceRaw * insuranceMultiplier);
-  const finalPrice = Math.ceil(finalPriceRaw / 10) * 10;
-  const formattedPrice = `${finalPrice.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr`;
+  const finalPrice = Math.ceil(basePrice / 10) * 10;
+  const formattedPrice = `${formatKr(finalPrice)} kr`;
+  const checkoutUrl = item?.repeat_url?.trim() || null;
 
-  const handleOrderClick = () => {
+  const title = item ? `${item.framleidandi} ${item.skjastaerd}` : "";
+  const specBullets = item
+    ? [
+        item.skjastaerd ? `Skjástærð: ${item.skjastaerd}` : null,
+        item.upplausn ? `Upplausn: ${item.upplausn}` : null,
+        item.skjataekni ? `Skjátegund: ${item.skjataekni}` : null,
+        item.endurnyjunartidni ? `Endurnýjunartíðni: ${item.endurnyjunartidni}` : null,
+        item.framleidandi ? `Framleiðandi: ${item.framleidandi}` : null,
+      ].filter((x): x is string => Boolean(x))
+    : [];
+
+  // Only hand off to Repeat — the order is created by the webhook after payment succeeds.
+  const handlePanta = () => {
+    if (ordering || !termsAccepted) return;
+    if (!checkoutUrl) return;
+
+    if (!session?.user) {
+      router.push(`/auth?redirect=/productscreen/${screenId}`);
+      return;
+    }
+
+    setOrderError(null);
+    setOrdering(true);
     try {
-      if (typeof window !== 'undefined') {
-        const selection = {
-          productId: screenId,
-          months: durations[durationIndex],
-          insured,
-          finalPrice,
-        };
-        window.sessionStorage.setItem('orderSelection', JSON.stringify(selection));
-      }
-    } catch {}
-    if (session?.user) {
-      router.push(`/orderscreen/${screenId}`);
-    } else {
-      router.push(`/auth?redirect=/orderscreen/${screenId}`);
+      window.location.href = checkoutUrl;
+    } catch {
+      setOrderError("Ekki tókst að opna greiðslusíðu. Reyndu aftur.");
+      setOrdering(false);
     }
   };
+
+  const actionBtnBase =
+    "relative overflow-hidden rounded-xl border px-1.5 sm:px-3 py-2.5 sm:py-3 text-[11px] sm:text-sm font-semibold transition-all duration-300 ease-out cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed min-w-0";
+  const actionBtnInner =
+    "relative z-10 inline-flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 min-w-0";
+
+  const pantaReady = termsAccepted && !!checkoutUrl;
+  const orderDisabled = !pantaReady || ordering;
 
   if (loading) {
     return (
@@ -159,190 +174,216 @@ export default function ProductScreenDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-3">
-      <div className={
-        `relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 rounded-lg border bg-white overflow-hidden ` +
-        (insured ? 'border-green-500' : 'border-transparent')
-      }>
-        {animatingInsurance ? (
-          <>
-            <svg className="pointer-events-none absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <rect x="0.5" y="0.5" width="99" height="99" rx="2" ry="2" fill="none" stroke="rgb(34,197,94)" strokeWidth="1" vectorEffect="non-scaling-stroke" pathLength="100" className="draw-border" />
-            </svg>
-            <div className="pointer-events-none absolute inset-0 bg-green-500/10 animate-flash" aria-hidden="true" />
-          </>
-        ) : null}
-        <div className="grid gap-8 md:grid-cols-2 items-start">
-          {/* Left: Images */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="relative aspect-[4/3] bg-gray-100 flex items-center justify-center">
-              {imagesLoading ? (
-                <div className="text-gray-400 text-sm">Hleð myndum…</div>
-              ) : images.length > 0 ? (
-                <>
-                  <img
-                    key={images[activeImageIndex]?.path}
-                    src={images[activeImageIndex]?.signedUrl}
-                    alt={`${item.framleidandi} ${item.skjastaerd}`}
-                    className="max-h-full max-w-full object-contain"
-                    loading="eager"
-                  />
-                  {images.length > 1 ? (
+    <div className="relative min-h-screen overflow-x-clip bg-gray-50 py-6 sm:py-10">
+      <div className="relative mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+        <button
+          type="button"
+          onClick={() => router.push("/#screens")}
+          className="mb-4 sm:mb-6 inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors cursor-pointer"
+        >
+          <svg className="h-4 w-4 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M12.78 15.53a.75.75 0 01-1.06 0l-5-5a.75.75 0 010-1.06l5-5a.75.75 0 111.06 1.06L8.31 10l4.47 4.47a.75.75 0 010 1.06z" /></svg>
+          Allar vörur
+        </button>
+
+        <div className="grid gap-5 sm:gap-8 md:grid-cols-2 items-start">
+          <div className="contents md:flex md:flex-col md:gap-4">
+            {/* Left: Product Images */}
+            <div className="order-1 min-w-0 space-y-3 sm:space-y-4 md:order-none">
+              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                <div className="relative aspect-[4/3] bg-gray-100 flex items-center justify-center p-2 sm:p-0">
+                  {imagesLoading ? (
+                    <div className="text-gray-400 text-sm">Hleð myndum…</div>
+                  ) : images.length > 0 ? (
                     <>
                       <button
                         type="button"
-                        onClick={() => setActiveImageIndex((i) => (i - 1 + images.length) % images.length)}
-                        className="absolute left-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-gray-700 hover:bg-white shadow cursor-pointer"
-                        aria-label="Fyrri mynd"
-                        title="Fyrri mynd"
+                        onClick={() => {
+                          const src = images[activeImageIndex]?.signedUrl;
+                          if (src) setZoomImageSrc(src);
+                        }}
+                        className="h-full w-full flex items-center justify-center cursor-zoom-in"
+                        aria-label="Stækka mynd"
                       >
-                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M12.78 15.53a.75.75 0 01-1.06 0l-4-4a.75.75 0 010-1.06l4-4a.75.75 0 111.06 1.06L9.31 10l3.47 3.47a.75.75 0 010 1.06z"/></svg>
+                        <img
+                          key={images[activeImageIndex]?.path}
+                          src={images[activeImageIndex]?.signedUrl}
+                          alt={title}
+                          className="max-h-full max-w-full object-contain"
+                          loading="eager"
+                        />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveImageIndex((i) => (i + 1) % images.length)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-gray-700 hover:bg-white shadow cursor-pointer"
-                        aria-label="Næsta mynd"
-                        title="Næsta mynd"
-                      >
-                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M7.22 4.47a.75.75 0 011.06 0l4 4c.3.3.3.77 0 1.06l-4 4a.75.75 0 11-1.06-1.06L10.69 10 7.22 6.53a.75.75 0 010-1.06z"/></svg>
-                      </button>
+                      {images.length > 1 ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setActiveImageIndex((i) => (i - 1 + images.length) % images.length)}
+                            className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-white/90 text-gray-700 hover:bg-white shadow cursor-pointer"
+                            aria-label="Fyrri mynd"
+                            title="Fyrri mynd"
+                          >
+                            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M12.78 15.53a.75.75 0 01-1.06 0l-4-4a.75.75 0 010-1.06l4-4a.75.75 0 111.06 1.06L9.31 10l3.47 3.47a.75.75 0 010 1.06z"/></svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActiveImageIndex((i) => (i + 1) % images.length)}
+                            className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-white/90 text-gray-700 hover:bg-white shadow cursor-pointer"
+                            aria-label="Næsta mynd"
+                            title="Næsta mynd"
+                          >
+                            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M7.22 4.47a.75.75 0 011.06 0l4 4c.3.3.3.77 0 1.06l-4 4a.75.75 0 11-1.06-1.06L10.69 10 7.22 6.53a.75.75 0 010-1.06z"/></svg>
+                          </button>
+                        </>
+                      ) : null}
                     </>
-                  ) : null}
-                </>
-              ) : (
-                <div className="text-gray-400 text-sm">Engar myndir til</div>
-              )}
-            </div>
-            {images.length > 1 ? (
-              <div className="p-3 border-t border-gray-100">
-                <div className="flex gap-2 overflow-x-auto">
-                  {images.map((img, idx) => (
-                    <button
-                      key={img.path}
-                      type="button"
-                      onClick={() => setActiveImageIndex(idx)}
-                      className={`relative flex-shrink-0 h-16 w-20 rounded border ${activeImageIndex === idx ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/30' : 'border-gray-200 hover:border-gray-300'} bg-gray-100 overflow-hidden cursor-pointer`}
-                      title={img.name}
-                    >
-                      <img src={img.signedUrl} alt="" className="h-full w-full object-contain" loading="lazy" />
-                      <span className="absolute top-0.5 left-0.5 text-[10px] px-1 py-0.5 rounded bg-black/50 text-white">{idx + 1}</span>
-                    </button>
-                  ))}
+                  ) : (
+                    <div className="text-gray-400 text-sm">Engar myndir til</div>
+                  )}
                 </div>
+                {images.length > 1 ? (
+                  <div className="p-2 sm:p-3 border-t border-gray-200">
+                    <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      {images.map((img, idx) => (
+                        <button
+                          key={img.path}
+                          type="button"
+                          onClick={() => setActiveImageIndex(idx)}
+                          className={`relative flex-shrink-0 h-14 w-16 sm:h-16 sm:w-20 rounded-lg border ${activeImageIndex === idx ? "border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/30" : "border-gray-200 hover:border-gray-300"} bg-white overflow-hidden cursor-pointer`}
+                          title={img.name}
+                        >
+                          <img src={img.signedUrl} alt="" className="h-full w-full object-contain" loading="lazy" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
+
+            {/* Actions — bottom on phone; under gallery on desktop */}
+            <div className="order-3 min-w-0 space-y-3 sm:space-y-4 md:order-none">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTermsAccepted((prev) => !prev)}
+                  aria-pressed={termsAccepted}
+                  className={`${actionBtnBase} ${
+                    termsAccepted
+                      ? "border-sky-500/50 text-white shadow-[0_0_28px_-10px_rgba(56,189,248,0.55)]"
+                      : "border-sky-500/45 text-sky-700 hover:border-sky-500/70 hover:bg-sky-50"
+                  } focus-visible:outline-sky-500`}
+                >
+                  <span
+                    aria-hidden
+                    className={`pointer-events-none absolute inset-0 origin-center bg-gradient-to-br from-sky-500 to-sky-700 transition-all duration-500 ease-out ${
+                      termsAccepted ? "scale-100 opacity-100" : "scale-75 opacity-0"
+                    }`}
+                  />
+                  <span className={actionBtnInner}>
+                    <svg
+                      className={`h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 transition-transform duration-500 ${termsAccepted ? "scale-110 text-white" : "scale-100"}`}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      aria-hidden
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6M8 4h8l1 2h3v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6h3l1-2z" />
+                      {termsAccepted ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12.5l1.6 1.6L15 10" />
+                      ) : null}
+                    </svg>
+                    <span className={`leading-tight text-center ${termsAccepted ? "text-white" : ""}`}>
+                      <span className="sm:hidden flex flex-col items-center">
+                        <span>Samþykkja</span>
+                        <span className="text-[10px] font-medium tracking-tight opacity-90">Skilmála</span>
+                      </span>
+                      <span className="hidden sm:inline">Samþykkja Skilmála</span>
+                    </span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePanta}
+                  disabled={orderDisabled}
+                  className={`${actionBtnBase} ${
+                    pantaReady
+                      ? "border-[var(--color-accent)]/60 text-white shadow-[0_0_28px_-8px_var(--color-accent)]"
+                      : "border-[var(--color-accent)]/45 text-[var(--color-accent)]/85"
+                  } focus-visible:outline-[var(--color-accent)] disabled:opacity-45`}
+                >
+                  <span
+                    aria-hidden
+                    className={`pointer-events-none absolute inset-0 origin-center bg-[var(--color-accent)] transition-all duration-500 ease-out delay-75 ${
+                      pantaReady ? "scale-100 opacity-100" : "scale-75 opacity-0"
+                    }`}
+                  />
+                  <span className={actionBtnInner}>
+                    <svg
+                      className={`h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 transition-transform duration-500 ${pantaReady ? "scale-110 text-white" : "scale-100"}`}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      aria-hidden
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 7h17l-1.2 11.2a2 2 0 01-2 1.8H6.7a2 2 0 01-2-1.8L3.5 7z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V5.5A2.5 2.5 0 0110.5 3h3A2.5 2.5 0 0116 5.5V7" />
+                    </svg>
+                    <span className={pantaReady ? "text-white" : undefined}>
+                      {ordering ? "Andartak…" : "Panta"}
+                    </span>
+                  </span>
+                </button>
+              </div>
+
+              {!termsAccepted ? (
+                <p className="text-center text-xs text-gray-500">
+                  Samþykktu{" "}
+                  <Link href="/legal" target="_blank" rel="noopener noreferrer" className="text-gray-700 underline underline-offset-2 hover:text-gray-900">
+                    skilmála
+                  </Link>{" "}
+                  til að panta
+                </p>
+              ) : !checkoutUrl ? (
+                <p className="text-center text-xs text-amber-700">
+                  Greiðsluhlekk vantar fyrir þessa vöru
+                </p>
+              ) : null}
+              {orderError ? (
+                <p className="text-center text-sm text-red-600 break-words">{orderError}</p>
+              ) : null}
+            </div>
           </div>
 
           {/* Right: Details */}
-          <div className="bg-white rounded-lg shadow-sm p-6 space-y-6">
-            <div>
-              <div className="flex items-baseline justify-between gap-4">
-                <h1 className="text-2xl font-semibold text-gray-900">{item.framleidandi}</h1>
-                <p className="text-xl font-semibold text-[var(--color-secondary)]">{formattedPrice}/mánuði</p>
+          <div className="order-2 min-w-0 space-y-3 sm:space-y-4 md:order-none">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-gray-900 break-words">
+                  {title}
+                </h1>
+                <p className="mt-2 sm:mt-3 text-xl sm:text-2xl font-extrabold break-words text-[var(--color-secondary)]">
+                  {formattedPrice}/mánuði
+                </p>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="rounded-md border border-gray-200 p-3">
-                <p className="text-gray-500">Upplausn</p>
-                <p className="mt-1 font-medium text-gray-900">{item.upplausn}</p>
-              </div>
-              <div className="rounded-md border border-gray-200 p-3">
-                <p className="text-gray-500">Skjátegund</p>
-                <p className="mt-1 font-medium text-gray-900">{item.skjataekni}</p>
-              </div>
-              <div className="rounded-md border border-gray-200 p-3">
-                <p className="text-gray-500">Endurnýjunartíðni</p>
-                <p className="mt-1 font-medium text-gray-900">{item.endurnyjunartidni}</p>
-              </div>
-              <div className="rounded-md border border-gray-200 p-3">
-                <p className="text-gray-500">Skjástærð</p>
-                <p className="mt-1 font-medium text-gray-900">{item.skjastaerd}</p>
-              </div>
-            </div>
 
-            {/* Duration slider */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-700 font-medium">Leigutímabil</p>
-                <p className="text-sm text-gray-500">{durations[durationIndex]} mánuðir</p>
-              </div>
-              <div className="w-full max-w-xs sm:max-w-sm mx-auto">
-                <input
-                  type="range"
-                  min={0}
-                  max={3}
-                  step={1}
-                  value={durationIndex}
-                  onChange={(e) => setDurationIndex(parseInt(e.target.value))}
-                  className="range-compact cursor-pointer"
-                  style={progressStyle}
-                  aria-label="Veldu leigutímabil"
-                />
-              </div>
-              <div className="mt-1 w-full max-w-xs sm:max-w-sm mx-auto flex justify-between text-[11px] text-gray-500">
-                {durations.map((m, idx) => (
-                  <span key={m} className={idx === durationIndex ? 'text-[var(--color-accent)] font-medium' : ''}>{m}m</span>
-                ))}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <button
-                onClick={() => {
-                  if (animatingInsurance) return;
-                  if (insured) {
-                    setInsured(false);
-                    return;
-                  }
-                  setInsured(true);
-                  setAnimatingInsurance(true);
-                  window.setTimeout(() => {
-                    setAnimatingInsurance(false);
-                  }, 1000);
-                }}
-                disabled={animatingInsurance}
-                aria-pressed={insured}
-                className={
-                  `flex-1 rounded-md px-4 py-2 text-sm font-medium text-white ` +
-                  (animatingInsurance
-                    ? 'bg-green-600/70 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 cursor-pointer')
-                }
-              >
-                {insured ? 'Enga Tryggingu' : 'Kaupa Tryggingu'}
-              </button>
-              <button
-                onClick={handleOrderClick}
-                className="flex-1 rounded-md px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] cursor-pointer"
-              >
-                Leigja núna
-              </button>
-              <button
-                onClick={() => {
-                  router.push('/');
-                  setTimeout(() => {
-                    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
-                  }, 400);
-                }}
-                className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-center cursor-pointer"
-              >
-                Sjá allar vörur
-              </button>
+              {specBullets.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {specBullets.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2 text-sm leading-relaxed text-gray-600 min-w-0">
+                      <svg className="mt-1.5 h-1 w-1 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true">
+                        <circle cx="4" cy="4" r="4" />
+                      </svg>
+                      <span className="min-w-0 break-words">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
-
-      {/* Insured label */}
-      {insured ? (
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 mt-2 mb-2 text-center">
-          <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-green-500/30">
-            Vara tryggð
-          </span>
-        </div>
-      ) : null}
 
       {/* Image lightbox overlay */}
       {zoomImageSrc ? (
@@ -370,33 +411,6 @@ export default function ProductScreenDetailPage() {
           </div>
         </div>
       ) : null}
-
-      {/* Styles for insurance animations */}
-      <style jsx>{`
-        @keyframes draw {
-          to { stroke-dashoffset: 0; }
-        }
-        .draw-border {
-          stroke-linejoin: round;
-          stroke-dasharray: 100;
-          stroke-dashoffset: 100;
-          animation: draw 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-        }
-        @keyframes flash {
-          0% { opacity: 0; }
-          15% { opacity: 1; }
-          85% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        .animate-flash {
-          animation: flash 1s ease-out both;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .draw-border { animation-duration: 0.001ms; animation-iteration-count: 1; }
-          .animate-flash { animation-duration: 0.001ms; animation-iteration-count: 1; }
-        }
-      `}</style>
     </div>
   );
 }
-

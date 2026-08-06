@@ -75,6 +75,7 @@ export default function Home() {
     id: string;
     name: string;
     images: string[];
+    fromPrice?: number | null;
   }
 
   interface ScreenItem {
@@ -375,9 +376,38 @@ export default function Home() {
           setLaptopsLoading(false);
           return;
         }
-        // 2) For each laptop, list images under laptopimages/<id>/ and cycle through them
+        // 2) Lowest variant price per laptop
+        const priceByLaptop: Record<string, number> = {};
+        try {
+          const ids = visible.map((l) => l.id);
+          for (const client of clients) {
+            try {
+              const { data: variants, error } = await client
+                .from("laptop_variants")
+                .select("laptop_id, price")
+                .in("laptop_id", ids);
+              if (error) {
+                debug('Home/Laptops/variants/error', { error });
+                continue;
+              }
+              for (const v of (variants || []) as { laptop_id: string; price: number | string | null }[]) {
+                const n = typeof v.price === "number" ? v.price : parseFloat(String(v.price ?? "").replace(/[^\d.]/g, ""));
+                if (!Number.isFinite(n)) continue;
+                const prev = priceByLaptop[v.laptop_id];
+                if (prev === undefined || n < prev) priceByLaptop[v.laptop_id] = n;
+              }
+              break;
+            } catch (e) {
+              debug('Home/Laptops/variants/exception', { error: e });
+            }
+          }
+        } catch {
+          // ignore — cards can still render without prices
+        }
+        // 3) For each laptop, list images under laptopimages/<id>/ and cycle through them
         const merged: LaptopItem[] = await Promise.all(
           visible.map(async (l) => {
+            const fromPrice = priceByLaptop[l.id] ?? null;
             try {
               const res = await fetch("/api/images/list-generic", {
                 method: "POST",
@@ -387,18 +417,18 @@ export default function Home() {
               if (res.ok) {
                 const j = await res.json();
                 const files: { signedUrl: string }[] = j?.files || [];
-                return { id: l.id, name: l.name, images: files.map((f) => f.signedUrl).filter(Boolean) };
+                return { id: l.id, name: l.name, images: files.map((f) => f.signedUrl).filter(Boolean), fromPrice };
               }
             } catch {
               // ignore
             }
-            return { id: l.id, name: l.name, images: [] as string[] };
+            return { id: l.id, name: l.name, images: [] as string[], fromPrice };
           })
         );
         if (isMounted) {
           setLaptops(merged);
           setLaptopsLoading(false);
-          debug('Home/Laptops/set', { count: merged.length });
+          debug('Home/Laptops/set', { count: merged.length, withPrices: Object.keys(priceByLaptop).length });
         }
       } catch (e) {
         if (isMounted) {
@@ -523,6 +553,55 @@ export default function Home() {
     return () => { isMounted = false; };
   }, []);
 
+  const isIpad = (name: string) => name.trim().toLowerCase().startsWith("ipad");
+  const isMacbook = (name: string) => name.trim().toLowerCase().startsWith("macbook");
+  const byLowestPrice = (a: LaptopItem, b: LaptopItem) => {
+    if (a.fromPrice == null && b.fromPrice == null) return 0;
+    if (a.fromPrice == null) return 1;
+    if (b.fromPrice == null) return -1;
+    return a.fromPrice - b.fromPrice;
+  };
+  const appleLaptops = laptops.filter((l) => isMacbook(l.name)).sort(byLowestPrice);
+  const ipads = laptops.filter((l) => isIpad(l.name)).sort(byLowestPrice);
+  const windowsLaptops = laptops.filter((l) => !isIpad(l.name) && !isMacbook(l.name)).sort(byLowestPrice);
+
+  /** Same track width as a 3-up Gaming PC card; center leftover items */
+  const cardGridClass = "flex flex-wrap justify-center gap-6";
+  const cardColClass = "w-full sm:w-[calc(50%-0.75rem)] lg:w-[calc((100%-3rem)/3)]";
+
+  const renderLaptopCard = (l: LaptopItem) => (
+    <div
+      key={l.id}
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(`/laptop/${l.id}`)}
+      onKeyDown={(e) => { if (e.key === "Enter") router.push(`/laptop/${l.id}`); }}
+      className={`${cardColClass} group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 backdrop-blur transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-[var(--color-accent)]/60 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_var(--color-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]`}
+    >
+      <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-px bg-gradient-to-r from-transparent via-[var(--color-accent)]/70 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div className="relative aspect-video w-full overflow-hidden bg-black/30">
+        <LaptopImageCarousel images={l.images} alt={l.name} />
+      </div>
+      <div className="p-6">
+        <h3 className="text-lg font-semibold text-white">
+          {l.name}
+        </h3>
+        {l.fromPrice != null ? (
+          <p className="mt-2 text-xl font-bold text-[var(--color-accent)]">
+            {`Frá ${Math.round(l.fromPrice).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} kr/mánuði`}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); router.push(`/laptop/${l.id}`); }}
+          className="mt-4 inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+        >
+          Sjá nánar
+        </button>
+      </div>
+    </div>
+  );
+
   const renderStars = (rating: number) => {
     const stars = [];
     const clamped = Math.max(0, Math.min(5, Number(rating) || 0));
@@ -575,7 +654,10 @@ export default function Home() {
             <div className="hero-fade-up hero-delay-2 mt-8">
               <button
                 onClick={() => {
-                  const el = document.getElementById("laptops");
+                  const el =
+                    document.getElementById("laptops") ||
+                    document.getElementById("ipads") ||
+                    document.getElementById("windows-laptops");
                   if (el && typeof el.scrollIntoView === "function") {
                     el.scrollIntoView({ behavior: "smooth", block: "start" });
                   } else {
@@ -626,67 +708,95 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Laptops Section */}
-      <section id="laptops" className="relative overflow-hidden bg-gradient-to-br from-[#0b0b12] via-[#11121c] to-[#1a0f1e] py-20">
-        {/* Poppy glow accents to make the new launch pop */}
-        <div className="pointer-events-none absolute -top-32 -left-24 h-80 w-80 rounded-full bg-[var(--color-accent)]/30 blur-[120px]" />
-        <div className="pointer-events-none absolute -bottom-32 -right-24 h-80 w-80 rounded-full bg-fuchsia-500/20 blur-[120px]" />
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-              Fartölvur og iPadar
-            </h2>
-            <p className="mt-4 text-lg text-white/70 max-w-2xl mx-auto">
-              Fartölvur og iPadar til leigu fullkomnar fyrir vinnu, leik og allt þar á milli.
-            </p>
+      {/* Apple Fartölvur (MacBook) */}
+      {(laptopsLoading || appleLaptops.length > 0) ? (
+        <section id="laptops" className="relative overflow-hidden bg-gradient-to-br from-[#0b0b12] via-[#11121c] to-[#1a0f1e] py-20">
+          <div className="pointer-events-none absolute -top-32 -left-24 h-80 w-80 rounded-full bg-[var(--color-accent)]/30 blur-[120px]" />
+          <div className="pointer-events-none absolute -bottom-32 -right-24 h-80 w-80 rounded-full bg-fuchsia-500/20 blur-[120px]" />
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+                Apple Fartölvur
+              </h2>
+            </div>
+            <div className={cardGridClass}>
+              {laptopsLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={`mac-sk-${i}`} className={`${cardColClass} rounded-lg border border-white/10 bg-white/5 overflow-hidden`}>
+                    <div className="aspect-video w-full bg-white/10 animate-pulse" />
+                    <div className="p-6 space-y-2">
+                      <div className="h-5 w-3/5 bg-white/10 rounded animate-pulse" />
+                      <div className="h-4 w-2/5 bg-white/5 rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                appleLaptops.map(renderLaptopCard)
+              )}
+            </div>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {laptopsLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={`lap-sk-${i}`} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-                  <div className="aspect-[4/3] w-full bg-white/10 animate-pulse" />
-                  <div className="p-6">
-                    <div className="h-6 w-3/5 bg-white/10 rounded animate-pulse" />
+        </section>
+      ) : null}
+
+      {/* iPad */}
+      {(laptopsLoading || ipads.length > 0) ? (
+        <section id="ipads" className="relative overflow-hidden bg-gradient-to-br from-[#0b0b12] via-[#11121c] to-[#1a0f1e] py-20">
+          <div className="pointer-events-none absolute -top-32 -right-24 h-80 w-80 rounded-full bg-[var(--color-accent)]/25 blur-[120px]" />
+          <div className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-fuchsia-500/15 blur-[120px]" />
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+                iPad
+              </h2>
+            </div>
+            <div className={cardGridClass}>
+              {laptopsLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={`ipad-sk-${i}`} className={`${cardColClass} rounded-lg border border-white/10 bg-white/5 overflow-hidden`}>
+                    <div className="aspect-video w-full bg-white/10 animate-pulse" />
+                    <div className="p-6 space-y-2">
+                      <div className="h-5 w-3/5 bg-white/10 rounded animate-pulse" />
+                      <div className="h-4 w-2/5 bg-white/5 rounded animate-pulse" />
+                    </div>
                   </div>
-                </div>
-              ))
-            ) : laptops.length === 0 ? (
-              <div className="col-span-full text-center text-white/60">
-                Fartölvur væntanlegar fljótlega.
-              </div>
-            ) : (
-              laptops.map((l) => (
-                <div
-                  key={l.id}
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => router.push(`/laptop/${l.id}`)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/laptop/${l.id}`); }}
-                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-[var(--color-accent)]/60 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_var(--color-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
-                >
-                  <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-px bg-gradient-to-r from-transparent via-[var(--color-accent)]/70 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-black/30">
-                    <LaptopImageCarousel images={l.images} alt={l.name} />
-                  </div>
-                  <div className="p-6">
-                    <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white via-white to-[var(--color-accent)] bg-clip-text text-transparent transition-all duration-300 group-hover:from-[var(--color-accent)] group-hover:to-white">
-                      {l.name}
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); router.push(`/laptop/${l.id}`); }}
-                      className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_-8px_var(--color-accent)] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
-                    >
-                      Sjá nánar
-                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M7.22 4.47a.75.75 0 011.06 0l4 4c.3.3.3.77 0 1.06l-4 4a.75.75 0 11-1.06-1.06L10.69 10 7.22 6.53a.75.75 0 010-1.06z" /></svg>
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
+                ))
+              ) : (
+                ipads.map(renderLaptopCard)
+              )}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
+
+      {/* Windows Fartölvur */}
+      {(laptopsLoading || windowsLaptops.length > 0) ? (
+        <section id="windows-laptops" className="relative overflow-hidden bg-gradient-to-br from-[#0b0b12] via-[#11121c] to-[#1a0f1e] py-20">
+          <div className="pointer-events-none absolute -top-32 -left-24 h-80 w-80 rounded-full bg-[var(--color-accent)]/20 blur-[120px]" />
+          <div className="pointer-events-none absolute -bottom-32 -right-24 h-80 w-80 rounded-full bg-sky-500/15 blur-[120px]" />
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+                Windows Fartölvur
+              </h2>
+            </div>
+            <div className={cardGridClass}>
+              {laptopsLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={`win-sk-${i}`} className={`${cardColClass} rounded-lg border border-white/10 bg-white/5 overflow-hidden`}>
+                    <div className="aspect-video w-full bg-white/10 animate-pulse" />
+                    <div className="p-6 space-y-2">
+                      <div className="h-5 w-3/5 bg-white/10 rounded animate-pulse" />
+                      <div className="h-4 w-2/5 bg-white/5 rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                windowsLaptops.map(renderLaptopCard)
+              )}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {/* Featured Properties Preview */}
       <section id="products" className="bg-gray-50 py-14">
@@ -695,14 +805,11 @@ export default function Home() {
             <h2 className="text-3xl font-bold tracking-tight text-gray-900">
               Borðtölvur
             </h2>
-            <p className="mt-4 text-lg text-gray-600">
-              Þær allra öflugustu tölvurnar.
-            </p>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={cardGridClass}>
             {itemsLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <div key={`sk-${i}`} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div key={`sk-${i}`} className={`${cardColClass} bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden`}>
                   <div className="relative aspect-video bg-gray-200 animate-pulse" />
                   <div className="p-6 space-y-2">
                     <div className="h-5 w-3/5 bg-gray-200 rounded animate-pulse" />
@@ -718,7 +825,7 @@ export default function Home() {
             {items.map((pc) => (
               <div
                 key={pc.id}
-                className="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer"
+                className={`${cardColClass} group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer`}
                 role="link"
                 tabIndex={0}
                 onClick={() => router.push(`/product/${pc.id}`)}
@@ -797,7 +904,7 @@ export default function Home() {
             {consoles.map((c) => (
               <div
                 key={c.id}
-                className="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer"
+                className={`${cardColClass} group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer`}
                 role="link"
                 tabIndex={0}
                 onClick={() => router.push(`/console/${c.id}`)}
@@ -861,24 +968,21 @@ export default function Home() {
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
               Skjáir
             </h2>
-            <p className="mt-4 text-lg text-white/70 max-w-2xl mx-auto">
-              Flottir skjáir fyrir auka vinnu.
-            </p>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={cardGridClass}>
             {screensLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <div key={`scr-sk-${i}`} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-                  <div className="aspect-[4/3] w-full bg-white/10 animate-pulse" />
+                <div key={`scr-sk-${i}`} className={`${cardColClass} rounded-lg border border-white/10 bg-white/5 overflow-hidden`}>
+                  <div className="aspect-video w-full bg-white/10 animate-pulse" />
                   <div className="p-6 space-y-2">
-                    <div className="h-6 w-3/5 bg-white/10 rounded animate-pulse" />
+                    <div className="h-5 w-3/5 bg-white/10 rounded animate-pulse" />
                     <div className="h-4 w-4/5 bg-white/5 rounded animate-pulse" />
                     <div className="h-5 w-2/5 bg-white/10 rounded animate-pulse mt-2" />
                   </div>
                 </div>
               ))
             ) : screens.length === 0 ? (
-              <div className="col-span-full text-center text-white/60">
+              <div className="w-full text-center text-white/60">
                 Skjáir væntanlegir fljótlega.
               </div>
             ) : (
@@ -889,10 +993,10 @@ export default function Home() {
                   tabIndex={0}
                   onClick={() => router.push(`/productscreen/${s.id}`)}
                   onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/productscreen/${s.id}`); }}
-                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-teal-400/50 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_rgba(45,212,191,0.45)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400"
+                  className={`${cardColClass} group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 backdrop-blur transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-teal-400/50 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_rgba(45,212,191,0.45)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400`}
                 >
                   <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-px bg-gradient-to-r from-transparent via-teal-400/70 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-black/30">
+                  <div className="relative aspect-video w-full overflow-hidden bg-black/30">
                     {s.imageUrl ? (
                       <img
                         src={s.imageUrl}
@@ -902,7 +1006,7 @@ export default function Home() {
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center text-white/25">
-                        <svg className="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <svg className="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25A1.5 1.5 0 015.25 3.75h13.5a1.5 1.5 0 011.5 1.5v10.5a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V5.25z" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 20.25h7.5M12 17.25v3" />
                         </svg>
@@ -910,14 +1014,14 @@ export default function Home() {
                     )}
                   </div>
                   <div className="p-6">
-                    <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white via-white to-teal-300 bg-clip-text text-transparent transition-all duration-300 group-hover:from-teal-300 group-hover:to-white">
+                    <h3 className="text-lg font-semibold text-white">
                       {s.framleidandi} {s.skjastaerd}
                     </h3>
                     <p className="mt-1 text-sm text-white/60">
                       {[s.upplausn, s.skjataekni, s.endurnyjunartidni].filter(Boolean).join(' · ')}
                     </p>
                     {s.verd ? (
-                      <p className="mt-2 text-lg font-bold text-teal-300/90">
+                      <p className="mt-2 text-xl font-bold text-teal-300/90">
                         {(() => {
                           const digits = (s.verd || '').toString().replace(/\D+/g, '');
                           const num = parseInt(digits, 10) || 0;
@@ -929,10 +1033,9 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); router.push(`/productscreen/${s.id}`); }}
-                      className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_-8px_rgba(13,148,136,0.7)] hover:bg-teal-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400"
+                      className="mt-4 inline-block rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400"
                     >
                       Sjá nánar
-                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M7.22 4.47a.75.75 0 011.06 0l4 4c.3.3.3.77 0 1.06l-4 4a.75.75 0 11-1.06-1.06L10.69 10 7.22 6.53a.75.75 0 010-1.06z" /></svg>
                     </button>
                   </div>
                 </div>

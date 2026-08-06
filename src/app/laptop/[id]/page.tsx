@@ -24,6 +24,15 @@ interface VariantRow {
   trygging: number | null;
   repeat_url: string | null;
   repeat_url_trygging: string | null;
+  repeat_url_penni?: string | null;
+  repeat_url_penni_trygging?: string | null;
+}
+
+interface AppleAccessory {
+  id: string;
+  nafn: string;
+  verd: number | string | null;
+  laptop_uuid: string | null;
 }
 
 interface ImageFile {
@@ -41,6 +50,12 @@ const formatStorage = (gb: number) =>
 const formatKr = (n: number) =>
   Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
+const parsePrice = (v: number | string | null | undefined) => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const n = parseFloat(String(v || "").replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+
 export default function LaptopDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -52,6 +67,8 @@ export default function LaptopDetailPage() {
 
   const [item, setItem] = useState<LaptopRow | null>(null);
   const [variants, setVariants] = useState<VariantRow[]>([]);
+  const [appleAccessories, setAppleAccessories] = useState<AppleAccessory[]>([]);
+  const [selectedAccessoryIds, setSelectedAccessoryIds] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [notFound, setNotFound] = useState<boolean>(false);
 
@@ -73,6 +90,7 @@ export default function LaptopDetailPage() {
       const clients = [supabasePublic, supabase];
       let laptop: LaptopRow | null = null;
       let variantRows: VariantRow[] = [];
+      let accessoryRows: AppleAccessory[] = [];
       for (const client of clients) {
         try {
           const { data, error } = await client
@@ -84,10 +102,16 @@ export default function LaptopDetailPage() {
             laptop = data as LaptopRow;
             const { data: vData } = await client
               .from("laptop_variants")
-              .select("id, laptop_id, storage_gb, price, trygging, repeat_url, repeat_url_trygging")
+              .select("id, laptop_id, storage_gb, price, trygging, repeat_url, repeat_url_trygging, repeat_url_penni, repeat_url_penni_trygging")
               .eq("laptop_id", laptopId)
               .order("price", { ascending: true });
             variantRows = (vData as VariantRow[]) || [];
+            const { data: aData } = await client
+              .from("appleaukahlutir")
+              .select("id, nafn, verd, laptop_uuid")
+              .eq("laptop_uuid", laptopId)
+              .order("nafn", { ascending: true });
+            accessoryRows = (aData as AppleAccessory[]) || [];
             break;
           }
         } catch {
@@ -103,6 +127,8 @@ export default function LaptopDetailPage() {
       }
       setItem(laptop);
       setVariants(variantRows);
+      setAppleAccessories(accessoryRows);
+      setSelectedAccessoryIds([]);
       setLoading(false);
     };
     fetchData();
@@ -154,45 +180,75 @@ export default function LaptopDetailPage() {
     return variants.find((v) => v.storage_gb === selectedStorage) || null;
   }, [variants, selectedStorage]);
 
+  const selectedAccessories = useMemo(
+    () => appleAccessories.filter((a) => selectedAccessoryIds.includes(a.id)),
+    [appleAccessories, selectedAccessoryIds]
+  );
+
+  const accessoryTotal = useMemo(
+    () => selectedAccessories.reduce((sum, a) => sum + parsePrice(a.verd), 0),
+    [selectedAccessories]
+  );
+
+  const accessoriesAdded = selectedAccessories.length > 0;
+
   useEffect(() => {
     setActiveImageIndex(0);
   }, [images.length]);
 
   useEffect(() => {
-    // Drop insurance if the new variant can't support it
+    // Drop insurance if the new variant can't support it for the current package
     if (!selectedVariant) {
       setWithInsurance(false);
       return;
     }
-    const canInsure =
-      selectedVariant.trygging != null &&
-      Number.isFinite(Number(selectedVariant.trygging)) &&
-      !!selectedVariant.repeat_url_trygging;
+    const penPackage = accessoriesAdded;
+    const canInsure = penPackage
+      ? selectedVariant.trygging != null &&
+        Number.isFinite(Number(selectedVariant.trygging)) &&
+        !!selectedVariant.repeat_url_penni_trygging?.trim()
+      : selectedVariant.trygging != null &&
+        Number.isFinite(Number(selectedVariant.trygging)) &&
+        !!selectedVariant.repeat_url_trygging;
     if (!canInsure) setWithInsurance(false);
-  }, [selectedVariant]);
+  }, [selectedVariant, accessoriesAdded]);
 
   const insuranceAvailable =
     !!selectedVariant &&
     selectedVariant.trygging != null &&
     Number.isFinite(Number(selectedVariant.trygging)) &&
-    !!selectedVariant.repeat_url_trygging;
+    !!(accessoriesAdded
+      ? selectedVariant.repeat_url_penni_trygging?.trim()
+      : selectedVariant.repeat_url_trygging);
 
   const displayPrice = useMemo(() => {
     if (!selectedVariant) return null;
     const base = Number(selectedVariant.price) || 0;
     const insurance = Number(selectedVariant.trygging) || 0;
-    return withInsurance ? base + insurance : base;
-  }, [selectedVariant, withInsurance]);
+    return (withInsurance ? base + insurance : base) + accessoryTotal;
+  }, [selectedVariant, withInsurance, accessoryTotal]);
 
   const checkoutUrl = useMemo(() => {
     if (!selectedVariant) return null;
+    if (accessoriesAdded) {
+      if (withInsurance) return selectedVariant.repeat_url_penni_trygging?.trim() || null;
+      return selectedVariant.repeat_url_penni?.trim() || null;
+    }
     if (withInsurance) return selectedVariant.repeat_url_trygging;
     return selectedVariant.repeat_url;
-  }, [selectedVariant, withInsurance]);
+  }, [selectedVariant, withInsurance, accessoriesAdded]);
 
   const toggleInsurance = () => {
     if (!insuranceAvailable) return;
     setWithInsurance((prev) => !prev);
+    setPricePulse(true);
+    window.setTimeout(() => setPricePulse(false), 420);
+  };
+
+  const toggleAccessory = (id: string) => {
+    setSelectedAccessoryIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
     setPricePulse(true);
     window.setTimeout(() => setPricePulse(false), 420);
   };
@@ -261,6 +317,12 @@ export default function LaptopDetailPage() {
     "relative z-10 inline-flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 min-w-0";
 
   const pantaReady = termsAccepted && !!checkoutUrl;
+  const nameLower = item.name.trim().toLowerCase();
+  const backHash = nameLower.startsWith("ipad")
+    ? "/#ipads"
+    : nameLower.startsWith("macbook")
+      ? "/#laptops"
+      : "/#windows-laptops";
 
   return (
     <div className="relative min-h-screen overflow-x-clip bg-gradient-to-br from-[#0b0b12] via-[#11121c] to-[#1a0f1e] py-6 sm:py-12">
@@ -269,7 +331,7 @@ export default function LaptopDetailPage() {
 
       <div className="relative mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
         <button
-          onClick={() => router.push("/#laptops")}
+          onClick={() => router.push(backHash)}
           className="mb-4 sm:mb-6 inline-flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors"
         >
           <svg className="h-4 w-4 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M12.78 15.53a.75.75 0 01-1.06 0l-5-5a.75.75 0 010-1.06l5-5a.75.75 0 111.06 1.06L8.31 10l4.47 4.47a.75.75 0 010 1.06z" /></svg>
@@ -469,9 +531,18 @@ export default function LaptopDetailPage() {
                 </Link>{" "}
                 til að panta
               </p>
+            ) : accessoriesAdded && !checkoutUrl ? (
+              <p className="text-center text-xs text-amber-300/90">
+                Greiðsluhlekk fyrir aukahlut vantar
+              </p>
             ) : withInsurance && selectedVariant?.trygging != null ? (
               <p className="text-center text-xs text-emerald-300/80">
                 Trygging virk · +{formatKr(Number(selectedVariant.trygging))} kr/mán
+                {accessoriesAdded ? " · aukahlutir innifaldir" : ""}
+              </p>
+            ) : accessoriesAdded ? (
+              <p className="text-center text-xs text-[var(--color-accent)]/90">
+                Apple aukahlutir bættir við pöntun
               </p>
             ) : null}
 
@@ -481,75 +552,140 @@ export default function LaptopDetailPage() {
           </div>
           </div>
 
-          <div className="order-2 min-w-0 rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 md:order-none">
-            <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight break-words bg-gradient-to-r from-white via-white to-[var(--color-accent)] bg-clip-text text-transparent">
-                {item.name}
-              </h1>
-              {displayPrice != null ? (
-                <div className="mt-2 sm:mt-3">
-                  <p
-                    key={`${displayPrice}-${withInsurance}`}
-                    className={`text-xl sm:text-2xl font-bold break-words transition-all duration-300 ${
-                      withInsurance ? "text-emerald-400" : "text-[var(--color-accent)]"
-                    } ${pricePulse ? "scale-[1.04]" : "scale-100"}`}
-                  >
-                    {formatMonthly(displayPrice)}
-                  </p>
-                  {withInsurance && selectedVariant ? (
-                    <p className="mt-1 text-xs text-white/45">
-                      {formatMonthly(Number(selectedVariant.price))} + {formatKr(Number(selectedVariant.trygging || 0))} kr trygging
-                    </p>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="mt-2 sm:mt-3 text-base sm:text-lg font-medium text-white/50">Verð kemur fljótlega</p>
-              )}
-            </div>
-
-            {item.description && item.description.split(",").map((s) => s.trim()).filter(Boolean).length > 0 ? (
-              <ul className="space-y-1.5">
-                {item.description.split(",").map((s) => s.trim()).filter(Boolean).map((feature, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm leading-relaxed text-white/60 min-w-0">
-                    <svg className="mt-1.5 h-1 w-1 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true">
-                      <circle cx="4" cy="4" r="4" />
-                    </svg>
-                    <span className="min-w-0 break-words">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
-            <IncludedItems value={item.innifalid} tone="dark" />
-
-            {variants.length > 0 ? (
+          {/* Right: details */}
+          <div className="order-2 min-w-0 md:order-none">
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-3.5 sm:p-5 space-y-3 sm:space-y-3.5">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white/80">Geymsla</p>
-                <div className="mt-3 flex flex-wrap gap-2 sm:gap-3">
-                  {allStorages.map((s) => {
-                    const isSelected = selectedStorage === s;
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setSelectedStorage(s)}
-                        className={`rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 text-sm font-semibold transition-all ${
-                          isSelected
-                            ? "bg-[var(--color-accent)] text-white shadow-[0_0_24px_-6px_var(--color-accent)]"
-                            : "border border-white/15 bg-white/5 text-white/80 hover:border-white/40 hover:bg-white/10"
-                        }`}
-                      >
-                        {formatStorage(s)}
-                      </button>
-                    );
-                  })}
-                </div>
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight break-words bg-gradient-to-r from-white via-white to-[var(--color-accent)] bg-clip-text text-transparent">
+                  {item.name}
+                </h1>
+                {displayPrice != null ? (
+                  <div className="mt-1.5">
+                    <p
+                      key={`${displayPrice}-${withInsurance}-${accessoryTotal}`}
+                      className={`text-lg sm:text-xl font-bold break-words transition-all duration-300 ${
+                        withInsurance ? "text-emerald-400" : "text-[var(--color-accent)]"
+                      } ${pricePulse ? "scale-[1.04]" : "scale-100"}`}
+                    >
+                      {formatMonthly(displayPrice)}
+                    </p>
+                    {(withInsurance || accessoryTotal > 0) && selectedVariant ? (
+                      <p className="mt-0.5 text-[11px] text-white/45 break-words">
+                        {formatKr(Number(selectedVariant.price))} kr
+                        {withInsurance ? ` + ${formatKr(Number(selectedVariant.trygging || 0))} kr trygging` : ""}
+                        {accessoryTotal > 0 ? ` + ${formatKr(accessoryTotal)} kr aukahlutir` : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="mt-1.5 text-sm font-medium text-white/50">Verð kemur fljótlega</p>
+                )}
               </div>
-            ) : null}
 
-            {variants.length > 0 && !selectedVariant ? (
-              <p className="text-sm text-white/50">Þessi samsetning er ekki í boði.</p>
-            ) : null}
+              {appleAccessories.length > 0 ? (
+                <div
+                  className={`relative overflow-hidden rounded-xl px-3 py-2.5 transition-all duration-300 ${
+                    accessoriesAdded
+                      ? "bg-[var(--color-accent)]/15 ring-2 ring-[var(--color-accent)]/70 shadow-[0_0_32px_-10px_var(--color-accent)]"
+                      : "bg-gradient-to-r from-[var(--color-accent)]/20 via-[var(--color-accent)]/10 to-transparent ring-2 ring-[var(--color-accent)]/45"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--color-accent)]">
+                      Apple aukahlutir
+                    </p>
+                    {accessoriesAdded ? (
+                      <span className="text-[11px] font-bold text-white">
+                        +{formatKr(accessoryTotal)} kr/mán
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-medium text-white/55">Bæta við?</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {appleAccessories.map((a) => {
+                      const selected = selectedAccessoryIds.includes(a.id);
+                      const price = parsePrice(a.verd);
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => toggleAccessory(a.id)}
+                          aria-pressed={selected}
+                          className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                            selected
+                              ? "bg-[var(--color-accent)] text-white shadow-[0_0_18px_-4px_var(--color-accent)] scale-[1.02]"
+                              : "bg-black/35 text-white ring-1 ring-white/25 hover:bg-black/50 hover:ring-[var(--color-accent)]/60"
+                          }`}
+                        >
+                          {selected ? (
+                            <svg className="h-3 w-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                              <path fillRule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.5 7.5a1 1 0 01-1.414 0l-3.5-3.5a1 1 0 011.414-1.42l2.793 2.793 6.793-6.793a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <span className="text-[var(--color-accent)]" aria-hidden>+</span>
+                          )}
+                          <span className="truncate max-w-[9rem] sm:max-w-[12rem]">{a.nafn}</span>
+                          {price > 0 ? (
+                            <span className={selected ? "text-white/85" : "text-[var(--color-accent)]"}>
+                              {formatKr(price)}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {variants.length > 0 ? (
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-white/70">Geymsla</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5 sm:gap-2">
+                    {allStorages.map((s) => {
+                      const isSelected = selectedStorage === s;
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setSelectedStorage(s)}
+                          className={`rounded-lg px-3 sm:px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
+                            isSelected
+                              ? "bg-[var(--color-accent)] text-white shadow-[0_0_20px_-6px_var(--color-accent)]"
+                              : "border border-white/15 bg-white/5 text-white/80 hover:border-white/40 hover:bg-white/10"
+                          }`}
+                        >
+                          {formatStorage(s)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {variants.length > 0 && !selectedVariant ? (
+                <p className="text-xs text-white/50">Þessi samsetning er ekki í boði.</p>
+              ) : null}
+
+              {item.description && item.description.split(",").map((s) => s.trim()).filter(Boolean).length > 0 ? (
+                <ul className="space-y-1">
+                  {item.description.split(",").map((s) => s.trim()).filter(Boolean).map((feature, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm leading-snug text-white/55 min-w-0">
+                      <svg className="mt-1 h-1 w-1 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true">
+                        <circle cx="4" cy="4" r="4" />
+                      </svg>
+                      <span className="min-w-0 break-words">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              <IncludedItems
+                value={item.innifalid}
+                tone="dark"
+                className="[&>p]:mb-1.5 [&>ul]:gap-1.5 [&_li]:rounded-lg [&_li]:px-2.5 [&_li]:py-1.5 [&_li]:text-xs"
+              />
+            </div>
           </div>
         </div>
       </div>

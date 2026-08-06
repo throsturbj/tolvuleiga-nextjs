@@ -94,14 +94,48 @@ interface LaptopVariantRow {
   trygging: number | null;
   repeat_url: string | null;
   repeat_url_trygging: string | null;
+  repeat_url_penni?: string | null;
+  repeat_url_penni_trygging?: string | null;
   stock_quantity: number | null;
   created_at?: string | null;
 }
 
-type NewLaptopVariant = { storage_gb: string; price: string; trygging: string; repeat_url: string; repeat_url_trygging: string; stock_quantity: string };
+type NewLaptopVariant = {
+  storage_gb: string;
+  price: string;
+  trygging: string;
+  repeat_url: string;
+  repeat_url_trygging: string;
+  repeat_url_penni: string;
+  repeat_url_penni_trygging: string;
+  stock_quantity: string;
+};
+
+interface AppleAukahlutirRow {
+  id: string;
+  nafn: string;
+  verd?: number | string | null;
+  laptop_uuid?: string | null;
+}
+
+type NewAppleAukahlutirRow = {
+  nafn: string;
+  verd: string;
+  laptop_uuid: string;
+};
 
 const emptyLaptopForm: NewLaptopRow = { name: "", description: "", innifalid: "", image_url: "", active: true };
-const emptyVariantForm: NewLaptopVariant = { storage_gb: "", price: "", trygging: "", repeat_url: "", repeat_url_trygging: "", stock_quantity: "" };
+const emptyVariantForm: NewLaptopVariant = {
+  storage_gb: "",
+  price: "",
+  trygging: "",
+  repeat_url: "",
+  repeat_url_trygging: "",
+  repeat_url_penni: "",
+  repeat_url_penni_trygging: "",
+  stock_quantity: "",
+};
+const emptyAppleForm: NewAppleAukahlutirRow = { nafn: "", verd: "", laptop_uuid: "" };
 
 export default function VorurAdminPage() {
   const { user, session, loading: authLoading } = useAuth();
@@ -120,7 +154,7 @@ export default function VorurAdminPage() {
   const [urlsSaving, setUrlsSaving] = useState<boolean>(false);
 
   // Screens state
-  const [activeTab, setActiveTab] = useState<"gaming" | "screens" | "keyboards" | "mouses" | "consoles" | "laptops">("gaming");
+  const [activeTab, setActiveTab] = useState<"gaming" | "screens" | "keyboards" | "mouses" | "consoles" | "laptops" | "ipads" | "appleaukahlutir">("gaming");
   const [screens, setScreens] = useState<ScreenRow[]>([]);
   const [screensLoading, setScreensLoading] = useState<boolean>(false);
   const [screenCreating, setScreenCreating] = useState<boolean>(false);
@@ -197,6 +231,16 @@ export default function VorurAdminPage() {
   const [editMsOpen, setEditMsOpen] = useState<boolean>(false);
   const [createMsMenuPos, setCreateMsMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [editMsMenuPos, setEditMsMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // Apple aukahlutir state
+  const [appleItems, setAppleItems] = useState<AppleAukahlutirRow[]>([]);
+  const [appleLoading, setAppleLoading] = useState<boolean>(false);
+  const [appleCreating, setAppleCreating] = useState<boolean>(false);
+  const [appleDeletingId, setAppleDeletingId] = useState<string | null>(null);
+  const [appleUpdatingId, setAppleUpdatingId] = useState<string | null>(null);
+  const [appleEditingId, setAppleEditingId] = useState<string | null>(null);
+  const [appleForm, setAppleForm] = useState<NewAppleAukahlutirRow>(emptyAppleForm);
+  const [appleEditForm, setAppleEditForm] = useState<NewAppleAukahlutirRow | null>(null);
 
   // Laptops state
   const [laptops, setLaptops] = useState<LaptopRow[]>([]);
@@ -455,10 +499,10 @@ export default function VorurAdminPage() {
     fetchMouses();
   }, [activeTab, session?.user, isAdmin]);
 
-  // Load laptops (and their variants) when switching to laptops tab
+  // Load laptops (and their variants) when switching to laptops / ipads / apple aukahlutir tabs
   useEffect(() => {
     const fetchLaptops = async () => {
-      if (activeTab !== "laptops") return;
+      if (activeTab !== "laptops" && activeTab !== "ipads" && activeTab !== "appleaukahlutir") return;
       if (!session?.user || !isAdmin) return;
       setLaptopsLoading(true);
       setError(null);
@@ -474,25 +518,27 @@ export default function VorurAdminPage() {
         } else {
           const list = (data as LaptopRow[]) ?? [];
           setLaptops(list);
-          const ids = list.map((l) => l.id);
-          if (ids.length > 0) {
-            const { data: variantRows, error: vErr } = await supabase
-              .from("laptop_variants")
-              .select("*")
-              .in("laptop_id", ids)
-              .order("price", { ascending: true });
-            if (!vErr && Array.isArray(variantRows)) {
-              const map: Record<string, LaptopVariantRow[]> = {};
-              (variantRows as LaptopVariantRow[]).forEach((v) => {
-                if (!map[v.laptop_id]) map[v.laptop_id] = [];
-                map[v.laptop_id].push(v);
-              });
-              setLaptopVariants(map);
+          if (activeTab === "laptops" || activeTab === "ipads") {
+            const ids = list.map((l) => l.id);
+            if (ids.length > 0) {
+              const { data: variantRows, error: vErr } = await supabase
+                .from("laptop_variants")
+                .select("*")
+                .in("laptop_id", ids)
+                .order("price", { ascending: true });
+              if (!vErr && Array.isArray(variantRows)) {
+                const map: Record<string, LaptopVariantRow[]> = {};
+                (variantRows as LaptopVariantRow[]).forEach((v) => {
+                  if (!map[v.laptop_id]) map[v.laptop_id] = [];
+                  map[v.laptop_id].push(v);
+                });
+                setLaptopVariants(map);
+              } else {
+                setLaptopVariants({});
+              }
             } else {
               setLaptopVariants({});
             }
-          } else {
-            setLaptopVariants({});
           }
         }
       } catch (err) {
@@ -505,6 +551,35 @@ export default function VorurAdminPage() {
       }
     };
     fetchLaptops();
+  }, [activeTab, session?.user, isAdmin]);
+
+  // Load Apple aukahlutir when switching to that tab
+  useEffect(() => {
+    const fetchApple = async () => {
+      if (activeTab !== "appleaukahlutir") return;
+      if (!session?.user || !isAdmin) return;
+      setAppleLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from("appleaukahlutir")
+          .select("id, nafn, verd, laptop_uuid")
+          .order("nafn", { ascending: true });
+        if (error) {
+          setError(error.message);
+          setAppleItems([]);
+        } else {
+          setAppleItems((data as AppleAukahlutirRow[]) ?? []);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setError(message);
+        setAppleItems([]);
+      } finally {
+        setAppleLoading(false);
+      }
+    };
+    fetchApple();
   }, [activeTab, session?.user, isAdmin]);
 
   const onChange = (field: keyof NewRow, value: string) => {
@@ -1271,6 +1346,12 @@ export default function VorurAdminPage() {
   const onChangeKeyboardEdit = (field: keyof NewKeyboardRow, value: string) => {
     setKeyboardEditForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
+  const onChangeApple = (field: keyof NewAppleAukahlutirRow, value: string) => {
+    setAppleForm((prev) => ({ ...prev, [field]: value }));
+  };
+  const onChangeAppleEdit = (field: keyof NewAppleAukahlutirRow, value: string) => {
+    setAppleEditForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
   const toggleCreateKbPc = (pcId: number) => {
     setKeyboardFormPcIds((prev) => (prev.includes(pcId) ? prev.filter((id) => id !== pcId) : [...prev, pcId]));
   };
@@ -1969,6 +2050,8 @@ export default function VorurAdminPage() {
         trygging: Number(variantForm.trygging),
         repeat_url: variantForm.repeat_url.trim() || null,
         repeat_url_trygging: variantForm.repeat_url_trygging.trim() || null,
+        repeat_url_penni: variantForm.repeat_url_penni.trim() || null,
+        repeat_url_penni_trygging: variantForm.repeat_url_penni_trygging.trim() || null,
         stock_quantity: variantForm.stock_quantity.trim() ? Math.trunc(Number(variantForm.stock_quantity)) : 0,
       };
       const { data, error } = await supabase.from("laptop_variants").insert([payload]).select("*").single();
@@ -1999,6 +2082,8 @@ export default function VorurAdminPage() {
       trygging: String(v.trygging ?? ""),
       repeat_url: v.repeat_url || "",
       repeat_url_trygging: v.repeat_url_trygging || "",
+      repeat_url_penni: v.repeat_url_penni || "",
+      repeat_url_penni_trygging: v.repeat_url_penni_trygging || "",
       stock_quantity: String(v.stock_quantity ?? 0),
     });
   };
@@ -2024,6 +2109,8 @@ export default function VorurAdminPage() {
         trygging: Number(variantEditForm.trygging),
         repeat_url: variantEditForm.repeat_url.trim() || null,
         repeat_url_trygging: variantEditForm.repeat_url_trygging.trim() || null,
+        repeat_url_penni: variantEditForm.repeat_url_penni.trim() || null,
+        repeat_url_penni_trygging: variantEditForm.repeat_url_penni_trygging.trim() || null,
         stock_quantity: variantEditForm.stock_quantity.trim() ? Math.trunc(Number(variantEditForm.stock_quantity)) : 0,
       };
       const { data, error } = await supabase.from("laptop_variants").update(payload).eq("id", id).select("*").single();
@@ -2150,6 +2237,128 @@ export default function VorurAdminPage() {
       setKeyboardDeletingId(null);
     }
   };
+
+  // Apple aukahlutir CRUD
+  const validateApple = (r: NewAppleAukahlutirRow): string[] => {
+    const errs: string[] = [];
+    if (!r.nafn.trim()) errs.push("Nafn vantar");
+    return errs;
+  };
+
+  const parseAppleVerd = (raw: string): number | null => {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const n = Number(trimmed.replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const handleCreateApple = async () => {
+    if (!isAdmin) return;
+    const errs = validateApple(appleForm);
+    if (appleForm.verd.trim() && parseAppleVerd(appleForm.verd) === null) {
+      errs.push("Verð verður að vera tala");
+    }
+    if (errs.length > 0) {
+      setError(errs.join(" · "));
+      return;
+    }
+    setAppleCreating(true);
+    setError(null);
+    try {
+      const payload = {
+        nafn: appleForm.nafn.trim(),
+        verd: parseAppleVerd(appleForm.verd),
+        laptop_uuid: appleForm.laptop_uuid.trim() || null,
+      };
+      const { data, error } = await supabase.from("appleaukahlutir").insert([payload]).select("id, nafn, verd, laptop_uuid").single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        setAppleItems((prev) => [data as AppleAukahlutirRow, ...prev]);
+        setAppleForm(emptyAppleForm);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setAppleCreating(false);
+    }
+  };
+
+  const handleStartAppleEdit = (row: AppleAukahlutirRow) => {
+    if (!isAdmin) return;
+    setAppleEditingId(row.id);
+    setAppleEditForm({
+      nafn: row.nafn || "",
+      verd: row.verd != null && row.verd !== "" ? String(row.verd) : "",
+      laptop_uuid: row.laptop_uuid || "",
+    });
+  };
+
+  const handleCancelAppleEdit = () => {
+    setAppleEditingId(null);
+    setAppleEditForm(null);
+  };
+
+  const handleUpdateApple = async (id: string) => {
+    if (!isAdmin || !appleEditForm) return;
+    const errs = validateApple(appleEditForm);
+    if (appleEditForm.verd.trim() && parseAppleVerd(appleEditForm.verd) === null) {
+      errs.push("Verð verður að vera tala");
+    }
+    if (errs.length > 0) {
+      setError(errs.join(" · "));
+      return;
+    }
+    setAppleUpdatingId(id);
+    setError(null);
+    try {
+      const payload = {
+        nafn: appleEditForm.nafn.trim(),
+        verd: parseAppleVerd(appleEditForm.verd),
+        laptop_uuid: appleEditForm.laptop_uuid.trim() || null,
+      };
+      const { data, error } = await supabase
+        .from("appleaukahlutir")
+        .update(payload)
+        .eq("id", id)
+        .select("id, nafn, verd, laptop_uuid")
+        .single();
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        setAppleItems((prev) => prev.map((r) => (r.id === id ? (data as AppleAukahlutirRow) : r)));
+        setAppleEditingId(null);
+        setAppleEditForm(null);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setAppleUpdatingId(null);
+    }
+  };
+
+  const handleDeleteApple = async (id: string) => {
+    if (!isAdmin) return;
+    const ok = typeof window !== "undefined" ? window.confirm("Eyða þessum aukahlut?") : false;
+    if (!ok) return;
+    setAppleDeletingId(id);
+    try {
+      const { error } = await supabase.from("appleaukahlutir").delete().eq("id", id);
+      if (!error) {
+        setAppleItems((prev) => prev.filter((r) => r.id !== id));
+      } else {
+        setError(error.message);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setAppleDeletingId(null);
+    }
+  };
+
   const handleToggleFalid = async (id: number, currentFalid: boolean | undefined) => {
     if (!isAdmin) return;
     setUpdatingId(id);
@@ -2356,6 +2565,22 @@ export default function VorurAdminPage() {
               >
                 Fartölvur
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("ipads")}
+                className={`px-3 py-1.5 text-sm rounded-t ${activeTab === "ipads" ? "bg-white border border-b-transparent border-gray-200 font-medium" : "text-gray-600 hover:text-gray-800"}`}
+                aria-current={activeTab === "ipads" ? "page" : undefined}
+              >
+                iPad
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("appleaukahlutir")}
+                className={`px-3 py-1.5 text-sm rounded-t ${activeTab === "appleaukahlutir" ? "bg-white border border-b-transparent border-gray-200 font-medium" : "text-gray-600 hover:text-gray-800"}`}
+                aria-current={activeTab === "appleaukahlutir" ? "page" : undefined}
+              >
+                Apple Aukahlutir
+              </button>
             </div>
             <div className="flex items-center justify-between py-2">
               <div className="text-sm text-gray-600">
@@ -2368,8 +2593,12 @@ export default function VorurAdminPage() {
                       : activeTab === "consoles"
                         ? (consolesLoading ? "Sæki gögn…" : `${consoles.length} consoles`)
                         : activeTab === "laptops"
-                          ? (laptopsLoading ? "Sæki gögn…" : `${laptops.length} fartölvur`)
-                          : (mousesLoading ? "Sæki gögn…" : `${mouses.length} mýs`)}
+                          ? (laptopsLoading ? "Sæki gögn…" : `${laptops.filter((l) => !l.name.trim().toLowerCase().startsWith("ipad")).length} fartölvur`)
+                          : activeTab === "ipads"
+                            ? (laptopsLoading ? "Sæki gögn…" : `${laptops.filter((l) => l.name.trim().toLowerCase().startsWith("ipad")).length} iPad`)
+                            : activeTab === "appleaukahlutir"
+                              ? (appleLoading ? "Sæki gögn…" : `${appleItems.length} aukahlutir`)
+                              : (mousesLoading ? "Sæki gögn…" : `${mouses.length} mýs`)}
               </div>
             </div>
           </div>
@@ -3029,7 +3258,7 @@ export default function VorurAdminPage() {
                 ) : null}
               </tbody>
             </table>
-            ) : activeTab === "laptops" ? (
+            ) : activeTab === "laptops" || activeTab === "ipads" ? (
             <table className="w-full text-sm table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -3044,7 +3273,7 @@ export default function VorurAdminPage() {
               <tbody>
                 <tr className="border-b border-gray-100 bg-gray-50">
                   <td className="px-2 py-3 align-top">
-                    <input value={laptopForm.name} onChange={(e) => setLaptopForm((f) => ({ ...f, name: e.target.value }))} placeholder="Nafn" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                    <input value={laptopForm.name} onChange={(e) => setLaptopForm((f) => ({ ...f, name: e.target.value }))} placeholder={activeTab === "ipads" ? "t.d. iPad Pro" : "Nafn"} className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
                   </td>
                   <td className="px-2 py-3 align-top">
                     <input value={laptopForm.description} onChange={(e) => setLaptopForm((f) => ({ ...f, description: e.target.value }))} placeholder="Lýsing (valfrjálst)" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
@@ -3072,7 +3301,10 @@ export default function VorurAdminPage() {
                     </button>
                   </td>
                 </tr>
-                {laptops.map((l) => {
+                {(activeTab === "ipads"
+                  ? laptops.filter((l) => l.name.trim().toLowerCase().startsWith("ipad"))
+                  : laptops.filter((l) => !l.name.trim().toLowerCase().startsWith("ipad"))
+                ).map((l) => {
                   const variants = laptopVariants[l.id] || [];
                   const isEditing = laptopEditingId === l.id;
                   const isExpanded = expandedLaptopId === l.id;
@@ -3183,6 +3415,12 @@ export default function VorurAdminPage() {
                                   <th className="text-left px-2 py-1 font-medium w-28">Trygging</th>
                                   <th className="text-left px-2 py-1 font-medium w-32">URL</th>
                                   <th className="text-left px-2 py-1 font-medium w-32">URL Trygging</th>
+                                  {activeTab === "ipads" ? (
+                                    <>
+                                      <th className="text-left px-2 py-1 font-medium w-32">URL Penni</th>
+                                      <th className="text-left px-2 py-1 font-medium w-32">URL Penni Trygging</th>
+                                    </>
+                                  ) : null}
                                   <th className="text-left px-2 py-1 font-medium w-40">Aðgerðir</th>
                                 </tr>
                               </thead>
@@ -3203,6 +3441,16 @@ export default function VorurAdminPage() {
                                   <td className="px-2 py-2 align-top">
                                     <input value={variantForm.repeat_url_trygging} onChange={(e) => setVariantForm((f) => ({ ...f, repeat_url_trygging: e.target.value }))} placeholder="https://…" className="border border-gray-300 rounded px-2 py-1 w-full" />
                                   </td>
+                                  {activeTab === "ipads" ? (
+                                    <>
+                                      <td className="px-2 py-2 align-top">
+                                        <input value={variantForm.repeat_url_penni} onChange={(e) => setVariantForm((f) => ({ ...f, repeat_url_penni: e.target.value }))} placeholder="https://…" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                      </td>
+                                      <td className="px-2 py-2 align-top">
+                                        <input value={variantForm.repeat_url_penni_trygging} onChange={(e) => setVariantForm((f) => ({ ...f, repeat_url_penni_trygging: e.target.value }))} placeholder="https://…" className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                      </td>
+                                    </>
+                                  ) : null}
                                   <td className="px-2 py-2 align-top">
                                     <button
                                       type="button"
@@ -3251,6 +3499,28 @@ export default function VorurAdminPage() {
                                           </a>
                                         ) : "—")}
                                       </td>
+                                      {activeTab === "ipads" ? (
+                                        <>
+                                          <td className="px-2 py-2 align-top text-gray-800">
+                                            {vEditing && variantEditForm ? (
+                                              <input value={variantEditForm.repeat_url_penni} onChange={(e) => setVariantEditForm((f) => (f ? { ...f, repeat_url_penni: e.target.value } : f))} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                            ) : (v.repeat_url_penni ? (
+                                              <a href={v.repeat_url_penni} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
+                                                {v.repeat_url_penni}
+                                              </a>
+                                            ) : "—")}
+                                          </td>
+                                          <td className="px-2 py-2 align-top text-gray-800">
+                                            {vEditing && variantEditForm ? (
+                                              <input value={variantEditForm.repeat_url_penni_trygging} onChange={(e) => setVariantEditForm((f) => (f ? { ...f, repeat_url_penni_trygging: e.target.value } : f))} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                            ) : (v.repeat_url_penni_trygging ? (
+                                              <a href={v.repeat_url_penni_trygging} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
+                                                {v.repeat_url_penni_trygging}
+                                              </a>
+                                            ) : "—")}
+                                          </td>
+                                        </>
+                                      ) : null}
                                       <td className="px-2 py-2 align-top">
                                         {vEditing ? (
                                           <div className="grid grid-cols-2 gap-2 w-36">
@@ -3296,7 +3566,7 @@ export default function VorurAdminPage() {
                                 })}
                                 {variants.length === 0 ? (
                                   <tr>
-                                    <td colSpan={6} className="px-2 py-3 text-center text-gray-400">
+                                    <td colSpan={activeTab === "ipads" ? 8 : 6} className="px-2 py-3 text-center text-gray-400">
                                       Engin tilbrigði enn. Bættu við hér að ofan.
                                     </td>
                                   </tr>
@@ -3309,16 +3579,110 @@ export default function VorurAdminPage() {
                     </Fragment>
                   );
                 })}
-                {!laptopsLoading && laptops.length === 0 ? (
+                {!laptopsLoading &&
+                (activeTab === "ipads"
+                  ? laptops.filter((l) => l.name.trim().toLowerCase().startsWith("ipad")).length === 0
+                  : laptops.filter((l) => !l.name.trim().toLowerCase().startsWith("ipad")).length === 0) ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
-                      Engar fartölvur fundust.
+                      {activeTab === "ipads" ? "Engir iPad fundust." : "Engar fartölvur fundust."}
                     </td>
                   </tr>
                 ) : null}
               </tbody>
             </table>
-            ) : (
+            ) : activeTab === "appleaukahlutir" ? (
+            <table className="w-full text-sm table-fixed">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-40">Nafn</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-24">Verð</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-40">Fartölva / iPad</th>
+                  <th className="text-left px-2 py-3 font-medium text-gray-600 w-40">Aðgerðir</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <td className="px-2 py-3 align-top">
+                    <input value={appleForm.nafn} onChange={(e) => onChangeApple("nafn", e.target.value)} placeholder="Nafn" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <input value={appleForm.verd} onChange={(e) => onChangeApple("verd", e.target.value)} placeholder="Verð" inputMode="decimal" className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <select
+                      value={appleForm.laptop_uuid}
+                      onChange={(e) => onChangeApple("laptop_uuid", e.target.value)}
+                      className="border border-gray-300 rounded px-2 py-1 text-xs w-full bg-white"
+                    >
+                      <option value="">— Engin —</option>
+                      {laptops.map((l) => (
+                        <option key={l.id} value={l.id}>{l.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-2 py-3 align-top">
+                    <button
+                      type="button"
+                      disabled={appleCreating}
+                      onClick={handleCreateApple}
+                      className="inline-flex items-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50"
+                    >
+                      Bæta við
+                    </button>
+                  </td>
+                </tr>
+                {appleItems.map((r) => (
+                  <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50/60">
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6" title={r.nafn}>{r.nafn}</div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6">
+                        {r.verd != null && r.verd !== ""
+                          ? `${formatPrice(Number(r.verd))} kr`
+                          : "—"}
+                      </div>
+                    </td>
+                    <td className="px-2 py-3 align-top text-gray-800">
+                      <div className="truncate leading-6">
+                        {r.laptop_uuid
+                          ? (laptops.find((l) => l.id === r.laptop_uuid)?.name || r.laptop_uuid)
+                          : "—"}
+                      </div>
+                    </td>
+                    <td className="px-2 py-3 align-top">
+                      <div className="grid grid-cols-2 gap-2 w-40">
+                        <button
+                          type="button"
+                          onClick={() => handleStartAppleEdit(r)}
+                          disabled={appleUpdatingId === r.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-xs disabled:opacity-50 w-full"
+                        >
+                          Uppfæra
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteApple(r.id)}
+                          disabled={appleDeletingId === r.id}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 text-xs disabled:opacity-50 w-full"
+                        >
+                          Eyða
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!appleLoading && appleItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center text-gray-500">
+                      Engir Apple aukahlutir fundust.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+            ) : activeTab === "mouses" ? (
             <table className="w-full text-sm table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -3488,7 +3852,7 @@ export default function VorurAdminPage() {
                 ) : null}
               </tbody>
             </table>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -4003,6 +4367,51 @@ export default function VorurAdminPage() {
                 type="button"
                 onClick={() => keyboardEditingId !== null ? handleUpdateKeyboard(keyboardEditingId) : undefined}
                 disabled={keyboardUpdatingId === keyboardEditingId}
+                className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm disabled:opacity-50"
+              >
+                Uppfæra
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {appleEditingId !== null && appleEditForm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={handleCancelAppleEdit} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Uppfæra Apple aukahlut</h2>
+              <button type="button" onClick={handleCancelAppleEdit} className="text-gray-500 hover:text-gray-700 text-sm">Loka</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Nafn</label>
+                <input value={appleEditForm.nafn} onChange={(e) => onChangeAppleEdit("nafn", e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Verð</label>
+                <input value={appleEditForm.verd} onChange={(e) => onChangeAppleEdit("verd", e.target.value)} inputMode="decimal" className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Fartölva / iPad</label>
+                <select
+                  value={appleEditForm.laptop_uuid}
+                  onChange={(e) => onChangeAppleEdit("laptop_uuid", e.target.value)}
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm bg-white"
+                >
+                  <option value="">— Engin —</option>
+                  {laptops.map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+              <button type="button" onClick={handleCancelAppleEdit} className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm">Hætta við</button>
+              <button
+                type="button"
+                onClick={() => appleEditingId !== null ? handleUpdateApple(appleEditingId) : undefined}
+                disabled={appleUpdatingId === appleEditingId}
                 className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:brightness-95 text-sm disabled:opacity-50"
               >
                 Uppfæra

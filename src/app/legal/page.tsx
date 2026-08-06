@@ -4,7 +4,7 @@ export default function LegalPage() {
 			<h1 className="text-2xl font-semibold tracking-tight">SKILMÁLI</h1>
 			<p className="text-black/70 dark:text-white/70">Leiguskilmálar BGÞ ehf. - Leiga á tölvum, fartölvum, leikjatölvum, skjám og tengdum búnaði.</p>
 			<p className="text-black/70 dark:text-white/70">1. Almenn ákvæði</p>
-			<p className="text-black/70 dark:text-white/70">Þessir skilmálar gilda um leigu á tölvum og tengdum búnaði frá BGÞ ehf., kt. 490925-0820, netfang: tolvuleiga@tolvuleiga.is (hér eftir nefnt „Leigusali“). Með því að leigja tölvu eða annan búnað hjá leigusala samþykkir leigutaki þessa skilmála og skuldbindur sig til að fylgja þeim í hvívetna. Leigusali áskilur sér rétt til að breyta þessum skilmálum hvenær sem er. Breyttir skilmálar taka gildi við birtingu þeirra á vefsíðu tolvuleiga.is.</p>
+			<p className="text-black/70 dark:text-white/70">Þessir skilmálar gilda um leigu á tölvum og tengdum búnaði frá BGÞ ehf., kt. 490925-0820, netfang: tolvuleiga@tolvuleiga.is (hér eftir nefnt „Leigusali“). Með því að leigja tölvu eða annan búnað hjá leigusala samþykkir leigutaki þessa skilmála og skuldbindur sig til að fylgja þeim í hvívetna. Með því að samþykkja þessa skilmála og staðfesta pöntun á vefsíðu leigusala stofnast bindandi leigusamningur milli leigutaka og BGÞ ehf. Leigusali áskilur sér rétt til að breyta þessum skilmálum hvenær sem er. Breyttir skilmálar taka gildi við birtingu þeirra á vefsíðu tolvuleiga.is.</p>
 			<p className="text-black/70 dark:text-white/70">2. Leigutakar</p>
 			<p className="text-black/70 dark:text-white/70">Leigusali leigir búnað bæði til einstaklinga og fyrirtækja. Leigutaki skal vera orðinn 18 ára eða hafa skriflegt samþykki forráðamanns. Fyrirtæki skulu tilgreina ábyrgðaraðila á leigutímanum.</p>
 			<p className="text-black/70 dark:text-white/70">3. Afhending, leigutímabil og lágmarksleiga </p>
@@ -16,7 +16,20 @@ export default function LegalPage() {
 			<p className="text-black/70 dark:text-white/70">6. Innifalið í leigu</p>
 			<p className="text-black/70 dark:text-white/70">Í leigunni er innifalinn sá búnaður sem leigutaki hefur valið, svo sem borðtölva, fartölva, leikjatölva (t.d. PlayStation 5), tölvuskjár eða annar búnaður samkvæmt pöntun, ásamt þeim fylgihlutum og hugbúnaði sem leigusali útvegar. Leigutaki getur valið að bæta við tryggingu gegn tjóni eða þjófnaði gegn mánaðarlegu aukagjaldi samkvæmt verðskrá leigusala.</p>
 			<p className="text-black/70 dark:text-white/70">7. Trygging og ábyrgð</p>
-			<p className="text-black/70 dark:text-white/70">Ef leigutaki hefur keypt tryggingu samkvæmt gildandi verðskrá leigusala, nær hún yfir tiltekið tjón samkvæmt nánari skilmálum tryggingarinnar. Tryggingin gildir ekki ef tjón verður vegna stórkostlegs gáleysis eða rangrar meðferðar á búnaðinum. Ef leigutaki hefur ekki tryggingu, ber hann allan kostnað sem hlýst af tjóni, tapi eða þjófnaði á búnaði. Leigutaki skal tafarlaust tilkynna leigusala um bilun, skemmdir eða tap á búnaði.</p>
+			<p className="text-black/70 dark:text-white/70">Ef leigutaki hefur keypt tryggingu samkvæmt gildandi verðskrá leigusala tekur hún til skyndilegs og ófyrirsjáanlegs tjóns á leigðum búnaði og þeim fylgihlutum sem leigusali afhendir með honum, sem verður við eðlilega notkun, svo sem vegna falls, höggs, óviljandi vökvatjóns eða annarra sambærilegra óhappa. Tryggingin tekur einnig til þjófnaðar á búnaðinum og meðfylgjandi fylgihlutum, enda hafi leigutaki sýnt eðlilega aðgæslu og tilkynnt þjófnað tafarlaust til lögreglu og leigusala.
+
+Ef tjón fellur undir trygginguna greiðir leigutaki eigin áhættu vegna hvers tjónsatviks. Eigin áhætta nemur að lágmarki 20.000 kr. Sé mánaðarlegt leigugjald fyrir hinn leigða búnað hærra en 20.000 kr., nemur eigin áhætta fjárhæð sem samsvarar einni (1) mánaðarleigu samkvæmt gildandi leigusamningi. Við útreikning eigin áhættu telst tryggingagjald eða önnur viðbótargjöld ekki hluti af mánaðarlegu leigugjaldi.
+
+Tryggingin tekur ekki til:
+Tjóns sem rekja má til ásetnings eða stórkostlegs gáleysis leigutaka.
+Tjóns sem stafar af rangri, óeðlilegri eða óheimilli notkun búnaðarins.
+Tjóns vegna breytinga eða viðgerða sem framkvæmdar eru án samþykkis leigusala.
+Taps eða þjófnaðar þegar búnaður hefur verið skilinn eftir án eðlilegrar gæslu eða ólæstur þar sem sanngjarnt hefði verið að tryggja hann betur.
+Týndra eða skemmdra fylgihluta, svo sem hleðslutækja, kapla, millistykka, stýripinna eða annarra aukahluta, nema annað sé sérstaklega tekið fram.
+
+Leigutaki skal tafarlaust tilkynna leigusala um bilun, tjón, tap eða þjófnað á búnaðinum.
+
+Hafi leigutaki ekki keypt tryggingu ber hann fulla fjárhagslega ábyrgð á öllu tjóni, tapi eða þjófnaði á búnaðinum á meðan hann er í hans vörslu.</p>
 			<p className="text-black/70 dark:text-white/70">8. Greiðsluskilmálar</p>
 			<p className="text-black/70 dark:text-white/70">Leiga er greidd mánaðarlega fyrirfram með greiðslukorti sem leigutaki skráir við gerð leigusamnings. Leigutaki ber ábyrgð á að greiðslukort sé gilt og að næg heimild sé til staðar fyrir mánaðarlegri greiðslu. Takist greiðsla ekki áskilur leigusali sér rétt til að reyna innheimtu á ný, innheimta dráttarvexti og innheimtukostnað samkvæmt lögum, stöðva þjónustu eða innkalla leigðan búnað. Ef greiðsla hefur ekki borist innan 7 daga frá gjalddaga áskilur leigusali sér rétt til að rifta samningi og krefjast tafarlausra skila á búnaði.</p>
 			<p className="text-black/70 dark:text-white/70">Leiga fyrir skammtímaleigu (t.d. nokkra daga) skal greidd fyrirfram við afhendingu búnaðar.</p>

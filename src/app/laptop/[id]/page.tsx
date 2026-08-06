@@ -479,11 +479,11 @@ export default function LaptopDetailPage() {
                     ) : null}
                   </svg>
                   <span className={`leading-tight text-center ${termsAccepted ? "text-white" : ""}`}>
-                    <span className="sm:hidden flex flex-col items-center">
-                      <span>Samþykkja</span>
-                      <span className="text-[10px] font-medium tracking-tight opacity-90">Skilmála</span>
+                    <span className="sm:hidden flex flex-col items-center text-[10px] font-medium tracking-tight">
+                      <span>Ég hef lesið</span>
+                      <span className="opacity-90">og samþykki skilmála</span>
                     </span>
-                    <span className="hidden sm:inline">Samþykkja Skilmála</span>
+                    <span className="hidden sm:inline">Ég hef lesið og samþykki skilmála</span>
                   </span>
                 </span>
               </button>

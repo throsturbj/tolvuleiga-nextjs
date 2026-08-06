@@ -628,7 +628,7 @@ export default function LaptopDetailPage() {
                           <span className="truncate max-w-[9rem] sm:max-w-[12rem]">{a.nafn}</span>
                           {price > 0 ? (
                             <span className={selected ? "text-white/85" : "text-[var(--color-accent)]"}>
-                              {formatKr(price)}
+                              {formatKr(price)} kr
                             </span>
                           ) : null}
                         </button>

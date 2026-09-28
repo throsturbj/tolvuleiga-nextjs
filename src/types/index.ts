@@ -4,7 +4,7 @@ export interface ContactForm {
   message: string;
 }
 
-// Product-related types removed as the products listing feature was deleted
+// Shared catalog types live in src/lib/products.ts
 
 export interface ApiResponse<T> {
   data: T;

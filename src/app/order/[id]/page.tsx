@@ -6,19 +6,14 @@ import { useState, useEffect, useRef } from "react";
 //
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-
-interface GamingPCRow {
-  id: number;
-  name: string;
-  verd: string;
-  cpu: string;
-  gpu: string;
-  storage: string;
-  motherboard?: string | null;
-  powersupply?: string | null;
-  cpucooler?: string | null;
-  ram?: string | null;
-}
+import { supabasePublic } from "@/lib/supabase-public";
+import {
+  fetchProductByParam,
+  parsePrice,
+  specLines,
+  type OrderSelection,
+  type Product,
+} from "@/lib/products";
 
 interface UserProfile {
   id: string;
@@ -37,8 +32,7 @@ export default function OrderConfirmationPage() {
   const router = useRouter();
   const { user, loading: authLoading, session } = useAuth();
   const productIdParam = params.id as string;
-  const productIdNum = Number(productIdParam);
-  const [product, setProduct] = useState<GamingPCRow | null>(null);
+  const [product, setProduct] = useState<Product | null>(null);
   const [productLoading, setProductLoading] = useState<boolean>(true);
 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -53,7 +47,7 @@ export default function OrderConfirmationPage() {
   const loadedForUidRef = useRef<string | null>(null);
 
   // Selection passed from product page
-  const [selection, setSelection] = useState<{ months: number; addons?: { skjár?: boolean; lyklaborð?: boolean; mus?: boolean }; insured?: boolean; finalPrice?: number } | null>(null);
+  const [selection, setSelection] = useState<OrderSelection | null>(null);
   const [confirmNoInsurance, setConfirmNoInsurance] = useState(false);
 
   const addMonths = (date: Date, months: number) => {
@@ -73,17 +67,28 @@ export default function OrderConfirmationPage() {
       if (typeof window !== 'undefined') {
         const raw = window.sessionStorage.getItem('orderSelection');
         if (raw) {
-          const parsed = JSON.parse(raw) as { months?: number; addons?: unknown; insured?: boolean; finalPrice?: number };
+          const parsed = JSON.parse(raw) as OrderSelection & { addons?: unknown };
           const months = parsed.months && [1,3,6,12].includes(parsed.months) ? parsed.months : 3;
           const src = (parsed.addons ?? {}) as Record<string, unknown>;
           const mapped = {
             skjár: src['skjár'] === true || src['skjar'] === true,
-            lyklaborð: src['lyklaborð'] === true || src['lyklabord'] === true,
+            lyklabord: src['lyklaborð'] === true || src['lyklabord'] === true,
             mus: src['mús'] === true || src['mus'] === true,
           };
           const insured = parsed.insured === true;
           const finalPrice = typeof parsed.finalPrice === 'number' && Number.isFinite(parsed.finalPrice) ? parsed.finalPrice : undefined;
-          setSelection({ months, addons: mapped, insured, finalPrice });
+          setSelection({
+            months,
+            addons: mapped,
+            insured,
+            finalPrice,
+            extraControllers: parsed.extraControllers,
+            variantId: parsed.variantId ?? null,
+            accessoryIds: parsed.accessoryIds || [],
+            screenProductId: parsed.screenProductId ?? null,
+            keyboardId: parsed.keyboardId ?? null,
+            mouseId: parsed.mouseId ?? null,
+          });
         } else {
           setSelection({ months: 3, addons: {} });
         }
@@ -97,32 +102,28 @@ export default function OrderConfirmationPage() {
   useEffect(() => {
     let isMounted = true;
     const fetchProduct = async () => {
-      if (!productIdNum || Number.isNaN(productIdNum)) {
+      if (!productIdParam) {
         setProduct(null);
         setProductLoading(false);
         return;
       }
       try {
-        const { data, error } = await supabase
-          .from('GamingPC')
-          .select('id,name,verd,cpu,gpu,storage,motherboard,powersupply,cpucooler,ram')
-          .eq('id', productIdNum)
-          .single();
-        if (!isMounted) return;
-        if (error) {
-          setProduct(null);
-        } else {
-          setProduct(data as GamingPCRow);
+        let found: Product | null = null;
+        for (const client of [supabase, supabasePublic]) {
+          found = await fetchProductByParam(client, productIdParam);
+          if (found) break;
         }
+        if (!isMounted) return;
+        setProduct(found);
       } catch {
-        setProduct(null);
+        if (isMounted) setProduct(null);
       } finally {
         if (isMounted) setProductLoading(false);
       }
     };
     fetchProduct();
     return () => { isMounted = false; };
-  }, [productIdNum]);
+  }, [productIdParam]);
 
   // Fetch user profile: prefer AuthContext user; otherwise load from Supabase; redirect if no session
   useEffect(() => {
@@ -273,8 +274,7 @@ export default function OrderConfirmationPage() {
       // Use finalPrice from product page if available; fallback to discounted product price
       let finalMonthlyPrice = selection?.finalPrice;
       if (!(typeof finalMonthlyPrice === 'number' && Number.isFinite(finalMonthlyPrice) && finalMonthlyPrice > 0)) {
-        const baseDigits = (product?.verd || '').toString().replace(/\D+/g, '');
-        const basePrice = parseInt(baseDigits, 10) || 0;
+        const basePrice = parsePrice(product?.price);
         const rate = months === 1 ? 0 : months === 3 ? 0.04 : months === 6 ? 0.08 : 0.12;
         const discountedRaw = Math.round(basePrice * (1 - rate));
         finalMonthlyPrice = Math.ceil(discountedRaw / 10) * 10;
@@ -294,7 +294,14 @@ export default function OrderConfirmationPage() {
             mus,
             trygging,
             verd: finalMonthlyPrice,
-            gamingpc_uuid: productIdNum || null,
+            product_id: product?.id ?? null,
+            variant_id: selection?.variantId || null,
+            screen_product_id: selection?.screenProductId || null,
+            numberofextracon: selection?.extraControllers || null,
+            gamingpc_uuid: null,
+            gamingconsole_uuid: null,
+            screen_uuid: null,
+            laptop_variant_uuid: null,
           },
         ])
         .select('id')
@@ -420,8 +427,8 @@ export default function OrderConfirmationPage() {
                       return `${selFinal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr/mánuði`;
                     }
                     // Fallback to simple discounted price if final not provided
-                    const digits = (product.verd || '').replace(/\D+/g, '');
-                    const base = parseInt(digits, 10) || 0;
+                    const digits = parsePrice(product.price);
+                    const base = digits;
                     const m = selection?.months ?? 1;
                     const rate = m === 1 ? 0 : m === 3 ? 0.04 : m === 6 ? 0.08 : 0.12;
                     const raw = Math.round(base * (1 - rate));
@@ -431,13 +438,9 @@ export default function OrderConfirmationPage() {
                 </p>
               </div>
               <div className="space-y-1 text-sm text-gray-700">
-                <p><span className="font-medium">Skjákort:</span> {product.gpu || '—'}</p>
-                <p><span className="font-medium">Örgjörvi:</span> {product.cpu || '—'}</p>
-                <p><span className="font-medium">Geymsla:</span> {product.storage || '—'}</p>
-                <p><span className="font-medium">Móðurborð:</span> {product.motherboard || '—'}</p>
-                <p><span className="font-medium">Vinnsluminni:</span> {product.ram || '—'}</p>
-                <p><span className="font-medium">Aflgjafi:</span> {product.powersupply || '—'}</p>
-                <p><span className="font-medium">Kæling:</span> {product.cpucooler || '—'}</p>
+                {specLines(product).map((row) => (
+                  <p key={row.label}><span className="font-medium">{row.label}:</span> {row.value}</p>
+                ))}
               </div>
             </div>
 

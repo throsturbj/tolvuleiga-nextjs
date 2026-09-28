@@ -3,12 +3,12 @@ import { sendMail } from '@/lib/email'
 
 export const runtime = 'nodejs'
 
-type Body = { productId?: number; productName?: string }
+type Body = { productId?: number | string; productName?: string }
 
 export async function POST(req: NextRequest) {
 	try {
 		const { productId, productName } = (await req.json().catch(() => ({}))) as Body
-		if (!productId) {
+		if (productId == null || productId === '') {
 			return NextResponse.json({ success: false, error: 'productId is required' }, { status: 400 })
 		}
 

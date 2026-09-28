@@ -3,6 +3,7 @@ import * as fontkit from 'fontkit'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { getServerSupabase } from './supabase-server'
+import { specText, type Product } from './products'
 
 export type OrderRow = {
 	id: string
@@ -14,6 +15,9 @@ export type OrderRow = {
 	gamingpc_uuid?: number | null
 	gamingconsole_uuid?: string | null
 	screen_uuid?: string | null
+	product_id?: string | null
+	variant_id?: string | null
+	screen_product_id?: string | null
 	created_at?: string | null
 	skjar?: boolean | null
 	lyklabord?: boolean | null
@@ -61,11 +65,11 @@ export type ScreenRow = {
 	endurnyjunartidni?: string | null
 }
 
-export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderRow; user: UserRow | null; pc: PcRow | null; console: ConsoleRow | null; screen: ScreenRow | null }> {
+export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderRow; user: UserRow | null; pc: PcRow | null; console: ConsoleRow | null; screen: ScreenRow | null; product: Product | null }> {
 	const supabase = getServerSupabase()
 	const { data: order, error: orderErr } = await supabase
 		.from('orders')
-		.select('id, orderNumber, auth_uid, timabilFra, timabilTil, verd, gamingpc_uuid, gamingconsole_uuid, screen_uuid, created_at, skjar, lyklabord, mus, trygging, numberofextracon')
+		.select('id, orderNumber, auth_uid, timabilFra, timabilTil, verd, gamingpc_uuid, gamingconsole_uuid, screen_uuid, product_id, variant_id, screen_product_id, created_at, skjar, lyklabord, mus, trygging, numberofextracon')
 		.eq('id', orderId)
 		.single<OrderRow>()
 	if (orderErr || !order) throw new Error('Order not found')
@@ -80,8 +84,53 @@ export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderR
 		user = userRow ?? null
 	}
 
+	let product: Product | null = null
+	if (order.product_id) {
+		const { data: productRow } = await supabase
+			.from('products')
+			.select('*')
+			.eq('id', order.product_id)
+			.maybeSingle()
+		product = (productRow as Product | null) ?? null
+	}
+
 	let pc: PcRow | null = null
-	if (order.gamingpc_uuid) {
+	let console: ConsoleRow | null = null
+	let screen: ScreenRow | null = null
+
+	if (product) {
+		if (product.type === 'gaming_pc' || product.type === 'laptop') {
+			pc = {
+				id: 0,
+				name: product.name,
+				cpu: specText(product.specs, 'cpu') || null,
+				gpu: specText(product.specs, 'gpu') || null,
+				storage: specText(product.specs, 'storage') || null,
+				motherboard: specText(product.specs, 'motherboard') || null,
+				powersupply: specText(product.specs, 'powersupply') || null,
+				cpucooler: specText(product.specs, 'cpucooler') || null,
+				ram: specText(product.specs, 'ram') || null,
+			}
+		} else if (product.type === 'console') {
+			console = {
+				id: product.id,
+				nafn: product.name,
+				geymsluplass: specText(product.specs, 'geymsluplass') || null,
+				tengi: specText(product.specs, 'tengi') || null,
+			}
+		} else if (product.type === 'screen') {
+			screen = {
+				id: product.id,
+				framleidandi: specText(product.specs, 'framleidandi') || product.name,
+				skjastaerd: specText(product.specs, 'skjastaerd') || null,
+				upplausn: specText(product.specs, 'upplausn') || null,
+				skjataekni: specText(product.specs, 'skjataekni') || null,
+				endurnyjunartidni: specText(product.specs, 'endurnyjunartidni') || null,
+			}
+		}
+	}
+
+	if (!pc && order.gamingpc_uuid) {
 		const { data: pcRow } = await supabase
 			.from('GamingPC')
 			.select('id, name, cpu, gpu, storage, motherboard, powersupply, cpucooler, ram')
@@ -90,8 +139,7 @@ export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderR
 		pc = pcRow ?? null
 	}
 
-	let console: ConsoleRow | null = null
-	if (order.gamingconsole_uuid) {
+	if (!console && order.gamingconsole_uuid) {
 		const { data: cRow } = await supabase
 			.from('gamingconsoles')
 			.select('id, nafn, geymsluplass, tengi')
@@ -100,17 +148,32 @@ export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderR
 		console = cRow ?? null
 	}
 
-	let screen: ScreenRow | null = null
-	if (order.screen_uuid) {
-		const { data: sRow } = await supabase
-			.from('screens')
-			.select('id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni')
-			.eq('id', order.screen_uuid)
-			.single<ScreenRow>()
-		screen = sRow ?? null
+	if (!screen && (order.screen_product_id || order.screen_uuid)) {
+		if (order.screen_product_id) {
+			const { data: sProd } = await supabase.from('products').select('*').eq('id', order.screen_product_id).maybeSingle()
+			const sp = sProd as Product | null
+			if (sp) {
+				screen = {
+					id: sp.id,
+					framleidandi: specText(sp.specs, 'framleidandi') || sp.name,
+					skjastaerd: specText(sp.specs, 'skjastaerd') || null,
+					upplausn: specText(sp.specs, 'upplausn') || null,
+					skjataekni: specText(sp.specs, 'skjataekni') || null,
+					endurnyjunartidni: specText(sp.specs, 'endurnyjunartidni') || null,
+				}
+			}
+		}
+		if (!screen && order.screen_uuid) {
+			const { data: sRow } = await supabase
+				.from('screens')
+				.select('id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni')
+				.eq('id', order.screen_uuid)
+				.single<ScreenRow>()
+			screen = sRow ?? null
+		}
 	}
 
-	return { order, user, pc, console, screen }
+	return { order, user, pc, console, screen, product }
 }
 
 function formatKr(value: number | string | null | undefined) {

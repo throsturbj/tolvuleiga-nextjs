@@ -2,13 +2,22 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { supabasePublic } from "@/lib/supabase-public";
 import { useAuth } from "@/contexts/AuthContext";
 import { debug } from "@/lib/debug";
 import heroImage from "../../img/forsidumynd1.jpg";
+import {
+  displayPrice,
+  formatMonthly,
+  parsePrice,
+  productSubtitle,
+  type Product,
+  type ProductGroup,
+  type ProductVariant,
+} from "@/lib/products";
 
 function LaptopImageCarousel({ images, alt }: { images: string[]; alt: string }) {
   const [idx, setIdx] = useState(0);
@@ -46,73 +55,29 @@ function LaptopImageCarousel({ images, alt }: { images: string[]; alt: string })
   );
 }
 
+type CatalogProduct = Product & {
+  images: string[];
+  fromPrice: number | null;
+};
+
+interface Review {
+  id: string;
+  content: string;
+  reviewer_name: string;
+  rating: number;
+  created_at?: string;
+}
+
 export default function Home() {
-  interface GamingPCItem {
-    id: number;
-    name: string;
-    verd: string;
-    cpu: string;
-    gpu: string;
-    storage: string;
-    uppselt?: boolean;
-    falid?: boolean;
-    tilbod?: boolean;
-    imageUrl?: string;
-  }
-
-  interface GamingConsoleItem {
-    id: string;
-    nafn: string;
-    verd: string;
-    geymsluplass: string;
-    numberofextracontrollers: string;
-    verdextracontrollers: string;
-    tengi: string;
-    imageUrl?: string | null;
-  }
-
-  interface LaptopItem {
-    id: string;
-    name: string;
-    images: string[];
-    fromPrice?: number | null;
-  }
-
-  interface ScreenItem {
-    id: string;
-    framleidandi: string;
-    skjastaerd: string;
-    upplausn: string;
-    skjataekni: string;
-    endurnyjunartidni: string;
-    verd?: string | null;
-    imageUrl?: string | null;
-  }
-
-  interface Review {
-    id: string;
-    content: string;
-    reviewer_name: string;
-    rating: number;
-    created_at?: string;
-  }
-
- 
-
-  const [items, setItems] = useState<GamingPCItem[]>([]);
-  const [itemsLoading, setItemsLoading] = useState<boolean>(true);
-  const [consoles, setConsoles] = useState<GamingConsoleItem[]>([]);
-  const [laptops, setLaptops] = useState<LaptopItem[]>([]);
-  const [laptopsLoading, setLaptopsLoading] = useState<boolean>(true);
-  const [screens, setScreens] = useState<ScreenItem[]>([]);
-  const [screensLoading, setScreensLoading] = useState<boolean>(true);
+  const [groups, setGroups] = useState<ProductGroup[]>([]);
+  const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState<boolean>(true);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const { loading: authLoading, session } = useAuth();
+  const { session } = useAuth();
   const router = useRouter();
-  // Clean native snap-scrolling carousel with center-on-card logic
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState<number>(0);
-  const centerToIndex = (idx: number, behavior: ScrollBehavior = 'smooth') => {
+  const centerToIndex = (idx: number, behavior: ScrollBehavior = "smooth") => {
     const el = scrollerRef.current;
     if (!el) return;
     const cards = Array.from(el.querySelectorAll<HTMLElement>('[data-review-card="true"]'));
@@ -129,7 +94,10 @@ export default function Home() {
     if (!el) return;
     const updateActive = () => {
       const cards = Array.from(el.querySelectorAll<HTMLElement>('[data-review-card="true"]'));
-      if (cards.length === 0) { setActiveIndex(0); return; }
+      if (cards.length === 0) {
+        setActiveIndex(0);
+        return;
+      }
       const containerCenter = el.scrollLeft + el.clientWidth / 2;
       let bestIdx = 0;
       let bestDist = Number.POSITIVE_INFINITY;
@@ -153,379 +121,179 @@ export default function Home() {
         });
       }
     };
-    el.addEventListener('scroll', onScroll, { passive: true } as AddEventListenerOptions);
-    // Center first card after layout
+    el.addEventListener("scroll", onScroll, { passive: true } as AddEventListenerOptions);
     requestAnimationFrame(() => {
-      centerToIndex(0, 'auto');
+      centerToIndex(0, "auto");
       updateActive();
     });
     const onResize = () => {
-      centerToIndex(activeIndex, 'auto');
+      centerToIndex(activeIndex, "auto");
       updateActive();
     };
-    window.addEventListener('resize', onResize);
+    window.addEventListener("resize", onResize);
     return () => {
-      el.removeEventListener('scroll', onScroll as EventListener);
-      window.removeEventListener('resize', onResize);
+      el.removeEventListener("scroll", onScroll as EventListener);
+      window.removeEventListener("resize", onResize);
     };
   }, [reviews.length]);
 
   useEffect(() => {
     let isMounted = true;
-    const fetchItems = async () => {
+    const fetchCatalog = async () => {
       try {
-        if (isMounted) setItemsLoading(true);
-        // Prefer authed client if user exists; otherwise anon; fallback to the other on failure/empty
+        setCatalogLoading(true);
         const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
-        debug('Home/PCs/start', { hasUser: !!session?.user, order: clients.map((c) => (c === supabase ? 'authed' : 'anon')) });
-        let data: GamingPCItem[] | null = null;
-        let lastError: unknown = null;
-        for (const client of clients) {
-          try {
-            const { data: d, error } = await client
-              .from("GamingPC")
-              .select("id, name, verd, cpu, gpu, storage, uppselt, falid, tilbod")
-              .order("id", { ascending: false });
-            if (error) {
-              lastError = error;
-              debug('Home/PCs/error', { client: client === supabase ? 'authed' : 'anon', error });
-              continue;
-            }
-            const arr = (d as GamingPCItem[]) || [];
-            debug('Home/PCs/result', { client: client === supabase ? 'authed' : 'anon', count: arr.length });
-            if (arr.length > 0) {
-              data = arr;
-              break;
-            } else {
-              // keep trying next client if current returned empty
-              data = arr;
-            }
-          } catch (e) {
-            lastError = e;
-            debug('Home/PCs/exception', { client: client === supabase ? 'authed' : 'anon', error: e });
-          }
-        }
-        if (!isMounted) return;
-        if (!data) {
-          console.error('Home: Error fetching products', lastError);
-          setItems([]);
-          setItemsLoading(false);
-        } else {
-          const visible = data.filter((pc) => pc.falid === true ? false : true);
-          // Sort by numeric verd ascending (smallest price first)
-          const sorted = [...visible].sort((a, b) => {
-            const aDigits = (a.verd || '').toString().replace(/\D+/g, '');
-            const bDigits = (b.verd || '').toString().replace(/\D+/g, '');
-            const aNum = parseInt(aDigits, 10) || 0;
-            const bNum = parseInt(bDigits, 10) || 0;
-            return aNum - bNum;
-          });
-          debug('Home/PCs/visible', { count: sorted.length });
-          // Batch fetch first images; card price comes from GamingPC.verd
-          try {
-            const ids = sorted.map((p) => p.id);
-            let imageMap: Record<number, { path: string; signedUrl: string } | null> = {};
-            if (ids.length > 0) {
-              try {
-                const res = await fetch("/api/images/first", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ pcIds: ids }),
-                });
-                if (res.ok) {
-                  const j = await res.json();
-                  imageMap = (j?.results || {}) as Record<number, { path: string; signedUrl: string } | null>;
-                }
-              } catch {
-                // ignore, keep empty map
-              }
-            }
-            const merged = sorted.map((p) => ({
-              ...p,
-              imageUrl: imageMap[p.id]?.signedUrl,
-            }));
-            setItems(merged);
-            setItemsLoading(false);
-            debug('Home/PCs/setItems', { count: merged.length, withImages: !!Object.keys(imageMap).length });
-          } catch {
-            setItems(sorted);
-            setItemsLoading(false);
-            debug('Home/PCs/setItems', { count: sorted.length, withImages: false, reason: 'aux fetch error' });
-          }
-        }
-      } catch (e) {
-        if (isMounted) {
-          console.error('Home: Unexpected error fetching products', e);
-          setItems([]);
-          setItemsLoading(false);
-        }
-      }
-    };
-    fetchItems();
-    return () => { isMounted = false; };
-    // Re-run when auth state finishes initializing or when user identity changes
-  }, []);
+        let groupRows: ProductGroup[] = [];
+        let productRows: Product[] = [];
+        let variantRows: ProductVariant[] = [];
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchConsoles = async () => {
-      try {
-        // Prefer authed client if user exists; otherwise anon; fallback to the other on failure/empty
-        const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
-        debug('Home/Consoles/start', { hasUser: !!session?.user, order: clients.map((c) => (c === supabase ? 'authed' : 'anon')) });
-        let data: GamingConsoleItem[] | null = null;
-        let lastError: unknown = null;
         for (const client of clients) {
-          try {
-            const { data: d, error } = await client
-              .from("gamingconsoles")
-              .select("id, nafn, verd, geymsluplass, numberofextracontrollers, verdextracontrollers, tengi")
-              .order("inserted_at", { ascending: false });
-            if (error) {
-              lastError = error;
-              debug('Home/Consoles/error', { client: client === supabase ? 'authed' : 'anon', error });
-              continue;
-            }
-            const arr = (d as GamingConsoleItem[]) || [];
-            // Accept empty arrays too; we just prefer a non-empty source if available
-            data = arr;
-            debug('Home/Consoles/result', { client: client === supabase ? 'authed' : 'anon', count: arr.length });
-            if (arr.length > 0) break;
-          } catch (e) {
-            lastError = e;
-            debug('Home/Consoles/exception', { client: client === supabase ? 'authed' : 'anon', error: e });
+          const { data: gData, error: gErr } = await client
+            .from("product_groups")
+            .select("id, slug, title, sort_order, visible, theme")
+            .eq("visible", true)
+            .order("sort_order", { ascending: true });
+          if (gErr) {
+            debug("Home/groups/error", gErr);
+            continue;
           }
+          groupRows = (gData as ProductGroup[]) || [];
+          if (groupRows.length > 0) break;
         }
-        if (!isMounted) return;
-        if (!data) {
-          console.error('Home: Error fetching consoles', lastError);
-          setConsoles([]);
-        } else {
-          const all = data || [];
-          if (all.length === 0) {
-            setConsoles([]);
-            debug('Home/Consoles/set', { count: 0 });
-            return;
-          }
-          try {
-            const ids = all.map((c) => c.id);
-            const res = await fetch("/api/images/first-generic", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ bucket: "consoles", folders: ids }),
-            });
-            if (res.ok) {
-              const j = await res.json();
-              const map: Record<string, { path: string; signedUrl: string } | null> = j?.results || {};
-              const merged = all.map((c) => ({
-                ...c,
-                imageUrl: map[c.id]?.signedUrl || null,
-              }));
-              setConsoles(merged);
-              debug('Home/Consoles/set', { count: merged.length, withImages: true });
-            } else {
-              setConsoles(all);
-              debug('Home/Consoles/set', { count: all.length, withImages: false, reason: 'images api !ok' });
-            }
-          } catch {
-            setConsoles(all);
-            debug('Home/Consoles/set', { count: all.length, withImages: false, reason: 'images api error' });
-          }
-        }
-      } catch (e) {
-        if (isMounted) {
-          console.error('Home: Unexpected error fetching consoles', e);
-          setConsoles([]);
-        }
-      }
-    };
-    fetchConsoles();
-    return () => { isMounted = false; };
-  }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchLaptops = async () => {
-      try {
-        if (isMounted) setLaptopsLoading(true);
-        const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
-        debug('Home/Laptops/start', { hasUser: !!session?.user });
-        // 1) Fetch laptops (id + name + active)
-        let laptopRows: { id: string; name: string; active: boolean | null }[] | null = null;
         for (const client of clients) {
-          try {
-            const { data, error } = await client
-              .from("laptops")
-              .select("id, name, active")
-              .order("created_at", { ascending: false });
-            if (error) {
-              debug('Home/Laptops/error', { client: client === supabase ? 'authed' : 'anon', error });
-              continue;
-            }
-            laptopRows = (data as { id: string; name: string; active: boolean | null }[]) || [];
-            debug('Home/Laptops/result', { client: client === supabase ? 'authed' : 'anon', count: laptopRows.length });
-            if (laptopRows.length > 0) break;
-          } catch (e) {
-            debug('Home/Laptops/exception', { error: e });
+          const { data: pData, error: pErr } = await client
+            .from("products")
+            .select("*")
+            .eq("hidden", false);
+          if (pErr) {
+            debug("Home/products/error", pErr);
+            continue;
           }
+          productRows = (pData as Product[]) || [];
+          if (productRows.length > 0) break;
         }
-        if (!isMounted) return;
-        const visible = (laptopRows || []).filter((l) => l.active !== false);
-        if (visible.length === 0) {
-          setLaptops([]);
-          setLaptopsLoading(false);
-          return;
-        }
-        // 2) Lowest variant price per laptop
-        const priceByLaptop: Record<string, number> = {};
-        try {
-          const ids = visible.map((l) => l.id);
+
+        if (productRows.length > 0) {
           for (const client of clients) {
-            try {
-              const { data: variants, error } = await client
-                .from("laptop_variants")
-                .select("laptop_id, price")
-                .in("laptop_id", ids);
-              if (error) {
-                debug('Home/Laptops/variants/error', { error });
-                continue;
-              }
-              for (const v of (variants || []) as { laptop_id: string; price: number | string | null }[]) {
-                const n = typeof v.price === "number" ? v.price : parseFloat(String(v.price ?? "").replace(/[^\d.]/g, ""));
-                if (!Number.isFinite(n)) continue;
-                const prev = priceByLaptop[v.laptop_id];
-                if (prev === undefined || n < prev) priceByLaptop[v.laptop_id] = n;
-              }
-              break;
-            } catch (e) {
-              debug('Home/Laptops/variants/exception', { error: e });
+            const { data: vData, error: vErr } = await client
+              .from("product_variants")
+              .select("id, product_id, options, price, trygging, stock_quantity, legacy_id");
+            if (vErr) {
+              debug("Home/variants/error", vErr);
+              continue;
             }
+            variantRows = (vData as ProductVariant[]) || [];
+            break;
           }
-        } catch {
-          // ignore — cards can still render without prices
         }
-        // 3) For each laptop, list images under laptopimages/<id>/ and cycle through them
-        const merged: LaptopItem[] = await Promise.all(
-          visible.map(async (l) => {
-            const fromPrice = priceByLaptop[l.id] ?? null;
+
+        if (!isMounted) return;
+
+        const minPriceByProduct: Record<string, number> = {};
+        for (const v of variantRows) {
+          const n = parsePrice(v.price);
+          if (!n) continue;
+          const prev = minPriceByProduct[v.product_id];
+          if (prev === undefined || n < prev) minPriceByProduct[v.product_id] = n;
+        }
+
+        const byBucket = new Map<string, string[]>();
+        for (const p of productRows) {
+          const bucket = p.image_bucket || "";
+          const folder = p.image_folder || p.id;
+          if (!bucket || !folder) continue;
+          const list = byBucket.get(bucket) || [];
+          list.push(folder);
+          byBucket.set(bucket, list);
+        }
+
+        const firstImageByFolder: Record<string, string> = {};
+        const carouselByFolder: Record<string, string[]> = {};
+
+        await Promise.all(
+          Array.from(byBucket.entries()).map(async ([bucket, folders]) => {
+            const unique = Array.from(new Set(folders));
+            try {
+              const res = await fetch("/api/images/first-generic", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bucket, folders: unique }),
+              });
+              if (res.ok) {
+                const j = await res.json();
+                const map = (j?.results || {}) as Record<string, { signedUrl?: string } | null>;
+                for (const folder of unique) {
+                  const url = map[folder]?.signedUrl;
+                  if (url) firstImageByFolder[`${bucket}:${folder}`] = url;
+                }
+              }
+            } catch {
+              // images are optional
+            }
+          })
+        );
+
+        const laptopFolders = productRows
+          .filter((p) => p.type === "laptop")
+          .map((p) => ({ bucket: p.image_bucket || "laptopimages", folder: p.image_folder || p.id }));
+        await Promise.all(
+          laptopFolders.map(async ({ bucket, folder }) => {
             try {
               const res = await fetch("/api/images/list-generic", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ bucket: "laptopimages", folder: l.id }),
+                body: JSON.stringify({ bucket, folder }),
               });
               if (res.ok) {
                 const j = await res.json();
                 const files: { signedUrl: string }[] = j?.files || [];
-                return { id: l.id, name: l.name, images: files.map((f) => f.signedUrl).filter(Boolean), fromPrice };
+                carouselByFolder[`${bucket}:${folder}`] = files.map((f) => f.signedUrl).filter(Boolean);
               }
             } catch {
               // ignore
             }
-            return { id: l.id, name: l.name, images: [] as string[], fromPrice };
           })
         );
-        if (isMounted) {
-          setLaptops(merged);
-          setLaptopsLoading(false);
-          debug('Home/Laptops/set', { count: merged.length, withPrices: Object.keys(priceByLaptop).length });
-        }
-      } catch (e) {
-        if (isMounted) {
-          console.error('Home: Unexpected error fetching laptops', e);
-          setLaptops([]);
-          setLaptopsLoading(false);
-        }
-      }
-    };
-    fetchLaptops();
-    return () => { isMounted = false; };
-  }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchScreens = async () => {
-      try {
-        if (isMounted) setScreensLoading(true);
-        const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
-        debug('Home/Screens/start', { hasUser: !!session?.user });
-        let data: ScreenItem[] | null = null;
-        let lastError: unknown = null;
-        for (const client of clients) {
-          try {
-            const { data: d, error } = await client
-              .from("screens")
-              .select("id, framleidandi, skjastaerd, upplausn, skjataekni, endurnyjunartidni, verd")
-              .order("created_at", { ascending: false });
-            if (error) {
-              lastError = error;
-              debug('Home/Screens/error', { client: client === supabase ? 'authed' : 'anon', error });
-              continue;
-            }
-            const arr = (d as ScreenItem[]) || [];
-            data = arr;
-            debug('Home/Screens/result', { client: client === supabase ? 'authed' : 'anon', count: arr.length });
-            if (arr.length > 0) break;
-          } catch (e) {
-            lastError = e;
-            debug('Home/Screens/exception', { error: e });
-          }
-        }
-        if (!isMounted) return;
-        if (!data) {
-          console.error('Home: Error fetching screens', lastError);
-          setScreens([]);
-          setScreensLoading(false);
-          return;
-        }
-        if (data.length === 0) {
-          setScreens([]);
-          setScreensLoading(false);
-          return;
-        }
-        try {
-          const ids = data.map((s) => s.id);
-          const res = await fetch("/api/images/first-generic", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bucket: "screens", folders: ids }),
-          });
-          if (res.ok) {
-            const j = await res.json();
-            const map: Record<string, { path: string; signedUrl: string } | null> = j?.results || {};
-            const merged = data.map((s) => ({
-              ...s,
-              imageUrl: map[s.id]?.signedUrl || null,
-            }));
-            setScreens(merged);
-            debug('Home/Screens/set', { count: merged.length, withImages: true });
-          } else {
-            setScreens(data);
-            debug('Home/Screens/set', { count: data.length, withImages: false, reason: 'images api !ok' });
-          }
-        } catch {
-          setScreens(data);
-          debug('Home/Screens/set', { count: data.length, withImages: false, reason: 'images api error' });
-        }
-        if (isMounted) setScreensLoading(false);
+        const merged: CatalogProduct[] = productRows.map((p) => {
+          const key = `${p.image_bucket || ""}:${p.image_folder || p.id}`;
+          const carousel = carouselByFolder[key];
+          const first = firstImageByFolder[key];
+          const images = carousel && carousel.length > 0 ? carousel : first ? [first] : [];
+          const fromPrice = minPriceByProduct[p.id] ?? (p.price != null ? displayPrice(p) : null);
+          return { ...p, images, fromPrice };
+        });
+
+        merged.sort((a, b) => {
+          const aPrice = a.fromPrice ?? Number.POSITIVE_INFINITY;
+          const bPrice = b.fromPrice ?? Number.POSITIVE_INFINITY;
+          return aPrice - bPrice;
+        });
+
+        setGroups(groupRows);
+        setCatalog(merged);
+        debug("Home/catalog", { groups: groupRows.length, products: merged.length });
       } catch (e) {
         if (isMounted) {
-          console.error('Home: Unexpected error fetching screens', e);
-          setScreens([]);
-          setScreensLoading(false);
+          console.error("Home: Unexpected error fetching catalog", e);
+          setGroups([]);
+          setCatalog([]);
         }
+      } finally {
+        if (isMounted) setCatalogLoading(false);
       }
     };
-    fetchScreens();
-    return () => { isMounted = false; };
-  }, []);
+    fetchCatalog();
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.user]);
 
   useEffect(() => {
     let isMounted = true;
     const fetchReviews = async () => {
       try {
-        // Public reads should work via anon due to RLS policy
-        // Fall back to authed if needed
         const clients = session?.user ? [supabasePublic, supabase] : [supabasePublic, supabase];
         let data: Review[] | null = null;
         for (const client of clients) {
@@ -550,57 +318,17 @@ export default function Home() {
       }
     };
     fetchReviews();
-    return () => { isMounted = false; };
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.user]);
 
-  const isIpad = (name: string) => name.trim().toLowerCase().startsWith("ipad");
-  const isMacbook = (name: string) => name.trim().toLowerCase().startsWith("macbook");
-  const byLowestPrice = (a: LaptopItem, b: LaptopItem) => {
-    if (a.fromPrice == null && b.fromPrice == null) return 0;
-    if (a.fromPrice == null) return 1;
-    if (b.fromPrice == null) return -1;
-    return a.fromPrice - b.fromPrice;
-  };
-  const appleLaptops = laptops.filter((l) => isMacbook(l.name)).sort(byLowestPrice);
-  const ipads = laptops.filter((l) => isIpad(l.name)).sort(byLowestPrice);
-  const windowsLaptops = laptops.filter((l) => !isIpad(l.name) && !isMacbook(l.name)).sort(byLowestPrice);
-
-  /** Same track width as a 3-up Gaming PC card; center leftover items */
   const cardGridClass = "flex flex-wrap justify-center gap-6";
   const cardColClass = "w-full sm:w-[calc(50%-0.75rem)] lg:w-[calc((100%-3rem)/3)]";
 
-  const renderLaptopCard = (l: LaptopItem) => (
-    <div
-      key={l.id}
-      role="link"
-      tabIndex={0}
-      onClick={() => router.push(`/laptop/${l.id}`)}
-      onKeyDown={(e) => { if (e.key === "Enter") router.push(`/laptop/${l.id}`); }}
-      className={`${cardColClass} group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 backdrop-blur transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-[var(--color-accent)]/60 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_var(--color-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]`}
-    >
-      <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-px bg-gradient-to-r from-transparent via-[var(--color-accent)]/70 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-      <div className="relative aspect-video w-full overflow-hidden bg-black/30">
-        <LaptopImageCarousel images={l.images} alt={l.name} />
-      </div>
-      <div className="p-6">
-        <h3 className="text-lg font-semibold text-white">
-          {l.name}
-        </h3>
-        {l.fromPrice != null ? (
-          <p className="mt-2 text-xl font-bold text-[var(--color-accent)]">
-            {`Frá ${Math.round(l.fromPrice).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} kr/mánuði`}
-          </p>
-        ) : null}
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); router.push(`/laptop/${l.id}`); }}
-          className="mt-4 inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
-        >
-          Sjá nánar
-        </button>
-      </div>
-    </div>
-  );
+  const productsForGroup = (groupId: string) => catalog.filter((p) => p.group_id === groupId);
+
+  const firstGroupSlug = groups[0]?.slug || "apple-laptops";
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -610,7 +338,7 @@ export default function Home() {
       stars.push(
         <svg
           key={i}
-          className={`h-4 w-4 ${filled ? 'text-yellow-500' : 'text-gray-300'}`}
+          className={`h-4 w-4 ${filled ? "text-yellow-500" : "text-gray-300"}`}
           viewBox="0 0 20 20"
           fill="currentColor"
           aria-hidden="true"
@@ -619,18 +347,150 @@ export default function Home() {
         </svg>
       );
     }
-    return <div className="flex gap-1" aria-label={`${clamped} stjörnur`}>{stars}</div>;
+    return (
+      <div className="flex gap-1" aria-label={`${clamped} stjörnur`}>
+        {stars}
+      </div>
+    );
   };
 
- 
+  const renderCard = (p: CatalogProduct, theme: ProductGroup["theme"]) => {
+    const dark = theme !== "light";
+    const href = `/product/${p.id}`;
+    const subtitle = productSubtitle(p);
+    const priceLabel =
+      p.fromPrice != null
+        ? p.type === "laptop" || p.type === "console"
+          ? `Frá ${formatMonthly(p.fromPrice)}`
+          : formatMonthly(p.fromPrice)
+        : null;
+    const accentPrice = theme === "teal" ? "text-teal-300/90" : dark ? "text-[var(--color-accent)]" : "text-[var(--color-secondary)]";
+    const cta =
+      theme === "teal"
+        ? "rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500"
+        : "rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95";
+
+    return (
+      <div
+        key={p.id}
+        role="link"
+        tabIndex={0}
+        onClick={() => router.push(href)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") router.push(href);
+        }}
+        className={
+          dark
+            ? `${cardColClass} group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 backdrop-blur transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-[var(--color-accent)]/60 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_var(--color-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]`
+            : `${cardColClass} group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer`
+        }
+      >
+        <div className={dark ? "relative aspect-video w-full overflow-hidden bg-black/30" : "relative aspect-video overflow-hidden bg-gray-200"}>
+          {p.type === "laptop" ? (
+            <LaptopImageCarousel images={p.images} alt={p.name} />
+          ) : p.images[0] ? (
+            <>
+              <img
+                src={p.images[0]}
+                alt={p.name}
+                className="absolute inset-0 h-full w-full object-contain transition-transform duration-300 ease-out group-hover:scale-[1.02]"
+                loading="lazy"
+              />
+              {p.tilbod ? (
+                <div className="pointer-events-none absolute top-0 left-0 z-[2] w-full h-0">
+                  <span className="absolute -left-10 top-3 w-44 rotate-[-18deg] text-center inline-block bg-gradient-to-r from-amber-600 to-orange-500 text-white text-[11px] sm:text-xs font-extrabold uppercase tracking-wide px-0 py-1.5 shadow-xl ring-1 ring-white/70">
+                    Nýárstilboð
+                  </span>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className={`absolute inset-0 flex items-center justify-center ${dark ? "text-white/25" : "text-gray-400"}`}>
+              <svg className="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5l3.75-3h10.5L21 7.5v9l-3.75 3H6.75L3 16.5v-9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 14.25l4.5-4.5 6 6 2.25-2.25L21 16.5" />
+              </svg>
+            </div>
+          )}
+          {p.uppselt ? (
+            <div className="absolute bottom-0 left-0 right-0">
+              <div className="mx-2 mb-2 rounded border border-gray-400 bg-gray-800/80 text-white text-xs font-semibold text-center py-1">
+                Uppselt!
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div className="p-6">
+          <h3 className={`text-lg font-semibold ${dark ? "text-white" : "text-gray-900"}`}>{p.name}</h3>
+          {subtitle ? (
+            <p className={`text-sm mt-1 ${dark ? "text-white/60" : "text-gray-600"}`}>{subtitle}</p>
+          ) : null}
+          {priceLabel ? <p className={`mt-2 text-xl font-bold ${accentPrice}`}>{priceLabel}</p> : null}
+          <div className="mt-4 flex items-center gap-2">
+            <Link href={href} className={cta} onClick={(e) => e.stopPropagation()}>
+              Sjá nánar
+            </Link>
+            {p.uppselt ? (
+              <Link href={href} className={cta} onClick={(e) => e.stopPropagation()}>
+                Skrá á biðlista
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const sectionWrap = (group: ProductGroup, children: ReactNode) => {
+    if (group.theme === "light") {
+      return (
+        <section id={group.slug} key={group.id} className="bg-gray-50 py-14">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold tracking-tight text-gray-900">{group.title}</h2>
+            </div>
+            {children}
+          </div>
+        </section>
+      );
+    }
+    if (group.theme === "teal") {
+      return (
+        <section id={group.slug} key={group.id} className="relative overflow-hidden bg-gradient-to-br from-[#0c1216] via-[#101820] to-[#0e1a1c] py-20">
+          <div className="pointer-events-none absolute -top-32 -right-24 h-80 w-80 rounded-full bg-teal-500/20 blur-[120px]" />
+          <div className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-sky-600/15 blur-[120px]" />
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">{group.title}</h2>
+            </div>
+            {children}
+          </div>
+        </section>
+      );
+    }
+    return (
+      <section id={group.slug} key={group.id} className="relative overflow-hidden bg-gradient-to-br from-[#0b0b12] via-[#11121c] to-[#1a0f1e] py-20">
+        <div className="pointer-events-none absolute -top-32 -left-24 h-80 w-80 rounded-full bg-[var(--color-accent)]/30 blur-[120px]" />
+        <div className="pointer-events-none absolute -bottom-32 -right-24 h-80 w-80 rounded-full bg-fuchsia-500/20 blur-[120px]" />
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">{group.title}</h2>
+          </div>
+          {children}
+        </div>
+      </section>
+    );
+  };
+
   return (
     <div className="min-h-screen">
-      {process.env.NEXT_PUBLIC_DEBUG === 'true' ? (
+      {process.env.NEXT_PUBLIC_DEBUG === "true" ? (
         <div className="fixed bottom-2 right-2 z-50 text-[10px] bg-black/70 text-white px-2 py-1 rounded">
-          <span>debug: items={items.length} consoles={consoles.length} screens={screens.length}</span>
+          <span>
+            debug: groups={groups.length} products={catalog.length}
+          </span>
         </div>
       ) : null}
-      {/* Hero Section */}
       <section className="relative isolate min-h-[min(88vh,920px)] overflow-hidden bg-[#0a0f0c]">
         <Image
           src={heroImage}
@@ -654,14 +514,11 @@ export default function Home() {
             <div className="hero-fade-up hero-delay-2 mt-8">
               <button
                 onClick={() => {
-                  const el =
-                    document.getElementById("laptops") ||
-                    document.getElementById("ipads") ||
-                    document.getElementById("windows-laptops");
+                  const el = document.getElementById(firstGroupSlug);
                   if (el && typeof el.scrollIntoView === "function") {
                     el.scrollIntoView({ behavior: "smooth", block: "start" });
                   } else {
-                    window.location.hash = "#laptops";
+                    window.location.hash = `#${firstGroupSlug}`;
                   }
                 }}
                 className="rounded-md bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_30px_-12px_var(--color-accent)] transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
@@ -673,7 +530,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features Section */}
       <section className="py-14 sm:py-16">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-12 sm:grid-cols-3 sm:gap-10">
@@ -708,362 +564,48 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Apple Fartölvur (MacBook) */}
-      {(laptopsLoading || appleLaptops.length > 0) ? (
-        <section id="laptops" className="relative overflow-hidden bg-gradient-to-br from-[#0b0b12] via-[#11121c] to-[#1a0f1e] py-20">
-          <div className="pointer-events-none absolute -top-32 -left-24 h-80 w-80 rounded-full bg-[var(--color-accent)]/30 blur-[120px]" />
-          <div className="pointer-events-none absolute -bottom-32 -right-24 h-80 w-80 rounded-full bg-fuchsia-500/20 blur-[120px]" />
-          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-                Apple Fartölvur
-              </h2>
-            </div>
-            <div className={cardGridClass}>
-              {laptopsLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={`mac-sk-${i}`} className={`${cardColClass} rounded-lg border border-white/10 bg-white/5 overflow-hidden`}>
-                    <div className="aspect-video w-full bg-white/10 animate-pulse" />
-                    <div className="p-6 space-y-2">
-                      <div className="h-5 w-3/5 bg-white/10 rounded animate-pulse" />
-                      <div className="h-4 w-2/5 bg-white/5 rounded animate-pulse" />
-                    </div>
-                  </div>
-                ))
-              ) : (
-                appleLaptops.map(renderLaptopCard)
-              )}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {/* iPad */}
-      {(laptopsLoading || ipads.length > 0) ? (
-        <section id="ipads" className="relative overflow-hidden bg-gradient-to-br from-[#0b0b12] via-[#11121c] to-[#1a0f1e] py-20">
-          <div className="pointer-events-none absolute -top-32 -right-24 h-80 w-80 rounded-full bg-[var(--color-accent)]/25 blur-[120px]" />
-          <div className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-fuchsia-500/15 blur-[120px]" />
-          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-                iPad
-              </h2>
-            </div>
-            <div className={cardGridClass}>
-              {laptopsLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={`ipad-sk-${i}`} className={`${cardColClass} rounded-lg border border-white/10 bg-white/5 overflow-hidden`}>
-                    <div className="aspect-video w-full bg-white/10 animate-pulse" />
-                    <div className="p-6 space-y-2">
-                      <div className="h-5 w-3/5 bg-white/10 rounded animate-pulse" />
-                      <div className="h-4 w-2/5 bg-white/5 rounded animate-pulse" />
-                    </div>
-                  </div>
-                ))
-              ) : (
-                ipads.map(renderLaptopCard)
-              )}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {/* Windows Fartölvur */}
-      {(laptopsLoading || windowsLaptops.length > 0) ? (
-        <section id="windows-laptops" className="relative overflow-hidden bg-gradient-to-br from-[#0b0b12] via-[#11121c] to-[#1a0f1e] py-20">
-          <div className="pointer-events-none absolute -top-32 -left-24 h-80 w-80 rounded-full bg-[var(--color-accent)]/20 blur-[120px]" />
-          <div className="pointer-events-none absolute -bottom-32 -right-24 h-80 w-80 rounded-full bg-sky-500/15 blur-[120px]" />
-          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-                Windows Fartölvur
-              </h2>
-            </div>
-            <div className={cardGridClass}>
-              {laptopsLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={`win-sk-${i}`} className={`${cardColClass} rounded-lg border border-white/10 bg-white/5 overflow-hidden`}>
-                    <div className="aspect-video w-full bg-white/10 animate-pulse" />
-                    <div className="p-6 space-y-2">
-                      <div className="h-5 w-3/5 bg-white/10 rounded animate-pulse" />
-                      <div className="h-4 w-2/5 bg-white/5 rounded animate-pulse" />
-                    </div>
-                  </div>
-                ))
-              ) : (
-                windowsLaptops.map(renderLaptopCard)
-              )}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {/* Featured Properties Preview */}
-      <section id="products" className="bg-gray-50 py-14">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-              Borðtölvur
-            </h2>
-          </div>
+      {groups.map((group) => {
+        const items = productsForGroup(group.id);
+        if (!catalogLoading && items.length === 0) return null;
+        return sectionWrap(
+          group,
           <div className={cardGridClass}>
-            {itemsLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={`sk-${i}`} className={`${cardColClass} bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden`}>
-                  <div className="relative aspect-video bg-gray-200 animate-pulse" />
-                  <div className="p-6 space-y-2">
-                    <div className="h-5 w-3/5 bg-gray-200 rounded animate-pulse" />
-                    <div className="h-4 w-4/5 bg-gray-100 rounded animate-pulse" />
-                    <div className="mt-4 flex items-center gap-2">
-                      <div className="h-9 w-28 bg-gray-200 rounded animate-pulse" />
-                      <div className="h-9 w-28 bg-gray-100 rounded animate-pulse" />
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : null}
-            {items.map((pc) => (
-              <div
-                key={pc.id}
-                className={`${cardColClass} group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer`}
-                role="link"
-                tabIndex={0}
-                onClick={() => router.push(`/product/${pc.id}`)}
-                onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/product/${pc.id}`); }}
-              >
-                <div className="relative aspect-video overflow-hidden bg-gray-200">
-                  {pc.imageUrl ? (
-                    <>
-                      <img
-                        src={pc.imageUrl}
-                        alt={pc.name}
-                        className="absolute inset-0 h-full w-full object-contain transition-transform duration-300 ease-out group-hover:scale-[1.02]"
-                        loading="lazy"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-                      {pc.tilbod ? (
-                        <div className="pointer-events-none absolute top-0 left-0 z-[2] w-full h-0">
-                          <span className="absolute -left-10 top-3 w-44 rotate-[-18deg] text-center inline-block bg-gradient-to-r from-amber-600 to-orange-500 text-white text-[11px] sm:text-xs font-extrabold uppercase tracking-wide px-0 py-1.5 shadow-xl ring-1 ring-white/70">
-                            Nýárstilboð
-                          </span>
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-                      <svg className="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5l3.75-3h10.5L21 7.5v9l-3.75 3H6.75L3 16.5v-9z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 14.25l4.5-4.5 6 6 2.25-2.25L21 16.5" />
-                      </svg>
-                    </div>
-                  )}
-                  {pc.uppselt ? (
-                    <div className="absolute bottom-0 left-0 right-0">
-                      <div className="mx-2 mb-2 rounded border border-gray-400 bg-gray-800/80 text-white text-xs font-semibold text-center py-1">
-                        Uppselt!
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900">{pc.name}</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {pc.gpu} · {pc.cpu} · {pc.storage}
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-xl font-bold text-[var(--color-secondary)]">
-                      {(() => {
-                        const digits = (pc.verd || '').toString().replace(/\D+/g, '');
-                        const num = parseInt(digits, 10) || 0;
-                        const formatted = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-                        return `${formatted} kr/mánuði`;
-                      })()}
-                    </span>
-                  </div>
-                  <div className="mt-4 flex items-center gap-2">
-                    <Link
-                      href={`/product/${pc.id}`}
-                      className="inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Sjá nánar
-                    </Link>
-                    {pc.uppselt ? (
-                      <Link
-                        href={`/product/${pc.id}`}
-                        className="inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Skrá á biðlista
-                      </Link>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {consoles.map((c) => (
-              <div
-                key={c.id}
-                className={`${cardColClass} group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer`}
-                role="link"
-                tabIndex={0}
-                onClick={() => router.push(`/console/${c.id}`)}
-                onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/console/${c.id}`); }}
-              >
-                <div className="relative aspect-video overflow-hidden bg-gray-200">
-                  {c.imageUrl ? (
-                    <>
-                      <img
-                        src={c.imageUrl}
-                        alt={c.nafn}
-                        className="absolute inset-0 h-full w-full object-contain transition-transform duration-300 ease-out group-hover:scale-[1.02]"
-                        loading="lazy"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-                    </>
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-                      <svg className="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5l3.75-3h10.5L21 7.5v9l-3.75 3H6.75L3 16.5v-9z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 14.25l4.5-4.5 6 6 2.25-2.25L21 16.5" />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-                <div className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900">{c.nafn}</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {c.geymsluplass} · {c.tengi}
-                  </p>
-                  <p className="text-xl font-bold text-[var(--color-secondary)] mt-2">
-                    {(() => {
-                      const digits = (c.verd || '').toString().replace(/\D+/g, '');
-                      const base = parseInt(digits, 10) || 0;
-                      const raw = Math.round(base * 0.88); // 12% off total price
-                      const rounded = Math.ceil(raw / 10) * 10;
-                      const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-                      return `Frá ${formatted} kr/mánuði`;
-                    })()}
-                  </p>
-                  <Link
-                    href={`/console/${c.id}`}
-                    className="mt-4 inline-block rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
-                    onClick={(e) => e.stopPropagation()}
+            {catalogLoading
+              ? Array.from({ length: 3 }).map((_, i) => (
+                  <div
+                    key={`${group.id}-sk-${i}`}
+                    className={
+                      group.theme === "light"
+                        ? `${cardColClass} bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden`
+                        : `${cardColClass} rounded-lg border border-white/10 bg-white/5 overflow-hidden`
+                    }
                   >
-                    Sjá nánar
-                  </Link>
-                </div>
-              </div>
-            ))}
+                    <div className={`aspect-video w-full ${group.theme === "light" ? "bg-gray-200" : "bg-white/10"} animate-pulse`} />
+                    <div className="p-6 space-y-2">
+                      <div className={`h-5 w-3/5 rounded animate-pulse ${group.theme === "light" ? "bg-gray-200" : "bg-white/10"}`} />
+                      <div className={`h-4 w-4/5 rounded animate-pulse ${group.theme === "light" ? "bg-gray-100" : "bg-white/5"}`} />
+                    </div>
+                  </div>
+                ))
+              : items.map((p) => renderCard(p, group.theme))}
           </div>
-        </div>
-      </section>
+        );
+      })}
 
-      {/* Screens Section */}
-      <section id="screens" className="relative overflow-hidden bg-gradient-to-br from-[#0c1216] via-[#101820] to-[#0e1a1c] py-20">
-        <div className="pointer-events-none absolute -top-32 -right-24 h-80 w-80 rounded-full bg-teal-500/20 blur-[120px]" />
-        <div className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-sky-600/15 blur-[120px]" />
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-              Skjáir
-            </h2>
-          </div>
-          <div className={cardGridClass}>
-            {screensLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={`scr-sk-${i}`} className={`${cardColClass} rounded-lg border border-white/10 bg-white/5 overflow-hidden`}>
-                  <div className="aspect-video w-full bg-white/10 animate-pulse" />
-                  <div className="p-6 space-y-2">
-                    <div className="h-5 w-3/5 bg-white/10 rounded animate-pulse" />
-                    <div className="h-4 w-4/5 bg-white/5 rounded animate-pulse" />
-                    <div className="h-5 w-2/5 bg-white/10 rounded animate-pulse mt-2" />
-                  </div>
-                </div>
-              ))
-            ) : screens.length === 0 ? (
-              <div className="w-full text-center text-white/60">
-                Skjáir væntanlegir fljótlega.
-              </div>
-            ) : (
-              screens.map((s) => (
-                <div
-                  key={s.id}
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => router.push(`/productscreen/${s.id}`)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/productscreen/${s.id}`); }}
-                  className={`${cardColClass} group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 backdrop-blur transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-teal-400/50 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_rgba(45,212,191,0.45)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400`}
-                >
-                  <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-px bg-gradient-to-r from-transparent via-teal-400/70 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                  <div className="relative aspect-video w-full overflow-hidden bg-black/30">
-                    {s.imageUrl ? (
-                      <img
-                        src={s.imageUrl}
-                        alt={`${s.framleidandi} ${s.skjastaerd}`}
-                        className="absolute inset-0 h-full w-full object-contain transition-transform duration-300 ease-out group-hover:scale-[1.02]"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-white/25">
-                        <svg className="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25A1.5 1.5 0 015.25 3.75h13.5a1.5 1.5 0 011.5 1.5v10.5a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V5.25z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 20.25h7.5M12 17.25v3" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-6">
-                    <h3 className="text-lg font-semibold text-white">
-                      {s.framleidandi} {s.skjastaerd}
-                    </h3>
-                    <p className="mt-1 text-sm text-white/60">
-                      {[s.upplausn, s.skjataekni, s.endurnyjunartidni].filter(Boolean).join(' · ')}
-                    </p>
-                    {s.verd ? (
-                      <p className="mt-2 text-xl font-bold text-teal-300/90">
-                        {(() => {
-                          const digits = (s.verd || '').toString().replace(/\D+/g, '');
-                          const num = parseInt(digits, 10) || 0;
-                          const formatted = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-                          return `${formatted} kr/mánuði`;
-                        })()}
-                      </p>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); router.push(`/productscreen/${s.id}`); }}
-                      className="mt-4 inline-block rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400"
-                    >
-                      Sjá nánar
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Reviews Section */}
       <section className="py-14">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-              Umsagnir viðskiptavina
-            </h2>
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900">Umsagnir viðskiptavina</h2>
           </div>
           <div className="relative">
             {reviews.length === 0 ? (
-              <div className="w-full text-center text-sm text-gray-500">
-                Engar umsagnir tiltækar enn.
-              </div>
+              <div className="w-full text-center text-sm text-gray-500">Engar umsagnir tiltækar enn.</div>
             ) : reviews.length === 1 ? (
               <div className="flex justify-center">
                 <div className="w-80 flex-none rounded-lg border border-gray-200 bg-white p-6 shadow-sm flex flex-col h-[22rem]">
                   <p
                     className="text-base text-gray-900 flex-1 overflow-hidden"
-                    style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' }}
+                    style={{ display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" }}
                   >
                     {reviews[0].content}
                   </p>
@@ -1081,7 +623,7 @@ export default function Home() {
                     className="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory px-2
                     [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                   >
-                    {reviews.map((r, idx) => (
+                    {reviews.map((r) => (
                       <div
                         key={r.id}
                         data-review-card="true"
@@ -1089,7 +631,7 @@ export default function Home() {
                       >
                         <p
                           className="text-base text-gray-900 flex-1 overflow-hidden"
-                          style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' }}
+                          style={{ display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" }}
                         >
                           {r.content}
                         </p>
@@ -1128,7 +670,7 @@ export default function Home() {
                       type="button"
                       aria-label={`Fara á umsögn ${i + 1}`}
                       onClick={() => centerToIndex(i)}
-                      className={`h-2.5 rounded-full transition-all ${activeIndex === i ? 'w-5 bg-[var(--color-accent)]' : 'w-2.5 bg-gray-300 hover:bg-gray-400'}`}
+                      className={`h-2.5 rounded-full transition-all ${activeIndex === i ? "w-5 bg-[var(--color-accent)]" : "w-2.5 bg-gray-300 hover:bg-gray-400"}`}
                     />
                   ))}
                 </div>

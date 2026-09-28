@@ -23,6 +23,8 @@ interface AdminOrderRow {
   gamingconsole_uuid?: string | null;
   screen_uuid?: string | null;
   laptop_variant_uuid?: string | null;
+  product_id?: string | null;
+  variant_id?: string | null;
   numberofextracon?: number | null;
   pdf_url?: string | null;
 }
@@ -42,6 +44,7 @@ export default function AdminDashboardPage() {
   const [ownersByUid, setOwnersByUid] = useState<Record<string, string>>({});
   const [kennitalaByUid, setKennitalaByUid] = useState<Record<string, string>>({});
   const [pcNamesById, setPcNamesById] = useState<Record<number, string>>({});
+  const [productNamesById, setProductNamesById] = useState<Record<string, string>>({});
   const [pendingStatusById, setPendingStatusById] = useState<Record<string, string>>({});
   const [busyUpdateById, setBusyUpdateById] = useState<Record<string, boolean>>({});
   const [busyDeleteById, setBusyDeleteById] = useState<Record<string, boolean>>({});
@@ -165,6 +168,15 @@ export default function AdminDashboardPage() {
           } else {
             setOwnersByUid({});
             setKennitalaByUid({});
+          }
+          const productIds = Array.from(new Set(rows.map(r => r.product_id).filter((v): v is string => typeof v === 'string' && v.length > 0)));
+          if (productIds.length > 0) {
+            const { data: pData } = await supabase.from('products').select('id,name').in('id', productIds);
+            const mapP: Record<string, string> = {};
+            (pData || []).forEach((r: { id: string; name: string }) => { mapP[r.id] = r.name; });
+            setProductNamesById(mapP);
+          } else {
+            setProductNamesById({});
           }
           // Fetch GamingPC names
           const pcIds = Array.from(new Set(rows.map(r => r.gamingpc_uuid).filter((v): v is number => typeof v === 'number')));
@@ -766,7 +778,9 @@ export default function AdminDashboardPage() {
                     </td>
                     <td className="px-4 py-3 align-top text-gray-700">{o.auth_uid ? (kennitalaByUid[o.auth_uid] || '—') : '—'}</td>
                     <td className="px-4 py-3 align-top text-gray-700 min-w-[16rem] pr-3">
-                      {o.laptop_variant_uuid ? (() => {
+                      {o.product_id && productNamesById[o.product_id]
+                        ? productNamesById[o.product_id]
+                        : o.laptop_variant_uuid ? (() => {
                         const info = laptopVariantInfoById[o.laptop_variant_uuid!];
                         return info ? `${info.name} · ${formatStorageGb(info.storageGb)}` : 'Fartölva';
                       })() : o.gamingpc_uuid ? (pcNamesById[o.gamingpc_uuid] || '—') : '—'}

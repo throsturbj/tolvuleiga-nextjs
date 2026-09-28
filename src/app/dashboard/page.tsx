@@ -27,6 +27,8 @@ interface Order {
   gamingconsole_uuid?: string | null;
   screen_uuid?: string | null;
   laptop_variant_uuid?: string | null;
+  product_id?: string | null;
+  variant_id?: string | null;
   numberofextracon?: number | null;
   pdf_url?: string | null;
 }
@@ -56,6 +58,7 @@ interface Preorder {
   created_at: string;
   updated_at: string;
   gamingpc_uuid?: number | null;
+  product_id?: string | null;
 }
 
 export default function DashboardPage() {
@@ -71,6 +74,7 @@ export default function DashboardPage() {
   const [consoleNamesById, setConsoleNamesById] = useState<Record<string, string>>({});
   const [screenNamesById, setScreenNamesById] = useState<Record<string, string>>({});
   const [laptopVariantInfoById, setLaptopVariantInfoById] = useState<Record<string, LaptopVariantInfo>>({});
+  const [productNamesById, setProductNamesById] = useState<Record<string, string>>({});
   const [openPcId, setOpenPcId] = useState<number | null>(null);
   const [busyOpenPdfById, setBusyOpenPdfById] = useState<Record<string, boolean>>({});
   const [busyCancelById, setBusyCancelById] = useState<Record<string, boolean>>({});
@@ -107,6 +111,23 @@ export default function DashboardPage() {
     const load = async () => {
       try {
         const ord = orders.find(o => o.id === extendOrderId);
+        if (ord?.product_id) {
+          const { data } = await supabase
+            .from('product_term_prices')
+            .select('month_1, month_3, month_6, month_9, month_12')
+            .eq('product_id', ord.product_id)
+            .maybeSingle();
+          if (data) {
+            setExtendPriceRow({
+              "1month": data.month_1,
+              "3month": data.month_3,
+              "6month": data.month_6,
+              "9month": data.month_9,
+              "12month": data.month_12,
+            });
+            return;
+          }
+        }
         const pcId = ord?.gamingpc_uuid;
         if (!pcId) { setExtendPriceRow(null); return; }
         const { data } = await supabase
@@ -319,6 +340,26 @@ export default function DashboardPage() {
         const laptopVariantIds = Array.from(
           new Set((ordersData || []).map(o => o.laptop_variant_uuid).filter((v: unknown): v is string => typeof v === 'string' && v.length > 0))
         )
+        const productIds = Array.from(
+          new Set(
+            [
+              ...((ordersData || []).map((o: Order) => o.product_id).filter((v): v is string => typeof v === 'string' && v.length > 0)),
+              ...((preordersData || []).map((p: Preorder) => p.product_id).filter((v): v is string => typeof v === 'string' && v.length > 0)),
+            ]
+          )
+        )
+        if (productIds.length > 0) {
+          try {
+            const { data: pRows } = await supabase.from('products').select('id, name').in('id', productIds)
+            const pmap: Record<string, string> = {}
+            ;(pRows || []).forEach((r: { id: string; name: string }) => { pmap[r.id] = r.name })
+            setProductNamesById(pmap)
+          } catch {
+            setProductNamesById({})
+          }
+        } else {
+          setProductNamesById({})
+        }
         if (ids.length > 0) {
           try {
             const { data: pcRows } = await supabase
@@ -936,7 +977,15 @@ export default function DashboardPage() {
                               </h4>
                             </div>
                             <div className="mt-2 flex items-center justify-between gap-2 text-sm text-gray-700 w-full">
-                              {order.gamingpc_uuid ? (
+                              {order.product_id ? (
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/product/${order.product_id}`)}
+                                  className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium min-w-0 max-w-[75%] overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer"
+                                >
+                                  {productNamesById[order.product_id] || 'Vara'}
+                                </button>
+                              ) : order.gamingpc_uuid ? (
                                 <button
                                   type="button"
                                   onClick={() => setOpenPcId(order.gamingpc_uuid!)}
@@ -1059,7 +1108,15 @@ export default function DashboardPage() {
                                     Sækja reikning
                                   </button>
                                 ) : null}
-                                {order.gamingpc_uuid ? (
+                                {order.product_id ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(`/product/${order.product_id}`)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-full w-40 px-3 py-2 text-xs font-semibold text-[var(--color-accent)] bg-white ring-1 ring-[var(--color-accent)]/30 hover:bg-gray-50 cursor-pointer"
+                                  >
+                                    Sjá vöru
+                                  </button>
+                                ) : order.gamingpc_uuid ? (
                                   <button
                                     type="button"
                                     onClick={() => setOpenPcId(order.gamingpc_uuid!)}
@@ -1164,7 +1221,15 @@ export default function DashboardPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="mt-2 flex items-center justify-start gap-2 text-sm text-gray-700 w-full">
-                                {po.gamingpc_uuid ? (
+                                {po.product_id ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(`/product/${po.product_id}`)}
+                                    className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/5 hover:bg-black/10 text-gray-900 text-xs font-medium min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer"
+                                  >
+                                    {productNamesById[po.product_id] || 'Vara'}
+                                  </button>
+                                ) : po.gamingpc_uuid ? (
                                   <button
                                     type="button"
                                     onClick={() => setOpenPcId(po.gamingpc_uuid!)}

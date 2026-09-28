@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { supabasePublic } from "@/lib/supabase-public";
@@ -20,13 +20,14 @@ import {
   type Product,
   type ProductVariant,
 } from "@/lib/products";
+import { joinProductWaitlist } from "@/lib/waitlist";
 
 type ImageFile = { name: string; path: string; signedUrl: string };
 
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   const productIdParam = String(params.id || "");
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -58,6 +59,7 @@ export default function ProductDetailPage() {
   const [isWaitlisting, setIsWaitlisting] = useState(false);
   const [waitlisted, setWaitlisted] = useState(false);
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
+  const waitlistAutoRef = useRef(false);
   const [extraControllers, setExtraControllers] = useState(0);
   const [screenPreviewUrl, setScreenPreviewUrl] = useState<string | null>(null);
 
@@ -265,33 +267,30 @@ export default function ProductDetailPage() {
   };
 
   const handleWaitlistClick = async () => {
-    if (!product || !termsAccepted) return;
+    if (!product) return;
+    if (authLoading) return;
     if (!session?.user) {
-      router.push(`/auth?redirect=/product/${product.id}`);
+      router.push(`/auth?redirect=/product/${product.id}?waitlist=1`);
       return;
     }
-    if (isWaitlisting || waitlisted) return;
+    if (waitlisted) {
+      router.push("/dashboard");
+      return;
+    }
+    if (isWaitlisting) return;
     setIsWaitlisting(true);
     setWaitlistError(null);
     try {
-      const { error: insErr } = await supabase.from("preorders").insert({
-        auth_uid: session.user.id,
-        product_id: product.id,
-      });
-      if (insErr) {
-        setWaitlistError(insErr.message || "Mistókst að skrá á biðlista");
+      const result = await joinProductWaitlist(product.id);
+      if (result.error === "UNAUTHENTICATED") {
+        router.push(`/auth?redirect=/product/${product.id}?waitlist=1`);
+        return;
+      }
+      if (!result.ok) {
+        setWaitlistError(result.error || "Mistókst að skrá á biðlista");
         return;
       }
       setWaitlisted(true);
-      try {
-        await fetch("/api/preorders/notify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productId: product.id, productName: product.name }),
-        });
-      } catch {
-        // ignore
-      }
       router.push("/dashboard");
     } catch (e) {
       setWaitlistError(e instanceof Error ? e.message : "Mistókst að skrá á biðlista");
@@ -299,6 +298,35 @@ export default function ProductDetailPage() {
       setIsWaitlisting(false);
     }
   };
+
+  useEffect(() => {
+    if (!product || !session?.user) return;
+    let alive = true;
+    supabase
+      .from("preorders")
+      .select("id")
+      .eq("auth_uid", session.user.id)
+      .eq("product_id", product.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (alive && data) setWaitlisted(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [product?.id, session?.user?.id]);
+
+  useEffect(() => {
+    if (authLoading || !product?.uppselt) return;
+    const want = new URLSearchParams(window.location.search).get("waitlist");
+    if (want !== "1" && want !== product.id) return;
+    if (waitlistAutoRef.current) return;
+    waitlistAutoRef.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("waitlist");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    void handleWaitlistClick();
+  }, [authLoading, product?.id, product?.uppselt, session?.user]);
 
   const openAccessoryModal = async (type: "screen" | "keyboard" | "mouse") => {
     setModalType(type);
@@ -359,7 +387,8 @@ export default function ProductDetailPage() {
     );
   }
 
-  const orderDisabled = !termsAccepted || ordering || (product.uppselt ? isWaitlisting || waitlisted : false);
+  const orderDisabled = !termsAccepted || ordering;
+  const waitlistDisabled = isWaitlisting || waitlisted;
 
   return (
     <div className="relative min-h-screen overflow-x-clip bg-gray-50 py-6 sm:py-10">
@@ -470,8 +499,9 @@ export default function ProductDetailPage() {
                   </span>
                 </button>
                 {product.uppselt ? (
-                  <button type="button" onClick={handleWaitlistClick} disabled={orderDisabled} className={`${actionBtnBase} border-[var(--color-accent)]/60 text-[var(--color-accent)] disabled:opacity-45`}>
-                    <span className={actionBtnInner}>{waitlisted ? "Skráð" : isWaitlisting ? "Skrái…" : "Panta"}</span>
+                  <button type="button" onClick={handleWaitlistClick} disabled={waitlistDisabled} className={`${actionBtnBase} border-[var(--color-accent)]/60 text-white disabled:opacity-45`}>
+                    <span aria-hidden className="pointer-events-none absolute inset-0 origin-center bg-[var(--color-accent)] scale-100 opacity-100" />
+                    <span className={actionBtnInner}>{waitlisted ? "Skráð" : isWaitlisting ? "Skrái…" : "Skrá mig á Biðlista"}</span>
                   </button>
                 ) : (
                   <button type="button" onClick={goOrder} disabled={orderDisabled} className={`${actionBtnBase} border-[var(--color-accent)]/60 text-[var(--color-accent)] disabled:opacity-45`}>
@@ -482,7 +512,7 @@ export default function ProductDetailPage() {
                   </button>
                 )}
               </div>
-              {!termsAccepted ? (
+              {!product.uppselt && !termsAccepted ? (
                 <p className="text-center text-xs text-gray-500">
                   Samþykktu{" "}
                   <Link href="/legal" target="_blank" rel="noopener noreferrer" className="text-gray-700 underline">

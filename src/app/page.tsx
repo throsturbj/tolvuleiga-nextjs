@@ -4,10 +4,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { supabasePublic } from "@/lib/supabase-public";
-import { useAuth } from "@/contexts/AuthContext";
 import { debug } from "@/lib/debug";
+import { joinProductWaitlist } from "@/lib/waitlist";
 import heroImage from "../../img/forsidumynd1.jpg";
 import {
   displayPrice,
@@ -18,42 +19,6 @@ import {
   type ProductGroup,
   type ProductVariant,
 } from "@/lib/products";
-
-function LaptopImageCarousel({ images, alt }: { images: string[]; alt: string }) {
-  const [idx, setIdx] = useState(0);
-  useEffect(() => {
-    if (images.length <= 1) return;
-    const t = setInterval(() => {
-      setIdx((i) => (i + 1) % images.length);
-    }, 3000);
-    return () => clearInterval(t);
-  }, [images.length]);
-
-  if (images.length === 0) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center text-white/25">
-        <svg className="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5l3.75-3h10.5L21 7.5v9l-3.75 3H6.75L3 16.5v-9z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 14.25l4.5-4.5 6 6 2.25-2.25L21 16.5" />
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {images.map((src, i) => (
-        <img
-          key={i}
-          src={src}
-          alt={alt}
-          loading="lazy"
-          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-1000 ease-in-out ${i === idx ? "opacity-100" : "opacity-0"}`}
-        />
-      ))}
-    </>
-  );
-}
 
 type CatalogProduct = Product & {
   images: string[];
@@ -73,8 +38,13 @@ export default function Home() {
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
   const [catalogLoading, setCatalogLoading] = useState<boolean>(true);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const { session } = useAuth();
+  const [waitlistedIds, setWaitlistedIds] = useState<Record<string, true>>({});
+  const [waitlistingId, setWaitlistingId] = useState<string | null>(null);
+  const [waitlistErrorById, setWaitlistErrorById] = useState<Record<string, string>>({});
   const router = useRouter();
+  const { session, loading: authLoading } = useAuth();
+  const waitlistQueryHandled = useRef<string | null>(null);
+  const pendingWaitlistId = useRef<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const centerToIndex = (idx: number, behavior: ScrollBehavior = "smooth") => {
@@ -142,52 +112,25 @@ export default function Home() {
     const fetchCatalog = async () => {
       try {
         setCatalogLoading(true);
-        const clients = session?.user ? [supabase, supabasePublic] : [supabasePublic, supabase];
-        let groupRows: ProductGroup[] = [];
-        let productRows: Product[] = [];
-        let variantRows: ProductVariant[] = [];
-
-        for (const client of clients) {
-          const { data: gData, error: gErr } = await client
+        const [gRes, pRes, vRes] = await Promise.all([
+          supabasePublic
             .from("product_groups")
             .select("id, slug, title, sort_order, visible, theme")
             .eq("visible", true)
-            .order("sort_order", { ascending: true });
-          if (gErr) {
-            debug("Home/groups/error", gErr);
-            continue;
-          }
-          groupRows = (gData as ProductGroup[]) || [];
-          if (groupRows.length > 0) break;
-        }
-
-        for (const client of clients) {
-          const { data: pData, error: pErr } = await client
+            .order("sort_order", { ascending: true }),
+          supabasePublic
             .from("products")
-            .select("*")
-            .eq("hidden", false);
-          if (pErr) {
-            debug("Home/products/error", pErr);
-            continue;
-          }
-          productRows = (pData as Product[]) || [];
-          if (productRows.length > 0) break;
-        }
+            .select("id, group_id, type, name, description, price, specs, uppselt, tilbod, image_bucket, image_folder")
+            .eq("hidden", false),
+          supabasePublic.from("product_variants").select("product_id, price"),
+        ]);
+        if (gRes.error) debug("Home/groups/error", gRes.error);
+        if (pRes.error) debug("Home/products/error", pRes.error);
+        if (vRes.error) debug("Home/variants/error", vRes.error);
 
-        if (productRows.length > 0) {
-          for (const client of clients) {
-            const { data: vData, error: vErr } = await client
-              .from("product_variants")
-              .select("id, product_id, options, price, trygging, stock_quantity, legacy_id");
-            if (vErr) {
-              debug("Home/variants/error", vErr);
-              continue;
-            }
-            variantRows = (vData as ProductVariant[]) || [];
-            break;
-          }
-        }
-
+        const groupRows = (gRes.data as ProductGroup[]) || [];
+        const productRows = (pRes.data as Product[]) || [];
+        const variantRows = (vRes.data as Pick<ProductVariant, "product_id" | "price">[]) || [];
         if (!isMounted) return;
 
         const minPriceByProduct: Record<string, number> = {};
@@ -197,6 +140,22 @@ export default function Home() {
           const prev = minPriceByProduct[v.product_id];
           if (prev === undefined || n < prev) minPriceByProduct[v.product_id] = n;
         }
+
+        const merged: CatalogProduct[] = productRows
+          .map((p) => {
+            const fromPrice = minPriceByProduct[p.id] ?? (p.price != null ? displayPrice(p) : null);
+            return { ...p, images: [] as string[], fromPrice };
+          })
+          .sort((a, b) => {
+            const aPrice = a.fromPrice ?? Number.POSITIVE_INFINITY;
+            const bPrice = b.fromPrice ?? Number.POSITIVE_INFINITY;
+            return aPrice - bPrice;
+          });
+
+        setGroups(groupRows);
+        setCatalog(merged);
+        setCatalogLoading(false);
+        debug("Home/catalog", { groups: groupRows.length, products: merged.length });
 
         const byBucket = new Map<string, string[]>();
         for (const p of productRows) {
@@ -209,8 +168,6 @@ export default function Home() {
         }
 
         const firstImageByFolder: Record<string, string> = {};
-        const carouselByFolder: Record<string, string[]> = {};
-
         await Promise.all(
           Array.from(byBucket.entries()).map(async ([bucket, folders]) => {
             const unique = Array.from(new Set(folders));
@@ -220,99 +177,52 @@ export default function Home() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ bucket, folders: unique }),
               });
-              if (res.ok) {
-                const j = await res.json();
-                const map = (j?.results || {}) as Record<string, { signedUrl?: string } | null>;
-                for (const folder of unique) {
-                  const url = map[folder]?.signedUrl;
-                  if (url) firstImageByFolder[`${bucket}:${folder}`] = url;
-                }
+              if (!res.ok) return;
+              const j = await res.json();
+              const map = (j?.results || {}) as Record<string, { signedUrl?: string } | null>;
+              for (const folder of unique) {
+                const url = map[folder]?.signedUrl;
+                if (url) firstImageByFolder[`${bucket}:${folder}`] = url;
               }
             } catch {
               // images are optional
             }
           })
         );
-
-        const laptopFolders = productRows
-          .filter((p) => p.type === "laptop")
-          .map((p) => ({ bucket: p.image_bucket || "laptopimages", folder: p.image_folder || p.id }));
-        await Promise.all(
-          laptopFolders.map(async ({ bucket, folder }) => {
-            try {
-              const res = await fetch("/api/images/list-generic", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ bucket, folder }),
-              });
-              if (res.ok) {
-                const j = await res.json();
-                const files: { signedUrl: string }[] = j?.files || [];
-                carouselByFolder[`${bucket}:${folder}`] = files.map((f) => f.signedUrl).filter(Boolean);
-              }
-            } catch {
-              // ignore
-            }
+        if (!isMounted) return;
+        setCatalog((prev) =>
+          prev.map((p) => {
+            const key = `${p.image_bucket || ""}:${p.image_folder || p.id}`;
+            const url = firstImageByFolder[key];
+            return url ? { ...p, images: [url] } : p;
           })
         );
-
-        const merged: CatalogProduct[] = productRows.map((p) => {
-          const key = `${p.image_bucket || ""}:${p.image_folder || p.id}`;
-          const carousel = carouselByFolder[key];
-          const first = firstImageByFolder[key];
-          const images = carousel && carousel.length > 0 ? carousel : first ? [first] : [];
-          const fromPrice = minPriceByProduct[p.id] ?? (p.price != null ? displayPrice(p) : null);
-          return { ...p, images, fromPrice };
-        });
-
-        merged.sort((a, b) => {
-          const aPrice = a.fromPrice ?? Number.POSITIVE_INFINITY;
-          const bPrice = b.fromPrice ?? Number.POSITIVE_INFINITY;
-          return aPrice - bPrice;
-        });
-
-        setGroups(groupRows);
-        setCatalog(merged);
-        debug("Home/catalog", { groups: groupRows.length, products: merged.length });
       } catch (e) {
         if (isMounted) {
           console.error("Home: Unexpected error fetching catalog", e);
           setGroups([]);
           setCatalog([]);
+          setCatalogLoading(false);
         }
-      } finally {
-        if (isMounted) setCatalogLoading(false);
       }
     };
     fetchCatalog();
     return () => {
       isMounted = false;
     };
-  }, [session?.user]);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
     const fetchReviews = async () => {
       try {
-        const clients = session?.user ? [supabasePublic, supabase] : [supabasePublic, supabase];
-        let data: Review[] | null = null;
-        for (const client of clients) {
-          try {
-            const { data: rows, error } = await client
-              .from("reviews")
-              .select("id, content, reviewer_name, rating, created_at")
-              .eq("is_published", true)
-              .order("created_at", { ascending: false });
-            if (!error && Array.isArray(rows)) {
-              data = rows as Review[];
-              break;
-            }
-          } catch {
-            // try next
-          }
-        }
+        const { data: rows, error } = await supabasePublic
+          .from("reviews")
+          .select("id, content, reviewer_name, rating, created_at")
+          .eq("is_published", true)
+          .order("created_at", { ascending: false });
         if (!isMounted) return;
-        setReviews(data ?? []);
+        setReviews(!error && Array.isArray(rows) ? (rows as Review[]) : []);
       } catch {
         if (isMounted) setReviews([]);
       }
@@ -321,7 +231,76 @@ export default function Home() {
     return () => {
       isMounted = false;
     };
-  }, [session?.user]);
+  }, []);
+
+  useEffect(() => {
+    if (!session?.user) {
+      setWaitlistedIds({});
+      return;
+    }
+    let alive = true;
+    const loadMine = async () => {
+      const { data } = await supabase.from("preorders").select("product_id").eq("auth_uid", session.user.id);
+      if (!alive) return;
+      const map: Record<string, true> = {};
+      for (const row of data || []) {
+        if (row.product_id) map[row.product_id as string] = true;
+      }
+      setWaitlistedIds(map);
+    };
+    loadMine();
+    return () => {
+      alive = false;
+    };
+  }, [session?.user?.id]);
+
+  const requestWaitlist = async (productId: string) => {
+    if (authLoading) {
+      pendingWaitlistId.current = productId;
+      setWaitlistingId(productId);
+      return;
+    }
+    if (!session?.user) {
+      router.push(`/auth?redirect=/?waitlist=${encodeURIComponent(productId)}`);
+      return;
+    }
+    if (waitlistedIds[productId]) {
+      router.push("/dashboard");
+      return;
+    }
+    setWaitlistingId(productId);
+    setWaitlistErrorById((prev) => {
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+    const result = await joinProductWaitlist(productId);
+    setWaitlistingId(null);
+    if (result.error === "UNAUTHENTICATED") {
+      router.push(`/auth?redirect=/?waitlist=${encodeURIComponent(productId)}`);
+      return;
+    }
+    if (!result.ok) {
+      setWaitlistErrorById((prev) => ({ ...prev, [productId]: result.error || "Mistókst að skrá á biðlista" }));
+      return;
+    }
+    setWaitlistedIds((prev) => ({ ...prev, [productId]: true }));
+    router.push("/dashboard");
+  };
+
+  useEffect(() => {
+    if (authLoading) return;
+    const fromQuery = new URLSearchParams(window.location.search).get("waitlist");
+    const id = pendingWaitlistId.current || fromQuery;
+    pendingWaitlistId.current = null;
+    if (!id || waitlistQueryHandled.current === id) return;
+    waitlistQueryHandled.current = id;
+    if (!session?.user) {
+      router.replace(`/auth?redirect=/?waitlist=${encodeURIComponent(id)}`);
+      return;
+    }
+    void requestWaitlist(id);
+  }, [authLoading, session?.user?.id]);
 
   const cardGridClass = "flex flex-wrap justify-center gap-6";
   const cardColClass = "w-full sm:w-[calc(50%-0.75rem)] lg:w-[calc((100%-3rem)/3)]";
@@ -386,9 +365,7 @@ export default function Home() {
         }
       >
         <div className={dark ? "relative aspect-video w-full overflow-hidden bg-black/30" : "relative aspect-video overflow-hidden bg-gray-200"}>
-          {p.type === "laptop" ? (
-            <LaptopImageCarousel images={p.images} alt={p.name} />
-          ) : p.images[0] ? (
+          {p.images[0] ? (
             <>
               <img
                 src={p.images[0]}
@@ -431,11 +408,23 @@ export default function Home() {
               Sjá nánar
             </Link>
             {p.uppselt ? (
-              <Link href={href} className={cta} onClick={(e) => e.stopPropagation()}>
-                Skrá á biðlista
-              </Link>
+              <button
+                type="button"
+                className={`${cta} disabled:opacity-60`}
+                disabled={!!waitlistedIds[p.id] || waitlistingId === p.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  void requestWaitlist(p.id);
+                }}
+              >
+                {waitlistedIds[p.id] ? "Skráð" : waitlistingId === p.id ? "Skrái…" : "Skrá á biðlista"}
+              </button>
             ) : null}
           </div>
+          {waitlistErrorById[p.id] ? (
+            <p className={`mt-2 text-xs ${dark ? "text-red-300" : "text-red-600"}`}>{waitlistErrorById[p.id]}</p>
+          ) : null}
         </div>
       </div>
     );

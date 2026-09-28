@@ -7,7 +7,6 @@ export async function POST(req: NextRequest) {
   try {
     const body: unknown = await req.json().catch(() => ({}))
 
-    // Extract bucket (must be a string)
     let bucket = ''
     if (typeof body === 'object' && body !== null) {
       const b = (body as Record<string, unknown>).bucket
@@ -16,7 +15,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Extract folders as unknown[]
     const foldersRaw: unknown[] =
       typeof body === 'object' &&
       body !== null &&
@@ -24,17 +22,18 @@ export async function POST(req: NextRequest) {
         ? ((body as Record<string, unknown>).folders as unknown[])
         : []
 
-    // Convert to sanitized string[]
-    const folders = foldersRaw
-      .map((x: unknown) => String(x ?? ''))
-      .filter((s) => s && !s.includes('..') && s !== '/')
+    const folders = Array.from(
+      new Set(
+        foldersRaw
+          .map((x: unknown) => String(x ?? ''))
+          .filter((s) => s && !s.includes('..') && s !== '/')
+      )
+    )
 
-    // Validate bucket
     if (!ALLOWED_BUCKETS.has(bucket)) {
       return NextResponse.json({ ok: false, error: 'Invalid bucket' }, { status: 400 })
     }
 
-    // Validate folder count
     if (folders.length === 0) {
       return NextResponse.json({ ok: true, results: {} })
     }
@@ -45,49 +44,48 @@ export async function POST(req: NextRequest) {
     const admin = getServerSupabase()
     const results: Record<string, { path: string; signedUrl: string } | null> = {}
 
-    for (const folder of folders) {
-      const { data: list, error } = await admin.storage.from(bucket).list(folder, {
-        limit: 200,
-        offset: 0,
-        sortBy: { column: 'name', order: 'asc' }
+    const listed = await Promise.all(
+      folders.map(async (folder) => {
+        const { data: list, error } = await admin.storage.from(bucket).list(folder, {
+          limit: 8,
+          offset: 0,
+          sortBy: { column: 'name', order: 'asc' },
+        })
+        if (error) return { folder, path: null as string | null }
+        const files = (list ?? []).filter((f: unknown) => {
+          if (typeof f === 'object' && f !== null && typeof (f as Record<string, unknown>).name === 'string') {
+            const name = (f as Record<string, unknown>).name as string
+            return !name.endsWith('/')
+          }
+          return false
+        })
+        if (files.length === 0) return { folder, path: null as string | null }
+        const first = files[0] as { name: string }
+        return { folder, path: `${folder}/${first.name}` }
       })
+    )
 
-      if (error) {
-        results[folder] = null
-        continue
+    const toSign = listed.filter((row): row is { folder: string; path: string } => !!row.path)
+    if (toSign.length === 0) {
+      for (const folder of folders) results[folder] = null
+      return NextResponse.json({ ok: true, results })
+    }
+
+    const { data: signed, error: sErr } = await admin.storage
+      .from(bucket)
+      .createSignedUrls(toSign.map((row) => row.path), 3600)
+
+    const urlByPath = new Map<string, string>()
+    if (!sErr && Array.isArray(signed)) {
+      for (const row of signed) {
+        if (row?.path && row.signedUrl) urlByPath.set(row.path, row.signedUrl)
       }
+    }
 
-      // Filter valid file objects
-      const files = (list ?? []).filter((f: unknown) => {
-        if (
-          typeof f === 'object' &&
-          f !== null &&
-          typeof (f as Record<string, unknown>).name === 'string'
-        ) {
-          const name = (f as Record<string, unknown>).name as string
-          return !name.endsWith('/')
-        }
-        return false
-      })
-
-      if (files.length === 0) {
-        results[folder] = null
-        continue
-      }
-
-      const first = files[0] as { name: string }
-      const path = `${folder}/${first.name}`
-
-      const { data: signed, error: sErr } = await admin.storage
-        .from(bucket)
-        .createSignedUrl(path, 300)
-
-      if (sErr || !signed?.signedUrl) {
-        results[folder] = null
-        continue
-      }
-
-      results[folder] = { path, signedUrl: signed.signedUrl }
+    for (const folder of folders) results[folder] = null
+    for (const row of toSign) {
+      const url = urlByPath.get(row.path)
+      results[row.folder] = url ? { path: row.path, signedUrl: url } : null
     }
 
     return NextResponse.json({ ok: true, results })

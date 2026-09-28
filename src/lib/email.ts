@@ -167,6 +167,72 @@ Tölvuleiga`
 	await sendMail({ to, subject, text, html })
 }
 
+export async function sendWaitlistEmails(args: {
+	userEmail: string
+	userName?: string
+	productName: string
+	adminEmail?: string
+}): Promise<void> {
+	const admin = args.adminEmail || process.env.CONTACT_TO || 'tolvuleiga@tolvuleiga.is'
+	const productName = args.productName.trim()
+	const userName = (args.userName || '').trim()
+
+	const userText = `Góðan dag,
+
+Takk fyrir að skrá þig á biðlista hjá Tölvuleigu.
+
+Vara: ${productName}
+
+Við munum hafa samband um leið og varan verður aftur fáanleg.
+
+Ef einhverjar spurningar vakna varðandi skráninguna eða þjónustuna, vinsamlegast hafið samband við okkur á tolvuleiga@tolvuleiga.is. Við munum leitast við að svara eins fljótt og kostur er.
+
+Kærar kveðjur,
+Tölvuleiga.is`
+
+	const userHtml = `
+<div style="font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#111">
+  <p>Góðan dag,</p>
+  <p>Takk fyrir að skrá þig á biðlista hjá Tölvuleigu.</p>
+  <p><strong>Vara:</strong> ${escapeHtml(productName)}</p>
+  <p>Við munum hafa samband um leið og varan verður aftur fáanleg.</p>
+  <p>Ef einhverjar spurningar vakna varðandi skráninguna eða þjónustuna, vinsamlegast hafið samband við okkur á <a href="mailto:tolvuleiga@tolvuleiga.is">tolvuleiga@tolvuleiga.is</a>. Við munum leitast við að svara eins fljótt og kostur er.</p>
+  <p style="margin-top:24px">Kærar kveðjur,<br/>Tölvuleiga.is</p>
+</div>`
+
+	const adminText = `Góðan dag,
+
+Ný skráning á biðlista hefur borist.
+
+Vara: ${productName}
+Nafn: ${userName || '—'}
+Netfang: ${args.userEmail}
+
+Kærar kveðjur,
+Tölvuleiga.is`
+
+	await sendMail({
+		to: args.userEmail,
+		subject: 'Staðfesting: skráning á biðlista',
+		text: userText,
+		html: userHtml,
+	})
+
+	await sendMail({
+		to: admin,
+		subject: `Nýskráning á biðlista: ${productName}`,
+		text: adminText,
+	})
+}
+
+function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+}
+
 export async function sendPasswordResetEmail(args: { to: string; resetLink: string }): Promise<void> {
 	const { to, resetLink } = args
 	const subject = 'Gleymt lykilorð - Tölvuleiga'

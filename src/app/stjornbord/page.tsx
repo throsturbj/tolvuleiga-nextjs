@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import CreateOrderTab from "@/components/admin/CreateOrderTab";
+import OverviewTab from "@/components/admin/OverviewTab";
 
 interface AdminOrderRow {
   id: string;
@@ -75,11 +77,13 @@ export default function AdminDashboardPage() {
   const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
 
   const isAdmin = !!user?.isAdmin;
-  const [activeTab, setActiveTab] = useState<'gamingpc' | 'laptops' | 'preorders'>('gamingpc');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'create' | 'preorders'>('overview');
+  const [refreshKey, setRefreshKey] = useState(0);
   const [laptopVariantInfoById, setLaptopVariantInfoById] = useState<Record<string, LaptopVariantInfo>>({});
-  const [preorders, setPreorders] = useState<Array<{ id: string; auth_uid: string | null; created_at: string; gamingpc_uuid?: number | null }>>([]);
+  const [preorders, setPreorders] = useState<Array<{ id: string; auth_uid: string | null; created_at: string; gamingpc_uuid?: number | null; product_id?: string | null }>>([]);
   const [preorderUserNameByUid, setPreorderUserNameByUid] = useState<Record<string, string>>({});
   const [preorderEmailByUid, setPreorderEmailByUid] = useState<Record<string, string>>({});
+  const [preorderProductNameById, setPreorderProductNameById] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (authLoading) return;
@@ -178,6 +182,37 @@ export default function AdminDashboardPage() {
           } else {
             setProductNamesById({});
           }
+          const variantIds = Array.from(new Set(rows.map(r => r.variant_id).filter((v): v is string => typeof v === 'string' && v.length > 0)));
+          if (variantIds.length > 0) {
+            try {
+              const { data: vRows } = await supabase
+                .from('product_variants')
+                .select('id, product_id, options')
+                .in('id', variantIds);
+              const extraProductIds = Array.from(new Set((vRows || []).map((r: { product_id?: string | null }) => r.product_id).filter((v): v is string => typeof v === 'string' && v.length > 0 && !productIds.includes(v))));
+              const extraNames: Record<string, string> = {};
+              if (extraProductIds.length > 0) {
+                const { data: extraProducts } = await supabase.from('products').select('id,name').in('id', extraProductIds);
+                (extraProducts || []).forEach((r: { id: string; name: string }) => { extraNames[r.id] = r.name; });
+              }
+              if (Object.keys(extraNames).length > 0) {
+                setProductNamesById((prev) => ({ ...prev, ...extraNames }));
+              }
+              const vmap: Record<string, LaptopVariantInfo> = {};
+              (vRows || []).forEach((r: { id: string; product_id?: string | null; options?: Record<string, unknown> | null }) => {
+                const raw = r.options?.storage_gb;
+                const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+                vmap[r.id] = {
+                  laptopId: r.product_id || r.id,
+                  name: extraNames[r.product_id || ''] || '',
+                  storageGb: Number.isFinite(n) ? n : 0,
+                };
+              });
+              setLaptopVariantInfoById((prev) => ({ ...prev, ...vmap }));
+            } catch {
+              // keep existing variant map
+            }
+          }
           // Fetch GamingPC names
           const pcIds = Array.from(new Set(rows.map(r => r.gamingpc_uuid).filter((v): v is number => typeof v === 'number')));
           if (pcIds.length > 0) {
@@ -214,12 +249,10 @@ export default function AdminDashboardPage() {
               (vRows || []).forEach((r: { id: string; laptop_id: string; storage_gb: number }) => {
                 lmap[r.id] = { laptopId: r.laptop_id, name: nameByLaptop[r.laptop_id] || 'Fartölva', storageGb: r.storage_gb };
               });
-              setLaptopVariantInfoById(lmap);
+              setLaptopVariantInfoById((prev) => ({ ...prev, ...lmap }));
             } catch {
-              setLaptopVariantInfoById({});
+              setLaptopVariantInfoById((prev) => prev);
             }
-          } else {
-            setLaptopVariantInfoById({});
           }
           // Fetch all product lists for modal selection
           try {
@@ -262,12 +295,12 @@ export default function AdminDashboardPage() {
     };
 
     fetchAllOrders();
-  }, [session?.user, isAdmin]);
+  }, [session?.user, isAdmin, refreshKey]);
 
   // Fetch all preorders and hydrate names/emails when Biðlisti tab is active
   useEffect(() => {
     const fetchPreorders = async () => {
-      if (!isAdmin || activeTab !== 'preorders') return;
+      if (!isAdmin) return;
       try {
         const { data, error } = await supabase
           .from('preorders')
@@ -276,8 +309,29 @@ export default function AdminDashboardPage() {
         if (error) {
           return;
         }
-        const rows = (data as Array<{ id: string; auth_uid: string | null; created_at: string; gamingpc_uuid?: number | null }>) || [];
+        const rows = (data as Array<{ id: string; auth_uid: string | null; created_at: string; gamingpc_uuid?: number | null; product_id?: string | null }>) || [];
         setPreorders(rows);
+
+        try {
+          const productIds = Array.from(
+            new Set(rows.map(r => r.product_id).filter((v): v is string => typeof v === 'string' && v.length > 0))
+          );
+          if (productIds.length > 0) {
+            const { data: productData } = await supabase
+              .from('products')
+              .select('id,name')
+              .in('id', productIds);
+            if (Array.isArray(productData)) {
+              const add: Record<string, string> = {};
+              productData.forEach((r: { id: string; name?: string | null }) => { add[r.id] = (r.name || '').trim(); });
+              setPreorderProductNameById(add);
+            }
+          } else {
+            setPreorderProductNameById({});
+          }
+        } catch {
+          setPreorderProductNameById({});
+        }
 
         // Ensure we have product names for all referenced PCs
         try {
@@ -341,7 +395,7 @@ export default function AdminDashboardPage() {
       } catch {}
     };
     fetchPreorders();
-  }, [activeTab, isAdmin, supabase]);
+  }, [isAdmin, supabase]);
 
   const formatDate = (iso?: string | null) => {
     if (!iso) return "—";
@@ -357,14 +411,7 @@ export default function AdminDashboardPage() {
   };
 
   const tableRows = useMemo(() => {
-    const filtered = orders.filter((o) =>
-      activeTab === 'laptops'
-        ? !!o.laptop_variant_uuid
-        : activeTab === 'gamingpc'
-          ? !!o.gamingpc_uuid
-          : true
-    );
-    return filtered.map((o) => {
+    return orders.map((o) => {
       const nowMs = Date.now();
       const tilMs = o.timabilTil ? new Date(o.timabilTil).getTime() : NaN;
       const daysLeft = Number.isFinite(tilMs) ? Math.ceil((tilMs - nowMs) / (1000 * 60 * 60 * 24)) : null;
@@ -382,7 +429,7 @@ export default function AdminDashboardPage() {
         expiringSoon,
       };
     });
-  }, [orders, activeTab]);
+  }, [orders]);
 
   const formatStorageGb = (gb: number) =>
     gb >= 1024 && gb % 1024 === 0 ? `${gb / 1024}TB` : `${gb}GB`;
@@ -692,31 +739,44 @@ export default function AdminDashboardPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold tracking-tight">Stjórnborð</h1>
-          <div className="text-sm text-gray-500">Allar pantanir</div>
+          <div className="text-sm text-gray-500">
+            {activeTab === 'overview' ? 'Rekstraryfirlit' : activeTab === 'create' ? 'Ný pöntun' : activeTab === 'preorders' ? 'Biðlisti' : 'Allar pantanir'}
+          </div>
         </div>
         <div className="mb-4 border-b border-gray-200">
-          <nav className="-mb-px flex gap-4" aria-label="Tabs">
+          <nav className="-mb-px flex flex-wrap gap-4" aria-label="Tabs">
             <button
               type="button"
-              onClick={() => setActiveTab('gamingpc')}
+              onClick={() => setActiveTab('overview')}
               className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
-                activeTab === 'gamingpc'
+                activeTab === 'overview'
                   ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Leikjatölvur
+              Yfirlit
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('laptops')}
+              onClick={() => setActiveTab('orders')}
               className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
-                activeTab === 'laptops'
+                activeTab === 'orders'
                   ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Fartölvur
+              Pantanir
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('create')}
+              className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
+                activeTab === 'create'
+                  ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Bæta við pöntun
             </button>
             <button
               type="button"
@@ -731,7 +791,11 @@ export default function AdminDashboardPage() {
             </button>
           </nav>
         </div>
-        {activeTab !== 'preorders' ? (
+        {activeTab === 'overview' ? (
+          <OverviewTab orders={orders} preorderCount={preorders.length} />
+        ) : activeTab === 'create' ? (
+          <CreateOrderTab onCreated={() => setRefreshKey((k) => k + 1)} />
+        ) : activeTab === 'orders' ? (
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <div className="text-sm text-gray-600">
@@ -753,12 +817,8 @@ export default function AdminDashboardPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[16rem]">Vara</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Verð</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[14rem]">Tímabil</th>
-                  {activeTab !== 'laptops' ? (
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Aukahlutir</th>
-                  ) : null}
-                  {activeTab !== 'laptops' ? (
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Trygging</th>
-                  ) : null}
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Aukahlutir</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Trygging</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Aðgerðir</th>
                 </tr>
               </thead>
@@ -778,45 +838,56 @@ export default function AdminDashboardPage() {
                     </td>
                     <td className="px-4 py-3 align-top text-gray-700">{o.auth_uid ? (kennitalaByUid[o.auth_uid] || '—') : '—'}</td>
                     <td className="px-4 py-3 align-top text-gray-700 min-w-[16rem] pr-3">
-                      {o.product_id && productNamesById[o.product_id]
-                        ? productNamesById[o.product_id]
-                        : o.laptop_variant_uuid ? (() => {
-                        const info = laptopVariantInfoById[o.laptop_variant_uuid!];
-                        return info ? `${info.name} · ${formatStorageGb(info.storageGb)}` : 'Fartölva';
-                      })() : o.gamingpc_uuid ? (pcNamesById[o.gamingpc_uuid] || '—') : '—'}
+                      {(() => {
+                        if (o.product_id && productNamesById[o.product_id]) {
+                          const vid = o.variant_id || o.laptop_variant_uuid;
+                          const info = vid ? laptopVariantInfoById[vid] : undefined;
+                          return info && info.storageGb
+                            ? `${productNamesById[o.product_id]} · ${formatStorageGb(info.storageGb)}`
+                            : productNamesById[o.product_id];
+                        }
+                        if (o.variant_id && laptopVariantInfoById[o.variant_id]) {
+                          const info = laptopVariantInfoById[o.variant_id];
+                          return info.storageGb ? `${info.name || 'Fartölva'} · ${formatStorageGb(info.storageGb)}` : (info.name || 'Fartölva');
+                        }
+                        if (o.laptop_variant_uuid) {
+                          const info = laptopVariantInfoById[o.laptop_variant_uuid];
+                          return info ? `${info.name} · ${formatStorageGb(info.storageGb)}` : 'Fartölva';
+                        }
+                        if (o.gamingpc_uuid) return pcNamesById[o.gamingpc_uuid] || '—';
+                        if (o.gamingconsole_uuid) return allConsoles.find((c) => c.id === o.gamingconsole_uuid)?.nafn || '—';
+                        if (o.screen_uuid) return allScreens.find((s) => s.id === o.screen_uuid)?.label || '—';
+                        return '—';
+                      })()}
                     </td>
                     <td className="px-4 py-3 align-top text-gray-700">
                       {(() => { const p = formatPrice(o.verd); return p ? p : '—'; })()}
                     </td>
                     <td className="px-4 py-3 align-top text-gray-700 min-w-[14rem] whitespace-nowrap">{o.periodFmt}</td>
-                    {activeTab !== 'laptops' ? (
-                      <td className="px-4 py-3 align-top text-gray-700">
-                        <div className="flex flex-wrap gap-2">
-                          {o.skjar ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Skjár</span>
-                          ) : null}
-                          {o.lyklabord ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Lyklaborð</span>
-                          ) : null}
-                          {o.mus ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Mús</span>
-                          ) : null}
-                          {!o.skjar && !o.lyklabord && !o.mus ? <span className="text-xs text-gray-400">—</span> : null}
-                        </div>
-                      </td>
-                    ) : null}
-                    {activeTab !== 'laptops' ? (
-                      <td className="px-4 py-3 align-top text-gray-700">
-                        {o.trygging ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs">Já</span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Nei</span>
-                        )}
-                      </td>
-                    ) : null}
+                    <td className="px-4 py-3 align-top text-gray-700">
+                      <div className="flex flex-wrap gap-2">
+                        {o.skjar ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Skjár</span>
+                        ) : null}
+                        {o.lyklabord ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Lyklaborð</span>
+                        ) : null}
+                        {o.mus ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Mús</span>
+                        ) : null}
+                        {!o.skjar && !o.lyklabord && !o.mus ? <span className="text-xs text-gray-400">—</span> : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-top text-gray-700">
+                      {o.trygging ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs">Já</span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">Nei</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 align-top">
                       <div className="flex items-center gap-2">
-                        {activeTab !== 'laptops' && (o.pdf_url || o.orderNumber) ? (
+                        {(o.pdf_url || o.orderNumber) ? (
                           <button
                             type="button"
                             onClick={() => handleOpenPdf(o.id, o.pdf_url, o.orderNumber)}
@@ -837,16 +908,14 @@ export default function AdminDashboardPage() {
                         >
                           Uppfæra
                         </button>
-                        {activeTab !== 'laptops' ? (
-                          <button
-                            type="button"
-                            disabled={!!busyRemindById[o.id]}
-                            onClick={() => handleSendReminder(o.id)}
-                            className="inline-flex items-center px-2.5 py-1.5 rounded border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs disabled:opacity-50 whitespace-nowrap"
-                          >
-                            Minna á
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          disabled={!!busyRemindById[o.id]}
+                          onClick={() => handleSendReminder(o.id)}
+                          className="inline-flex items-center px-2.5 py-1.5 rounded border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs disabled:opacity-50 whitespace-nowrap"
+                        >
+                          Minna á
+                        </button>
                         <button
                           type="button"
                           disabled={!!busyDeleteById[o.id]}
@@ -855,17 +924,15 @@ export default function AdminDashboardPage() {
                         >
                           Eyða
                         </button>
-                        {activeTab !== 'laptops' ? (
-                          <button
-                            type="button"
-                            disabled={!!busyGeneratePdfById[o.id]}
-                            onClick={() => handleGenerateAdminPdf(o.id)}
-                            className="inline-flex items-center px-2.5 py-1.5 rounded border border-purple-600 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 whitespace-nowrap"
-                            title="Endurskapa PDF og senda á admin"
-                          >
-                            PDF
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          disabled={!!busyGeneratePdfById[o.id]}
+                          onClick={() => handleGenerateAdminPdf(o.id)}
+                          className="inline-flex items-center px-2.5 py-1.5 rounded border border-purple-600 text-purple-600 hover:bg-purple-50 text-xs disabled:opacity-50 whitespace-nowrap"
+                          title="Endurskapa PDF og senda á admin"
+                        >
+                          PDF
+                        </button>
                         {framlengingarByOrderId[o.id] ? (
                           <button
                             type="button"
@@ -882,7 +949,7 @@ export default function AdminDashboardPage() {
                 ))}
                 {!loading && tableRows.length === 0 ? (
                   <tr>
-                    <td colSpan={activeTab === 'laptops' ? 8 : 10} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
                       Engar pantanir fundust.
                     </td>
                   </tr>
@@ -913,12 +980,16 @@ export default function AdminDashboardPage() {
                     const uid = po.auth_uid || '';
                     const name = (uid && (preorderUserNameByUid[uid] || '') || '').trim();
                     const email = uid ? (preorderEmailByUid[uid] || '') : '';
+                    const productName =
+                      (po.product_id && preorderProductNameById[po.product_id]) ||
+                      (typeof po.gamingpc_uuid === 'number' && pcNamesById[po.gamingpc_uuid]) ||
+                      '—';
                     return (
                       <tr key={po.id} className="border-b border-gray-100 hover:bg-gray-50/60">
                         <td className="px-4 py-3 align-top">{formatDate(po.created_at)}</td>
                         <td className="px-4 py-3 align-top">{name || '—'}</td>
                         <td className="px-4 py-3 align-top">{email || '—'}</td>
-                        <td className="px-4 py-3 align-top">{(typeof po.gamingpc_uuid === 'number' && pcNamesById[po.gamingpc_uuid]) ? pcNamesById[po.gamingpc_uuid] : '—'}</td>
+                        <td className="px-4 py-3 align-top">{productName}</td>
                       </tr>
                     );
                   })}

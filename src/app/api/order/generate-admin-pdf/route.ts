@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
         userEmail = userLookup?.user?.email ?? null
       }
     } catch {}
+    if (!userEmail) userEmail = meta?.order?.guest_email ?? null
 
     // Upload new PDF to storage (private bucket) and update order record
     const bucket = 'order-pdfs'

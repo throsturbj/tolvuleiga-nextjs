@@ -43,6 +43,9 @@ export default function VorurAdminPage() {
   const [tab, setTab] = useState<Tab>("products");
   const [error, setError] = useState<string | null>(null);
   const [groups, setGroups] = useState<ProductGroup[]>([]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [reordering, setReordering] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [variantsByProduct, setVariantsByProduct] = useState<Record<string, ProductVariant[]>>({});
   const [aukahlutir, setAukahlutir] = useState<Aukahlutur[]>([]);
@@ -118,7 +121,7 @@ export default function VorurAdminPage() {
     const { error: err } = await supabase.from("product_groups").insert({
       slug: groupForm.slug.trim(),
       title: groupForm.title.trim(),
-      sort_order: parseInt(groupForm.sort_order, 10) || 0,
+      sort_order: parseInt(groupForm.sort_order, 10) || (groups.length + 1) * 10,
       visible: groupForm.visible,
       theme: groupForm.theme,
     });
@@ -141,6 +144,35 @@ export default function VorurAdminPage() {
     const { error: err } = await supabase.from("product_groups").delete().eq("id", id);
     if (err) setError(err.message);
     else refresh();
+  };
+
+  const persistGroupOrder = async (ordered: ProductGroup[]) => {
+    const next = ordered.map((g, i) => ({ ...g, sort_order: (i + 1) * 10 }));
+    setGroups(next);
+    setReordering(true);
+    setError(null);
+    const results = await Promise.all(
+      next.map((g) =>
+        supabase
+          .from("product_groups")
+          .update({ sort_order: g.sort_order, updated_at: new Date().toISOString() })
+          .eq("id", g.id)
+      )
+    );
+    setReordering(false);
+    const failed = results.find((r) => r.error);
+    if (failed?.error) {
+      setError(failed.error.message);
+      refresh();
+    }
+  };
+
+  const moveGroup = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= groups.length || to >= groups.length) return;
+    const next = [...groups];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    void persistGroupOrder(next);
   };
 
   const specsFromForm = (type: ProductType, specs: Record<string, string>) => {
@@ -393,10 +425,15 @@ export default function VorurAdminPage() {
               </select>
               <button type="button" className={btnCls} disabled={saving} onClick={createGroup}>Bæta við hópi</button>
             </div>
+            <p className="text-sm text-gray-500">
+              Dragðu hópana upp eða niður til að ákveða röðina á forsíðunni.
+              {reordering ? " Vista röð…" : ""}
+            </p>
             <div className="bg-white rounded-lg border overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-left">
                   <tr>
+                    <th className="px-3 py-2 w-10" />
                     <th className="px-3 py-2">Röð</th>
                     <th className="px-3 py-2">Titill</th>
                     <th className="px-3 py-2">Slug</th>
@@ -406,11 +443,47 @@ export default function VorurAdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {groups.map((g) => (
-                    <tr key={g.id} className="border-t">
-                      <td className="px-3 py-2">
-                        <input className="w-16 border rounded px-1" defaultValue={g.sort_order} onBlur={(e) => updateGroup(g, { sort_order: parseInt(e.target.value, 10) || 0 })} />
+                  {groups.map((g, index) => (
+                    <tr
+                      key={g.id}
+                      draggable
+                      onDragStart={(e) => {
+                        if ((e.target as HTMLElement).closest("input,select,button,a,textarea")) {
+                          e.preventDefault();
+                          return;
+                        }
+                        setDragIndex(index);
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", g.id);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        if (dragOverIndex !== index) setDragOverIndex(index);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const from = dragIndex;
+                        setDragIndex(null);
+                        setDragOverIndex(null);
+                        if (from != null) moveGroup(from, index);
+                      }}
+                      onDragEnd={() => {
+                        setDragIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      className={`border-t ${dragIndex === index ? "opacity-40" : ""} ${
+                        dragOverIndex === index && dragIndex !== index ? "border-t-2 border-t-[var(--color-accent)]" : ""
+                      }`}
+                    >
+                      <td className="px-2 py-2 text-gray-400 cursor-grab active:cursor-grabbing select-none" title="Dragðu til að raða">
+                        <span aria-hidden className="inline-flex h-7 w-7 items-center justify-center rounded hover:bg-gray-100">
+                          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M7 5a1 1 0 110-2 1 1 0 010 2zm6-1a1 1 0 100 2 1 1 0 000-2zM7 11a1 1 0 110-2 1 1 0 010 2zm6-1a1 1 0 100 2 1 1 0 000-2zM7 17a1 1 0 110-2 1 1 0 010 2zm6-1a1 1 0 100 2 1 1 0 000-2z" />
+                          </svg>
+                        </span>
                       </td>
+                      <td className="px-3 py-2 text-gray-500 tabular-nums">{g.sort_order}</td>
                       <td className="px-3 py-2">
                         <input className="w-full border rounded px-1" defaultValue={g.title} onBlur={(e) => updateGroup(g, { title: e.target.value })} />
                       </td>

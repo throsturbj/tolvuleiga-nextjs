@@ -51,6 +51,16 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
   const [productQuery, setProductQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedUser, setSelectedUser] = useState<Customer | null>(null);
+  const [customerMode, setCustomerMode] = useState<"existing" | "guest">("existing");
+  const [guest, setGuest] = useState({
+    fullName: "",
+    kennitala: "",
+    email: "",
+    phone: "",
+    address: "",
+    city: "",
+    postalCode: "",
+  });
   const [product, setProduct] = useState<Product | null>(null);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [variantId, setVariantId] = useState<string | null>(null);
@@ -204,11 +214,27 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
     });
   }, [products, productQuery, typeFilter]);
 
+  const guestReady =
+    customerMode === "guest" &&
+    guest.fullName.trim() &&
+    guest.kennitala.trim() &&
+    guest.email.includes("@") &&
+    guest.phone.trim() &&
+    guest.address.trim() &&
+    guest.city.trim() &&
+    guest.postalCode.trim();
+  const customerReady = customerMode === "existing" ? !!selectedUser : !!guestReady;
+  const customerLabel =
+    customerMode === "existing"
+      ? selectedUser?.full_name || "Enginn viðskiptavinur"
+      : guest.fullName.trim() || "Enginn viðskiptavinur";
+  const customerEmail = customerMode === "existing" ? selectedUser?.email || "" : guest.email.trim();
+
   const submit = async () => {
     setError(null);
     setSuccess(null);
-    if (!selectedUser) {
-      setError("Veldu viðskiptavin.");
+    if (!customerReady) {
+      setError(customerMode === "guest" ? "Fylltu inn allar upplýsingar viðskiptavinar." : "Veldu viðskiptavin.");
       return;
     }
     if (!product) {
@@ -226,7 +252,19 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          authUid: selectedUser.auth_uid,
+          ...(customerMode === "existing"
+            ? { authUid: selectedUser?.auth_uid }
+            : {
+                guest: {
+                  fullName: guest.fullName.trim(),
+                  kennitala: guest.kennitala.trim(),
+                  email: guest.email.trim(),
+                  phone: guest.phone.trim(),
+                  address: guest.address.trim(),
+                  city: guest.city.trim(),
+                  postalCode: guest.postalCode.trim(),
+                },
+              }),
           productId: product.id,
           variantId,
           screenProductId: skjar ? screenId : null,
@@ -248,10 +286,11 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
         setError(j.error || "Mistókst að stofna pöntun");
         return;
       }
-      setSuccess(`Pöntun stofnuð. Staðfestingarpóstur var sendur á ${selectedUser.email} og á Tölvuleigu.`);
+      setSuccess(`Pöntun stofnuð. Staðfestingarpóstur var sendur á ${customerEmail} og á Tölvuleigu.`);
       setProduct(null);
       setMessage("");
       setPriceOverride("");
+      setGuest({ fullName: "", kennitala: "", email: "", phone: "", address: "", city: "", postalCode: "" });
       onCreated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Villa");
@@ -264,18 +303,102 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
       <div className="space-y-6">
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-end justify-between gap-3">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-accent)]">1. Viðskiptavinur</p>
               <h2 className="text-lg font-semibold text-gray-900">Hver á að fá pöntunina?</h2>
             </div>
-            {selectedUser ? (
+            {selectedUser && customerMode === "existing" ? (
               <button type="button" className="text-xs text-gray-500 underline" onClick={() => setSelectedUser(null)}>
                 Skipta
               </button>
             ) : null}
           </div>
-          {selectedUser ? (
+          <div className="mb-4 inline-flex rounded-2xl bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => setCustomerMode("existing")}
+              className={`rounded-xl px-3 py-1.5 text-sm font-medium ${
+                customerMode === "existing" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+              }`}
+            >
+              Skráður
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCustomerMode("guest");
+                setSelectedUser(null);
+              }}
+              className={`rounded-xl px-3 py-1.5 text-sm font-medium ${
+                customerMode === "guest" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+              }`}
+            >
+              Án notanda
+            </button>
+          </div>
+
+          {customerMode === "guest" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-1 block text-xs font-medium text-gray-500">Nafn</span>
+                <input
+                  value={guest.fullName}
+                  onChange={(e) => setGuest((g) => ({ ...g, fullName: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-gray-500">Kennitala</span>
+                <input
+                  value={guest.kennitala}
+                  onChange={(e) => setGuest((g) => ({ ...g, kennitala: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-gray-500">Sími</span>
+                <input
+                  value={guest.phone}
+                  onChange={(e) => setGuest((g) => ({ ...g, phone: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+                />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-1 block text-xs font-medium text-gray-500">Netfang</span>
+                <input
+                  type="email"
+                  value={guest.email}
+                  onChange={(e) => setGuest((g) => ({ ...g, email: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+                />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-1 block text-xs font-medium text-gray-500">Heimilisfang</span>
+                <input
+                  value={guest.address}
+                  onChange={(e) => setGuest((g) => ({ ...g, address: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-gray-500">Borg</span>
+                <input
+                  value={guest.city}
+                  onChange={(e) => setGuest((g) => ({ ...g, city: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-gray-500">Póstnúmer</span>
+                <input
+                  value={guest.postalCode}
+                  onChange={(e) => setGuest((g) => ({ ...g, postalCode: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+                />
+              </label>
+            </div>
+          ) : selectedUser ? (
             <div className="rounded-xl border border-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/5 px-4 py-3">
               <div className="font-semibold text-gray-900">{selectedUser.full_name || "Ónefndur"}</div>
               <div className="mt-1 text-sm text-gray-600">{selectedUser.email}</div>
@@ -505,12 +628,13 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
 
         <section className="rounded-2xl bg-[var(--color-secondary)] p-5 text-white shadow-sm">
           <div className="text-xs uppercase tracking-wide text-white/70">Samantekt</div>
-          <div className="mt-2 text-sm text-white/80">{selectedUser?.full_name || "Enginn viðskiptavinur"}</div>
+          <div className="mt-2 text-sm text-white/80">{customerLabel}</div>
           <div className="text-sm text-white/80">{product?.name || "Engin vara"}</div>
+          {customerMode === "guest" && guest.email ? <div className="text-xs text-white/60">{guest.email}</div> : null}
           <div className="mt-4 text-3xl font-bold">{formatKr(finalPrice)} kr<span className="text-base font-medium text-white/70">/mán</span></div>
           <button
             type="button"
-            disabled={submitting || !selectedUser || !product}
+            disabled={submitting || !customerReady || !product}
             onClick={() => void submit()}
             className="mt-5 w-full rounded-xl bg-[var(--color-accent)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >

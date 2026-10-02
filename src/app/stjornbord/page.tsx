@@ -29,6 +29,8 @@ interface AdminOrderRow {
   variant_id?: string | null;
   numberofextracon?: number | null;
   pdf_url?: string | null;
+  guest_name?: string | null;
+  guest_kennitala?: string | null;
 }
 
 interface LaptopVariantInfo {
@@ -834,9 +836,11 @@ export default function AdminDashboardPage() {
                       <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">{o.status}</span>
                     </td>
                     <td className="px-4 py-3 align-top">
-                      <div className="text-[13px] text-gray-700">{o.auth_uid ? (ownersByUid[o.auth_uid] || "—") : "—"}</div>
+                      <div className="text-[13px] text-gray-700">
+                        {o.auth_uid ? ownersByUid[o.auth_uid] || "—" : o.guest_name || "—"}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 align-top text-gray-700">{o.auth_uid ? (kennitalaByUid[o.auth_uid] || '—') : '—'}</td>
+                    <td className="px-4 py-3 align-top text-gray-700">{o.auth_uid ? kennitalaByUid[o.auth_uid] || "—" : o.guest_kennitala || "—"}</td>
                     <td className="px-4 py-3 align-top text-gray-700 min-w-[16rem] pr-3">
                       {(() => {
                         if (o.product_id && productNamesById[o.product_id]) {

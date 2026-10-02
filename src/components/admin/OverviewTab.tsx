@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { formatKr, parsePrice } from "@/lib/products";
+import { formatKr } from "@/lib/products";
 
 type OrderLite = {
   id: string;
   status: string;
   verd?: number | null;
   product_id?: string | null;
+  orderNumber?: string | null;
+  auth_uid?: string | null;
   timabilFra?: string | null;
   timabilTil?: string | null;
   created_at: string;
@@ -21,179 +23,121 @@ type Asset = {
   purchase_date: string | null;
   purchase_cost: number;
   notes: string | null;
+  current_order_id?: string | null;
 };
 
 type RevenueRow = {
   id: string;
   asset_id: string;
-  year: number;
-  month: number;
   amount: number;
+  created_at?: string;
 };
 
-type ExpenseRow = {
-  id: string;
-  category: string;
-  year: number;
-  month: number;
-  amount: number;
-  note: string | null;
-};
+const ACTIVE_STATUSES = new Set(["Bíður greiðslu", "Undirbúningur", "Í gangi", "Í vinnslu", "Uppsögn í gangi"]);
+const DONE_STATUSES = new Set(["Lokið", "Hætt við"]);
+const FAR_FUTURE = 8.64e15;
 
-const MONTHS_IS = ["Jan", "Feb", "Mar", "Apr", "Maí", "Jún", "Júl", "Ágú", "Sep", "Okt", "Nóv", "Des"];
-const EXPENSE_CATS = ["Húsnæði", "Birgðir", "Markaðssetning", "Laun", "Hugbúnaður", "Annað"];
-const ACTIVE_STATUSES = new Set(["Bíður greiðslu", "Undirbúningur", "Í gangi", "Í vinnslu"]);
-
-function monthKey(year: number, month: number) {
-  return `${year}-${String(month).padStart(2, "0")}`;
+function toIsoDate(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function last12Months() {
-  const now = new Date();
-  const out: { year: number; month: number; label: string; key: string }[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push({
-      year: d.getFullYear(),
-      month: d.getMonth() + 1,
-      label: `${MONTHS_IS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`,
-      key: monthKey(d.getFullYear(), d.getMonth() + 1),
-    });
+function isMissingTable(code?: string | null, message?: string | null) {
+  return code === "PGRST205" || /does not exist|schema cache/i.test(message || "");
+}
+
+function daysUntil(iso?: string | null) {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return null;
+  return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function formatDateIs(iso?: string | null) {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat("is-IS", { dateStyle: "medium" }).format(new Date(iso));
+  } catch {
+    return iso;
   }
-  return out;
 }
 
-function orderActiveInMonth(o: OrderLite, year: number, month: number) {
-  const start = new Date(year, month - 1, 1).getTime();
-  const end = new Date(year, month, 0, 23, 59, 59).getTime();
-  const from = o.timabilFra ? new Date(o.timabilFra).getTime() : new Date(o.created_at).getTime();
-  const to = o.timabilTil ? new Date(o.timabilTil).getTime() : end;
-  return from <= end && to >= start;
+function leftLabel(days: number | null) {
+  if (days === null) return "Óvíst hvenær laus";
+  if (days < 0) return "Laus núna";
+  if (days === 0) return "Laus í dag";
+  if (days === 1) return "1 dagur eftir";
+  return `${days} dagar eftir`;
 }
 
-function AreaBarChart({
-  labels,
-  series,
-}: {
-  labels: string[];
-  series: { name: string; color: string; values: number[] }[];
-}) {
-  const w = 640;
-  const h = 220;
-  const pad = { l: 44, r: 12, t: 16, b: 28 };
-  const max = Math.max(1, ...series.flatMap((s) => s.values));
-  const innerW = w - pad.l - pad.r;
-  const innerH = h - pad.t - pad.b;
-  const n = labels.length;
-  const x = (i: number) => pad.l + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
-  const y = (v: number) => pad.t + innerH - (v / max) * innerH;
-  const pathFor = (values: number[]) =>
-    values.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
-  const areaFor = (values: number[]) =>
-    `${pathFor(values)} L ${x(values.length - 1).toFixed(1)} ${pad.t + innerH} L ${x(0).toFixed(1)} ${pad.t + innerH} Z`;
+function orderIsOut(order: OrderLite | null) {
+  if (!order || DONE_STATUSES.has(order.status)) return false;
+  const days = daysUntil(order.timabilTil);
+  if (days !== null && days < 0) return false;
+  return ACTIVE_STATUSES.has(order.status) || Boolean(order.timabilTil);
+}
 
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-56 w-full">
-      {[0, 0.5, 1].map((t) => {
-        const yy = pad.t + innerH * (1 - t);
-        return (
-          <g key={t}>
-            <line x1={pad.l} x2={w - pad.r} y1={yy} y2={yy} stroke="#e5e7eb" strokeWidth="1" />
-            <text x={8} y={yy + 4} className="fill-gray-400" fontSize="10">
-              {formatKr(Math.round(max * t))}
-            </text>
-          </g>
-        );
-      })}
-      {series.map((s) => (
-        <g key={s.name}>
-          <path d={areaFor(s.values)} fill={s.color} opacity="0.12" />
-          <path d={pathFor(s.values)} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" />
-          {s.values.map((v, i) => (
-            <circle key={`${s.name}-${i}`} cx={x(i)} cy={y(v)} r="3" fill={s.color} />
-          ))}
-        </g>
-      ))}
-      {labels.map((label, i) => (
-        <text key={label} x={x(i)} y={h - 8} textAnchor="middle" className="fill-gray-400" fontSize="9">
-          {label}
-        </text>
-      ))}
-    </svg>
-  );
+function availabilityTime(order: OrderLite | null) {
+  if (!orderIsOut(order)) return 0;
+  const t = order?.timabilTil ? new Date(order.timabilTil).getTime() : NaN;
+  return Number.isFinite(t) ? t : FAR_FUTURE;
 }
 
 export default function OverviewTab({
   orders,
-  preorderCount,
 }: {
   orders: OrderLite[];
-  preorderCount: number;
+  preorderCount?: number;
 }) {
   const now = new Date();
-  const thisYear = now.getFullYear();
-  const thisMonth = now.getMonth() + 1;
-  const months = last12Months();
+  const [view, setView] = useState<"products" | "picture">("products");
 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [revenues, setRevenues] = useState<RevenueRow[]>([]);
-  const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [products, setProducts] = useState<Array<{ id: string; name: string }>>([]);
+  const [ownerNames, setOwnerNames] = useState<Record<string, string>>({});
   const [schemaReady, setSchemaReady] = useState(true);
+  const [needsIncomeMigration, setNeedsIncomeMigration] = useState(false);
+  const [needsOrderMigration, setNeedsOrderMigration] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [assetName, setAssetName] = useState("");
-  const [assetProductId, setAssetProductId] = useState("");
-  const [assetCost, setAssetCost] = useState("");
-  const [assetDate, setAssetDate] = useState(toIsoDate(now));
-  const [assetNotes, setAssetNotes] = useState("");
-  const [savingAsset, setSavingAsset] = useState(false);
+  const [name, setName] = useState("");
+  const [productId, setProductId] = useState("");
+  const [cost, setCost] = useState("");
+  const [date, setDate] = useState(toIsoDate(now));
+  const [saving, setSaving] = useState(false);
 
-  const [revAssetId, setRevAssetId] = useState("");
-  const [revAmount, setRevAmount] = useState("");
-  const [revMonth, setRevMonth] = useState(monthKey(thisYear, thisMonth));
-  const [savingRev, setSavingRev] = useState(false);
-
-  const [expCat, setExpCat] = useState("Annað");
-  const [expAmount, setExpAmount] = useState("");
-  const [expNote, setExpNote] = useState("");
-  const [savingExp, setSavingExp] = useState(false);
+  const [incomeByAsset, setIncomeByAsset] = useState<Record<string, string>>({});
+  const [orderPickByAsset, setOrderPickByAsset] = useState<Record<string, string>>({});
+  const [savingIncome, setSavingIncome] = useState<string | null>(null);
+  const [linkingAsset, setLinkingAsset] = useState<string | null>(null);
+  const [deletingIncome, setDeletingIncome] = useState<string | null>(null);
 
   const loadLedger = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [a, r, e, p] = await Promise.all([
+      const [a, r, p] = await Promise.all([
         supabase.from("company_assets").select("*").order("created_at", { ascending: false }),
-        supabase.from("asset_revenue").select("*"),
-        supabase.from("company_expenses").select("*").order("created_at", { ascending: false }),
-        supabase.from("products").select("id,name,type,price").eq("hidden", false).order("name"),
+        supabase.from("asset_revenue").select("*").order("created_at", { ascending: true }),
+        supabase.from("products").select("id,name").eq("hidden", false).order("name"),
       ]);
-      const missing =
-        a.error?.message?.includes("does not exist") ||
-        r.error?.message?.includes("does not exist") ||
-        e.error?.message?.includes("schema cache") ||
-        e.error?.code === "PGRST205" ||
-        a.error?.code === "PGRST205";
-      if (missing) {
+      if (isMissingTable(a.error?.code, a.error?.message) || isMissingTable(r.error?.code, r.error?.message)) {
         setSchemaReady(false);
         setAssets([]);
         setRevenues([]);
-        setExpenses([]);
         return;
       }
       if (a.error) throw a.error;
       if (r.error) throw r.error;
-      if (e.error) throw e.error;
       setSchemaReady(true);
       setAssets((a.data as Asset[]) || []);
       setRevenues((r.data as RevenueRow[]) || []);
-      setExpenses((e.data as ExpenseRow[]) || []);
       setProducts((p.data as Array<{ id: string; name: string }>) || []);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Gat ekki sótt yfirlit";
-      if (/does not exist|PGRST205|schema cache/i.test(msg)) setSchemaReady(false);
+      if (isMissingTable(null, msg)) setSchemaReady(false);
       else setError(msg);
     } finally {
       setLoading(false);
@@ -204,462 +148,600 @@ export default function OverviewTab({
     void loadLedger();
   }, []);
 
-  const activeOrders = orders.filter((o) => ACTIVE_STATUSES.has(o.status));
-  const mrr = activeOrders.reduce((sum, o) => sum + parsePrice(o.verd), 0);
-  const expiringSoon = orders.filter((o) => {
-    if (!o.timabilTil || !ACTIVE_STATUSES.has(o.status)) return false;
-    const days = Math.ceil((new Date(o.timabilTil).getTime() - Date.now()) / 86400000);
-    return days >= 0 && days <= 14;
-  }).length;
-
-  const computedByMonth = months.map((m) =>
-    orders.reduce((sum, o) => (orderActiveInMonth(o, m.year, m.month) ? sum + parsePrice(o.verd) : sum), 0)
-  );
-  const bookedByMonth = months.map((m) =>
-    revenues.filter((r) => r.year === m.year && r.month === m.month).reduce((sum, r) => sum + r.amount, 0)
-  );
-  const expenseByMonth = months.map((m) =>
-    expenses.filter((r) => r.year === m.year && r.month === m.month).reduce((sum, r) => sum + r.amount, 0)
-  );
-
-  const fleetCost = assets.reduce((s, a) => s + a.purchase_cost, 0);
-  const bookedTotal = revenues.reduce((s, r) => s + r.amount, 0);
-  const bookedThisMonth = revenues
-    .filter((r) => r.year === thisYear && r.month === thisMonth)
-    .reduce((s, r) => s + r.amount, 0);
-  const expensesThisMonth = expenses
-    .filter((r) => r.year === thisYear && r.month === thisMonth)
-    .reduce((s, r) => s + r.amount, 0);
-  const profitThisMonth = bookedThisMonth - expensesThisMonth;
-  const paybackMonths = mrr > 0 ? Math.ceil(fleetCost / mrr) : null;
-
-  const productIncome = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const o of activeOrders) {
-      const id = o.product_id || "unknown";
-      map[id] = (map[id] || 0) + parsePrice(o.verd);
-    }
-    return Object.entries(map)
-      .map(([id, amount]) => ({
-        id,
-        name: products.find((p) => p.id === id)?.name || (id === "unknown" ? "Óþekkt vara" : "Vara"),
-        amount,
-      }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 6);
-  }, [activeOrders, products]);
-
-  const suggestedForAsset = (asset: Asset) => {
-    if (!asset.product_id) return 0;
-    return activeOrders.filter((o) => o.product_id === asset.product_id).reduce((s, o) => s + parsePrice(o.verd), 0);
-  };
-
-  const addAsset = async () => {
-    const cost = parseInt(assetCost.replace(/\D+/g, ""), 10) || 0;
-    const name = assetName.trim() || products.find((p) => p.id === assetProductId)?.name || "";
-    if (!name || cost <= 0) {
-      setError("Settu nafn og kaupverð.");
+  useEffect(() => {
+    const uids = Array.from(new Set(orders.map((o) => o.auth_uid).filter((v): v is string => Boolean(v))));
+    if (uids.length === 0) {
+      setOwnerNames({});
       return;
     }
-    setSavingAsset(true);
+    void supabase
+      .from("users")
+      .select("auth_uid, full_name")
+      .in("auth_uid", uids)
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        for (const row of (data as Array<{ auth_uid: string; full_name: string | null }> | null) || []) {
+          map[row.auth_uid] = row.full_name || "";
+        }
+        setOwnerNames(map);
+      });
+  }, [orders]);
+
+  const incomesByAsset = useMemo(() => {
+    const map: Record<string, RevenueRow[]> = {};
+    for (const row of revenues) (map[row.asset_id] ||= []).push(row);
+    return map;
+  }, [revenues]);
+
+  const earnedByAsset = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const [id, rows] of Object.entries(incomesByAsset)) {
+      map[id] = rows.reduce((s, r) => s + r.amount, 0);
+    }
+    return map;
+  }, [incomesByAsset]);
+
+  const orderById = useMemo(() => {
+    const map: Record<string, OrderLite> = {};
+    for (const o of orders) map[o.id] = o;
+    return map;
+  }, [orders]);
+
+  const usedOrderIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of assets) {
+      if (a.current_order_id) set.add(a.current_order_id);
+    }
+    return set;
+  }, [assets]);
+
+  const linkableOrders = useMemo(
+    () => orders.filter((o) => orderIsOut(o) && !usedOrderIds.has(o.id)),
+    [orders, usedOrderIds]
+  );
+
+  const sortedAssets = useMemo(() => {
+    return [...assets].sort((a, b) => {
+      const oa = a.current_order_id ? orderById[a.current_order_id] || null : null;
+      const ob = b.current_order_id ? orderById[b.current_order_id] || null : null;
+      const ta = availabilityTime(oa);
+      const tb = availabilityTime(ob);
+      if (ta !== tb) return ta - tb;
+      return a.name.localeCompare(b.name, "is");
+    });
+  }, [assets, orderById]);
+
+  const totalCost = assets.reduce((s, a) => s + a.purchase_cost, 0);
+  const totalBack = assets.reduce((s, a) => s + (earnedByAsset[a.id] || 0), 0);
+  const totalDiff = totalBack - totalCost;
+
+  const renterName = (order: OrderLite | null) => {
+    if (!order) return "";
+    if (order.auth_uid && ownerNames[order.auth_uid]) return ownerNames[order.auth_uid];
+    return order.orderNumber || "Óþekktur leigjandi";
+  };
+
+  const addProduct = async () => {
+    const purchaseCost = parseInt(cost.replace(/\D+/g, ""), 10) || 0;
+    const productName = name.trim() || products.find((p) => p.id === productId)?.name || "";
+    if (!productName || purchaseCost <= 0) {
+      setError("Veldu vöru og settu inn hvað hún kostaði.");
+      return;
+    }
+    setSaving(true);
     setError(null);
     const { error: err } = await supabase.from("company_assets").insert({
-      name,
-      product_id: assetProductId || null,
-      purchase_cost: cost,
-      purchase_date: assetDate || null,
-      notes: assetNotes.trim() || null,
+      name: productName,
+      product_id: productId || null,
+      purchase_cost: purchaseCost,
+      purchase_date: date || null,
     });
-    setSavingAsset(false);
+    setSaving(false);
     if (err) {
       setError(err.message);
       return;
     }
-    setAssetName("");
-    setAssetProductId("");
-    setAssetCost("");
-    setAssetNotes("");
+    setName("");
+    setProductId("");
+    setCost("");
     await loadLedger();
   };
 
-  const addRevenue = async () => {
-    const amount = parseInt(revAmount.replace(/\D+/g, ""), 10) || 0;
-    const [y, m] = revMonth.split("-").map((n) => parseInt(n, 10));
-    if (!revAssetId || amount <= 0) {
-      setError("Veldu eign og upphæð tekna.");
-      return;
-    }
-    setSavingRev(true);
-    setError(null);
-    const { error: err } = await supabase.from("asset_revenue").upsert(
-      { asset_id: revAssetId, year: y, month: m, amount },
-      { onConflict: "asset_id,year,month" }
-    );
-    setSavingRev(false);
-    if (err) {
-      setError(err.message);
-      return;
-    }
-    setRevAmount("");
-    await loadLedger();
-  };
-
-  const addExpense = async () => {
-    const amount = parseInt(expAmount.replace(/\D+/g, ""), 10) || 0;
+  const addIncome = async (assetId: string) => {
+    const amount = parseInt((incomeByAsset[assetId] || "").replace(/\D+/g, ""), 10) || 0;
     if (amount <= 0) {
-      setError("Settu upphæð kostnaðar.");
+      setError("Settu inn upphæðina sem varan skilaði.");
       return;
     }
-    setSavingExp(true);
+    setSavingIncome(assetId);
     setError(null);
-    const { error: err } = await supabase.from("company_expenses").insert({
-      category: expCat,
-      year: thisYear,
-      month: thisMonth,
-      amount,
-      note: expNote.trim() || null,
-    });
-    setSavingExp(false);
+    const { error: err } = await supabase.from("asset_revenue").insert({ asset_id: assetId, amount });
+    setSavingIncome(null);
+    if (err) {
+      if (/null value.*(year|month)|asset_id_year_month|check constraint/i.test(err.message)) {
+        setNeedsIncomeMigration(true);
+        setError("Keyrðu sql/2026-10-02-asset-income-entries.sql í Supabase til að skrá hverja innkomu sér.");
+      } else setError(err.message);
+      return;
+    }
+    setIncomeByAsset((prev) => ({ ...prev, [assetId]: "" }));
+    await loadLedger();
+  };
+
+  const linkOrder = async (assetId: string) => {
+    const orderId = orderPickByAsset[assetId] || "";
+    if (!orderId) {
+      setError("Veldu pöntun til að tengja.");
+      return;
+    }
+    setLinkingAsset(assetId);
+    setError(null);
+    const { error: err } = await supabase.from("company_assets").update({ current_order_id: orderId }).eq("id", assetId);
+    setLinkingAsset(null);
+    if (err) {
+      if (/current_order_id|Could not find/i.test(err.message)) {
+        setNeedsOrderMigration(true);
+        setError("Keyrðu sql/2026-10-02-asset-current-order.sql í Supabase til að tengja pantanir við vörur.");
+      } else if (/duplicate|unique/i.test(err.message)) {
+        setError("Þessi pöntun er þegar tengd annarri vöru.");
+      } else setError(err.message);
+      return;
+    }
+    setOrderPickByAsset((prev) => ({ ...prev, [assetId]: "" }));
+    await loadLedger();
+  };
+
+  const unlinkOrder = async (assetId: string) => {
+    setLinkingAsset(assetId);
+    setError(null);
+    const { error: err } = await supabase.from("company_assets").update({ current_order_id: null }).eq("id", assetId);
+    setLinkingAsset(null);
     if (err) {
       setError(err.message);
       return;
     }
-    setExpAmount("");
-    setExpNote("");
+    await loadLedger();
+  };
+
+  const removeIncome = async (id: string) => {
+    setDeletingIncome(id);
+    setError(null);
+    const { error: err } = await supabase.from("asset_revenue").delete().eq("id", id);
+    setDeletingIncome(null);
+    if (err) {
+      setError(err.message);
+      return;
+    }
     await loadLedger();
   };
 
   const removeAsset = async (id: string) => {
-    if (!window.confirm("Eyða þessari eign og tekjuskráningu hennar?")) return;
+    if (!window.confirm("Eyða þessari vöru úr yfirlitinu?")) return;
     await supabase.from("company_assets").delete().eq("id", id);
     await loadLedger();
   };
 
   if (!schemaReady) {
     return (
-      <div className="space-y-6">
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
-          <h2 className="text-lg font-semibold">Eignabókhald ekki virkt enn</h2>
-          <p className="mt-2 text-sm">
-            Keyrðu <code className="rounded bg-white px-1.5 py-0.5 text-xs">sql/2026-09-28-admin-overview.sql</code> í
-            Supabase til að skrá innkaup, mánaðarlegar tekjur og rekstrarkostnað. Yfirlit pöntunum hér fyrir neðan virkar samt.
-          </p>
-        </div>
-        <KpiRow
-          activeCount={activeOrders.length}
-          expiringSoon={expiringSoon}
-          mrr={mrr}
-          bookedThisMonth={0}
-          expensesThisMonth={0}
-          fleetCost={0}
-          paybackMonths={null}
-          preorderCount={preorderCount}
-        />
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Áætlaðar leigutekjur síðustu 12 mánuði</h2>
-          <AreaBarChart
-            labels={months.map((m) => m.label)}
-            series={[{ name: "Leigur", color: "#004932", values: computedByMonth }]}
-          />
-        </section>
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-950">
+        <h2 className="text-lg font-semibold">Yfirlit er ekki tilbúið</h2>
+        <p className="mt-2 text-sm leading-relaxed">
+          Keyrðu <code className="rounded bg-white px-1.5 py-0.5 text-xs">sql/2026-09-28-admin-overview.sql</code> og{" "}
+          <code className="rounded bg-white px-1.5 py-0.5 text-xs">sql/2026-10-02-asset-income-entries.sql</code> í
+          Supabase.
+        </p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <KpiRow
-        activeCount={activeOrders.length}
-        expiringSoon={expiringSoon}
-        mrr={mrr}
-        bookedThisMonth={bookedThisMonth}
-        expensesThisMonth={expensesThisMonth}
-        fleetCost={fleetCost}
-        paybackMonths={paybackMonths}
-        preorderCount={preorderCount}
-      />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Yfirlit</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            {view === "products"
+              ? "Næsta lausa vara efst. Tengdu pöntun til að sjá nafn og hvað er eftir."
+              : "Ein súla per vöru. Grátt er kaupverð, grænt er hvað hún hefur skilað."}
+          </p>
+        </div>
+        <div className="inline-flex rounded-2xl bg-gray-100 p-1">
+          <button
+            type="button"
+            onClick={() => setView("products")}
+            className={`rounded-xl px-4 py-2 text-sm font-medium ${
+              view === "products" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            Hver vara
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("picture")}
+            className={`rounded-xl px-4 py-2 text-sm font-medium ${
+              view === "picture" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            Súlur
+          </button>
+        </div>
+      </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">12 mánaða sjóðsstreymi</h2>
-              <p className="text-xs text-gray-500">Bókaðar tekjur, áætlaðar leigutekjur og rekstrarkostnaður</p>
-            </div>
-            <div className="flex flex-wrap gap-3 text-[11px] text-gray-500">
-              <Legend color="#FF5733" label="Bókað" />
-              <Legend color="#004932" label="Leigur (áætlað)" />
-              <Legend color="#9ca3af" label="Kostnaður" />
-            </div>
-          </div>
-          <AreaBarChart
-            labels={months.map((m) => m.label)}
-            series={[
-              { name: "Bókað", color: "#FF5733", values: bookedByMonth },
-              { name: "Leigur", color: "#004932", values: computedByMonth },
-              { name: "Kostnaður", color: "#9ca3af", values: expenseByMonth },
-            ]}
-          />
-          <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="rounded-lg bg-orange-50 px-2 py-2">
-              <div className="text-gray-500">Hagnaður þessa mánaðar</div>
-              <div className={`font-semibold ${profitThisMonth >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                {formatKr(profitThisMonth)} kr
-              </div>
-            </div>
-            <div className="rounded-lg bg-gray-50 px-2 py-2">
-              <div className="text-gray-500">Heildartekjur bókaðar</div>
-              <div className="font-semibold text-gray-900">{formatKr(bookedTotal)} kr</div>
-            </div>
-            <div className="rounded-lg bg-gray-50 px-2 py-2">
-              <div className="text-gray-500">Óendurheimtur floti</div>
-              <div className="font-semibold text-gray-900">{formatKr(Math.max(0, fleetCost - bookedTotal))} kr</div>
-            </div>
-          </div>
-        </section>
+      {needsIncomeMigration ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Keyrðu <code className="rounded bg-white px-1.5 py-0.5 text-xs">sql/2026-10-02-asset-income-entries.sql</code> í
+          Supabase.
+        </p>
+      ) : null}
+      {needsOrderMigration ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Keyrðu <code className="rounded bg-white px-1.5 py-0.5 text-xs">sql/2026-10-02-asset-current-order.sql</code> í
+          Supabase til að tengja pöntun við vöru.
+        </p>
+      ) : null}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Vinsælasta leigan</h2>
-          <p className="mb-4 text-xs text-gray-500">Mánaðartekjur úr virkum pöntunum</p>
-          {productIncome.length === 0 ? (
-            <p className="text-sm text-gray-500">Engar virkar pantanir.</p>
-          ) : (
-            <div className="space-y-3">
-              {productIncome.map((row) => {
-                const pct = mrr > 0 ? Math.round((row.amount / mrr) * 100) : 0;
+      {view === "picture" ? (
+        <PillarView
+          rows={sortedAssets.map((asset) => {
+            const order = asset.current_order_id ? orderById[asset.current_order_id] || null : null;
+            const out = orderIsOut(order);
+            return {
+              id: asset.id,
+              name: asset.name,
+              renter: out ? renterName(order) : "Laus",
+              cost: asset.purchase_cost,
+              earned: earnedByAsset[asset.id] || 0,
+            };
+          })}
+        />
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <SummaryCard label="Keypt fyrir" value={`${formatKr(totalCost)} kr`} tone="neutral" />
+            <SummaryCard label="Fengið til baka" value={`${formatKr(totalBack)} kr`} tone="good" />
+            <SummaryCard
+              label={totalDiff >= 0 ? "Hagnaður" : "Eftir að ná inn"}
+              value={`${formatKr(Math.abs(totalDiff))} kr`}
+              tone={totalDiff >= 0 ? "good" : "warn"}
+            />
+          </div>
+
+          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h3 className="font-semibold text-gray-900">Skrá nýja vöru</h3>
+            <p className="mt-1 text-sm text-gray-500">Hvað kostaði tækið ykkur að kaupa?</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <select
+                value={productId}
+                onChange={(e) => {
+                  setProductId(e.target.value);
+                  const match = products.find((p) => p.id === e.target.value);
+                  if (match && !name.trim()) setName(match.name);
+                }}
+                className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+              >
+                <option value="">Veldu vöru</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nafn (ef annað)" className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm" />
+              <input value={cost} onChange={(e) => setCost(e.target.value)} placeholder="Kaupverð kr" className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm" />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm" />
+            </div>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void addProduct()}
+              className="mt-3 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {saving ? "Vista…" : "Skrá vöru"}
+            </button>
+          </section>
+
+          {loading && assets.length === 0 ? <p className="text-sm text-gray-500">Hleður…</p> : null}
+
+          {sortedAssets.length > 0 ? (
+            <ol className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              {sortedAssets.map((asset, i) => {
+                const order = asset.current_order_id ? orderById[asset.current_order_id] || null : null;
+                const out = orderIsOut(order);
+                const days = out ? daysUntil(order?.timabilTil) : null;
                 return (
-                  <div key={row.id}>
-                    <div className="mb-1 flex justify-between text-sm">
-                      <span className="truncate pr-2 font-medium text-gray-800">{row.name}</span>
-                      <span className="text-gray-500">{formatKr(row.amount)} kr</span>
+                  <li key={asset.id} className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0">
+                    <span className="w-7 text-sm font-bold text-gray-400">{i + 1}.</span>
+                    <span className="min-w-[8rem] flex-1 font-semibold text-gray-900">{asset.name}</span>
+                    {out ? (
+                      <>
+                        <span className="text-sm text-gray-700">{renterName(order)}</span>
+                        <span className={`rounded-full px-3 py-1 text-sm font-bold ${days !== null && days <= 3 ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-800"}`}>
+                          {leftLabel(days)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-800">Laus</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          ) : null}
+
+          {assets.length === 0 && !loading ? (
+            <p className="rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-10 text-center text-sm text-gray-500">
+              Engar vörur skráðar enn. Byrjaðu á að skrá tæki og kaupverð.
+            </p>
+          ) : (
+            <div className="grid gap-4">
+              {sortedAssets.map((asset, i) => {
+                const earned = earnedByAsset[asset.id] || 0;
+                const leftMoney = asset.purchase_cost - earned;
+                const paidBack = leftMoney <= 0;
+                const progress = asset.purchase_cost > 0 ? Math.min(100, Math.round((earned / asset.purchase_cost) * 100)) : 0;
+                const history = incomesByAsset[asset.id] || [];
+                const nextNumber = history.length + 1;
+                const order = asset.current_order_id ? orderById[asset.current_order_id] || null : null;
+                const out = orderIsOut(order);
+                const days = out ? daysUntil(order?.timabilTil) : null;
+                const matching = linkableOrders.filter((o) => asset.product_id && o.product_id === asset.product_id);
+                const others = linkableOrders.filter((o) => !asset.product_id || o.product_id !== asset.product_id);
+
+                return (
+                  <article key={asset.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                    <div className={`px-5 py-4 ${out ? "bg-[var(--color-secondary)] text-white" : "bg-emerald-600 text-white"}`}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-white/70">
+                            {i + 1}. {out ? "Í útleigu" : "Næst laus"}
+                          </div>
+                          <h3 className="mt-1 text-2xl font-black leading-tight">{asset.name}</h3>
+                        </div>
+                        <button type="button" onClick={() => void removeAsset(asset.id)} className="text-xs text-white/60 hover:text-white">
+                          Eyða
+                        </button>
+                      </div>
+                      {out ? (
+                        <div className="mt-3">
+                          <div className="text-xl font-bold">{renterName(order)}</div>
+                          <div className="mt-1 text-3xl font-black">{leftLabel(days)}</div>
+                          {order?.timabilTil ? <div className="mt-1 text-sm text-white/75">til {formatDateIs(order.timabilTil)}</div> : null}
+                          {order?.orderNumber ? <div className="text-sm text-white/75">pöntun {order.orderNumber}</div> : null}
+                        </div>
+                      ) : (
+                        <div className="mt-3 text-3xl font-black">Laus núna</div>
+                      )}
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                      <div className="h-full rounded-full bg-[var(--color-secondary)]" style={{ width: `${pct}%` }} />
+
+                    <div className="p-5">
+                      {!out ? (
+                        linkableOrders.length > 0 ? (
+                          <div className="mb-5 flex flex-wrap items-end gap-2">
+                            <label className="min-w-[14rem] flex-1 text-sm">
+                              <span className="mb-1 block text-xs text-gray-500">Tengja pöntun við þessa vöru</span>
+                              <select
+                                value={orderPickByAsset[asset.id] || ""}
+                                onChange={(e) => setOrderPickByAsset((prev) => ({ ...prev, [asset.id]: e.target.value }))}
+                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                              >
+                                <option value="">Veldu pöntun</option>
+                                {matching.length > 0 ? (
+                                  <optgroup label="Þessi vara">
+                                    {matching.map((o) => (
+                                      <option key={o.id} value={o.id}>
+                                        {renterName(o)} · {o.orderNumber || o.id.slice(0, 8)} · {leftLabel(daysUntil(o.timabilTil))}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                ) : null}
+                                {others.length > 0 ? (
+                                  <optgroup label={matching.length > 0 ? "Aðrar pantanir" : "Pantanir"}>
+                                    {others.map((o) => (
+                                      <option key={o.id} value={o.id}>
+                                        {renterName(o)} · {o.orderNumber || o.id.slice(0, 8)} · {leftLabel(daysUntil(o.timabilTil))}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                ) : null}
+                              </select>
+                            </label>
+                            <button
+                              type="button"
+                              disabled={linkingAsset === asset.id}
+                              onClick={() => void linkOrder(asset.id)}
+                              className="rounded-xl bg-[var(--color-secondary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            >
+                              {linkingAsset === asset.id ? "Vista…" : "Tengja"}
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="mb-5 text-sm text-gray-500">Engin virk pöntun til að tengja.</p>
+                        )
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={linkingAsset === asset.id}
+                          onClick={() => void unlinkOrder(asset.id)}
+                          className="mb-5 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Losa vöru
+                        </button>
+                      )}
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <div className="text-xs text-gray-500">Kostaði okkur</div>
+                          <div className="text-xl font-bold text-gray-900">{formatKr(asset.purchase_cost)} kr</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Skilaði til baka</div>
+                          <div className="text-xl font-bold text-[var(--color-secondary)]">{formatKr(earned)} kr</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">{paidBack ? "Komið með hagnað" : "Eftir að ná inn"}</div>
+                          <div className={`text-xl font-bold ${paidBack ? "text-emerald-700" : "text-amber-700"}`}>
+                            {formatKr(Math.abs(leftMoney))} kr
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <div className="mb-1 flex justify-between text-xs text-gray-500">
+                          <span>{paidBack ? "Greidd upp" : `${progress}% til baka`}</span>
+                          <span>
+                            {formatKr(earned)} / {formatKr(asset.purchase_cost)}
+                          </span>
+                        </div>
+                        <div className="h-3 overflow-hidden rounded-full bg-gray-100">
+                          <div
+                            className={`h-full rounded-full ${paidBack ? "bg-emerald-500" : "bg-[var(--color-secondary)]"}`}
+                            style={{ width: `${Math.max(progress, earned > 0 ? 4 : 0)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-5">
+                        <div className="mb-2 text-sm font-medium text-gray-900">Innkoma</div>
+                        {history.length === 0 ? (
+                          <p className="mb-3 text-sm text-gray-500">Engin innkoma skráð enn.</p>
+                        ) : (
+                          <ul className="mb-3 divide-y divide-gray-100 rounded-xl border border-gray-100">
+                            {history.map((row, index) => (
+                              <li key={row.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                                <span className="text-gray-600">Innkoma {index + 1}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-medium text-gray-900">{formatKr(row.amount)} kr</span>
+                                  <button
+                                    type="button"
+                                    disabled={deletingIncome === row.id}
+                                    onClick={() => void removeIncome(row.id)}
+                                    className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50"
+                                  >
+                                    Eyða
+                                  </button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        <div className="flex flex-wrap items-end gap-2">
+                          <label className="min-w-[10rem] flex-1 text-sm">
+                            <span className="mb-1 block text-xs text-gray-500">Bæta við innkomu {nextNumber}</span>
+                            <input
+                              value={incomeByAsset[asset.id] || ""}
+                              onChange={(e) => setIncomeByAsset((prev) => ({ ...prev, [asset.id]: e.target.value }))}
+                              placeholder="Upphæð kr"
+                              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            disabled={savingIncome === asset.id}
+                            onClick={() => void addIncome(asset.id)}
+                            className="rounded-xl bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                          >
+                            {savingIncome === asset.id ? "Vista…" : `Skrá innkomu ${nextNumber}`}
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </div>
           )}
-        </section>
-      </div>
-
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Eignir sem þið keyptuð</h2>
-          <p className="mb-4 text-xs text-gray-500">Skráðu innkaupaverð. ROI og endurheimt reiknast sjálfkrafa.</p>
-          <div className="mb-4 grid gap-2 sm:grid-cols-2">
-            <select value={assetProductId} onChange={(e) => setAssetProductId(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm">
-              <option value="">Tengja við vöru (valfrjálst)</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <input value={assetName} onChange={(e) => setAssetName(e.target.value)} placeholder="Nafn eignar" className="rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-            <input value={assetCost} onChange={(e) => setAssetCost(e.target.value)} placeholder="Kaupverð kr" className="rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-            <input type="date" value={assetDate} onChange={(e) => setAssetDate(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-            <input value={assetNotes} onChange={(e) => setAssetNotes(e.target.value)} placeholder="Athugasemd" className="sm:col-span-2 rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-            <button
-              type="button"
-              disabled={savingAsset}
-              onClick={() => void addAsset()}
-              className="sm:col-span-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {savingAsset ? "Vista…" : "Skrá eign"}
-            </button>
-          </div>
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="text-left text-xs text-gray-500">
-                <tr>
-                  <th className="pb-2">Eign</th>
-                  <th className="pb-2">Kaup</th>
-                  <th className="pb-2">Tekjur</th>
-                  <th className="pb-2">Staða</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {assets.map((a) => {
-                  const earned = revenues.filter((r) => r.asset_id === a.id).reduce((s, r) => s + r.amount, 0);
-                  const left = a.purchase_cost - earned;
-                  const roi = a.purchase_cost > 0 ? Math.round((earned / a.purchase_cost) * 100) : 0;
-                  return (
-                    <tr key={a.id} className="border-t border-gray-100">
-                      <td className="py-2 pr-3">
-                        <div className="font-medium text-gray-900">{a.name}</div>
-                        <div className="text-[11px] text-gray-400">{a.purchase_date || "—"}</div>
-                      </td>
-                      <td className="py-2">{formatKr(a.purchase_cost)}</td>
-                      <td className="py-2">{formatKr(earned)}</td>
-                      <td className="py-2">
-                        <span className={`text-xs font-medium ${left <= 0 ? "text-emerald-700" : "text-amber-700"}`}>
-                          {left <= 0 ? `Greidd upp · ${roi}%` : `${formatKr(left)} eftir · ${roi}%`}
-                        </span>
-                      </td>
-                      <td className="py-2 text-right">
-                        <button type="button" onClick={() => void removeAsset(a.id)} className="text-xs text-red-500 hover:underline">
-                          Eyða
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {!loading && assets.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-gray-400">
-                      Engar eignir skráðar enn.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <div className="space-y-6">
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900">Skrá mánaðartekjur</h2>
-            <p className="mb-4 text-xs text-gray-500">
-              Hvað þessi eign skilaði ykkur í þessum mánuði. Tillaga byggir á virkum leigum.
-            </p>
-            <div className="grid gap-2">
-              <select
-                value={revAssetId}
-                onChange={(e) => {
-                  setRevAssetId(e.target.value);
-                  const asset = assets.find((a) => a.id === e.target.value);
-                  if (asset) setRevAmount(String(suggestedForAsset(asset) || ""));
-                }}
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm"
-              >
-                <option value="">Veldu eign</option>
-                {assets.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-              <div className="grid grid-cols-2 gap-2">
-                <select value={revMonth} onChange={(e) => setRevMonth(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm">
-                  {months.map((m) => (
-                    <option key={m.key} value={m.key}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-                <input value={revAmount} onChange={(e) => setRevAmount(e.target.value)} placeholder="Upphæð kr" className="rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-              </div>
-              <button
-                type="button"
-                disabled={savingRev}
-                onClick={() => void addRevenue()}
-                className="rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
-              >
-                {savingRev ? "Vista…" : "Bóka tekjur"}
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900">Rekstrarkostnaður · {MONTHS_IS[thisMonth - 1]}</h2>
-            <div className="mt-3 grid gap-2">
-              <select value={expCat} onChange={(e) => setExpCat(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm">
-                {EXPENSE_CATS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-              <input value={expAmount} onChange={(e) => setExpAmount(e.target.value)} placeholder="Upphæð kr" className="rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-              <input value={expNote} onChange={(e) => setExpNote(e.target.value)} placeholder="Lýsing" className="rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-              <button
-                type="button"
-                disabled={savingExp}
-                onClick={() => void addExpense()}
-                className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-              >
-                {savingExp ? "Vista…" : "Skrá kostnað"}
-              </button>
-            </div>
-            <ul className="mt-4 space-y-2">
-              {expenses
-                .filter((e) => e.year === thisYear && e.month === thisMonth)
-                .slice(0, 6)
-                .map((e) => (
-                  <li key={e.id} className="flex justify-between text-sm text-gray-700">
-                    <span>
-                      {e.category}
-                      {e.note ? <span className="text-gray-400"> · {e.note}</span> : null}
-                    </span>
-                    <span>{formatKr(e.amount)} kr</span>
-                  </li>
-                ))}
-            </ul>
-          </section>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
 
-function KpiRow({
-  activeCount,
-  expiringSoon,
-  mrr,
-  bookedThisMonth,
-  expensesThisMonth,
-  fleetCost,
-  paybackMonths,
-  preorderCount,
+function PillarView({
+  rows,
 }: {
-  activeCount: number;
-  expiringSoon: number;
-  mrr: number;
-  bookedThisMonth: number;
-  expensesThisMonth: number;
-  fleetCost: number;
-  paybackMonths: number | null;
-  preorderCount: number;
+  rows: Array<{ id: string; name: string; renter: string; cost: number; earned: number }>;
 }) {
+  const peak = Math.max(1, ...rows.flatMap((r) => [r.cost, r.earned]));
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-10 text-center text-sm text-gray-500">
+        Engar vörur skráðar enn. Skráðu þær fyrst undir „Hver vara“.
+      </div>
+    );
+  }
+
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Kpi label="Virkar leigur" value={String(activeCount)} hint={`${expiringSoon} á enda innan 14 daga`} />
-      <Kpi label="MRR úr pöntunum" value={`${formatKr(mrr)} kr`} hint="Samtala mánaðarverðs á virkum pöntunum" />
-      <Kpi label="Bókaðar tekjur í mánuði" value={`${formatKr(bookedThisMonth)} kr`} hint={`Kostnaður ${formatKr(expensesThisMonth)} kr`} accent />
-      <Kpi
-        label="Floti / endurheimt"
-        value={`${formatKr(fleetCost)} kr`}
-        hint={paybackMonths ? `~${paybackMonths} mán. á núverandi MRR` : `${preorderCount} á biðlista`}
-      />
-    </div>
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
+      <div className="mb-6 flex flex-wrap items-center gap-4 text-sm">
+        <span className="inline-flex items-center gap-2 text-gray-600">
+          <span className="h-3 w-3 rounded-sm bg-gray-300" />
+          Kostaði
+        </span>
+        <span className="inline-flex items-center gap-2 text-gray-600">
+          <span className="h-3 w-3 rounded-sm bg-[var(--color-secondary)]" />
+          Skilaði
+        </span>
+      </div>
+      <div className="flex items-end gap-8 overflow-x-auto pb-2">
+        {rows.map((row) => {
+          const costH = Math.max(8, Math.round((row.cost / peak) * 260));
+          const earnH = row.earned > 0 ? Math.max(8, Math.round((row.earned / peak) * 260)) : 0;
+          const ahead = row.earned >= row.cost && row.cost > 0;
+          return (
+            <div key={row.id} className="flex w-32 shrink-0 flex-col items-center">
+              <div className="flex h-[280px] items-end justify-center gap-2">
+                <div className="flex flex-col items-center">
+                  <div className="mb-1 text-[11px] font-semibold text-gray-500">{formatKr(row.cost)}</div>
+                  <div className="w-11 rounded-t-md bg-gray-300" style={{ height: costH }} title={`Kostaði ${formatKr(row.cost)} kr`} />
+                </div>
+                <div className="flex flex-col items-center">
+                  {row.earned > 0 ? (
+                    <div className={`mb-1 text-[11px] font-semibold ${ahead ? "text-emerald-700" : "text-[var(--color-secondary)]"}`}>
+                      {formatKr(row.earned)}
+                    </div>
+                  ) : (
+                    <div className="mb-1 text-[11px] text-gray-400">0</div>
+                  )}
+                  <div
+                    className={`w-11 rounded-t-md ${ahead ? "bg-emerald-500" : "bg-[var(--color-secondary)]"}`}
+                    style={{ height: Math.max(earnH, 4) }}
+                    title={`Skilaði ${formatKr(row.earned)} kr`}
+                  />
+                </div>
+              </div>
+              <div className="mt-3 w-full border-t border-gray-200 pt-3 text-center">
+                <div className="text-sm font-bold leading-tight text-gray-900">{row.name}</div>
+                <div className="mt-1 text-xs text-gray-500">{row.renter}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
-function Kpi({ label, value, hint, accent }: { label: string; value: string; hint: string; accent?: boolean }) {
+function SummaryCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "neutral" | "good" | "warn";
+}) {
+  const cls =
+    tone === "good"
+      ? "border-emerald-200 bg-emerald-50"
+      : tone === "warn"
+        ? "border-amber-200 bg-amber-50"
+        : "border-gray-200 bg-white";
   return (
-    <div className={`rounded-2xl border p-4 shadow-sm ${accent ? "border-[var(--color-accent)]/30 bg-orange-50" : "border-gray-200 bg-white"}`}>
-      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</div>
+    <div className={`rounded-2xl border p-4 shadow-sm ${cls}`}>
+      <div className="text-xs font-medium text-gray-500">{label}</div>
       <div className="mt-1 text-2xl font-bold text-gray-900">{value}</div>
-      <div className="mt-1 text-xs text-gray-500">{hint}</div>
     </div>
   );
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-      {label}
-    </span>
-  );
-}
-
-function toIsoDate(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }

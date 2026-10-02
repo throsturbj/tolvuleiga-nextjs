@@ -24,6 +24,13 @@ export type OrderRow = {
 	mus?: boolean | null
 	trygging?: boolean | null
 	numberofextracon?: number | null
+	guest_name?: string | null
+	guest_kennitala?: string | null
+	guest_email?: string | null
+	guest_phone?: string | null
+	guest_address?: string | null
+	guest_city?: string | null
+	guest_postal_code?: string | null
 }
 
 export type UserRow = {
@@ -67,11 +74,16 @@ export type ScreenRow = {
 
 export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderRow; user: UserRow | null; pc: PcRow | null; console: ConsoleRow | null; screen: ScreenRow | null; product: Product | null }> {
 	const supabase = getServerSupabase()
-	const { data: order, error: orderErr } = await supabase
-		.from('orders')
-		.select('id, orderNumber, auth_uid, timabilFra, timabilTil, verd, gamingpc_uuid, gamingconsole_uuid, screen_uuid, product_id, variant_id, screen_product_id, created_at, skjar, lyklabord, mus, trygging, numberofextracon')
-		.eq('id', orderId)
-		.single<OrderRow>()
+	const baseCols =
+		'id, orderNumber, auth_uid, timabilFra, timabilTil, verd, gamingpc_uuid, gamingconsole_uuid, screen_uuid, product_id, variant_id, screen_product_id, created_at, skjar, lyklabord, mus, trygging, numberofextracon'
+	const guestCols =
+		', guest_name, guest_kennitala, guest_email, guest_phone, guest_address, guest_city, guest_postal_code'
+	let { data: order, error: orderErr } = await supabase.from('orders').select(`${baseCols}${guestCols}`).eq('id', orderId).maybeSingle<OrderRow>()
+	if (orderErr && /guest_|schema cache|does not exist/i.test(orderErr.message)) {
+		const retry = await supabase.from('orders').select(baseCols).eq('id', orderId).maybeSingle<OrderRow>()
+		order = retry.data
+		orderErr = retry.error
+	}
 	if (orderErr || !order) throw new Error('Order not found')
 
 	let user: UserRow | null = null
@@ -82,6 +94,17 @@ export async function fetchOrderBundle(orderId: string): Promise<{ order: OrderR
 			.eq('auth_uid', order.auth_uid)
 			.single<UserRow>()
 		user = userRow ?? null
+	}
+	if (!user && (order.guest_name || order.guest_email)) {
+		user = {
+			auth_uid: '',
+			full_name: order.guest_name,
+			kennitala: order.guest_kennitala,
+			phone: order.guest_phone,
+			address: order.guest_address,
+			city: order.guest_city,
+			postal_code: order.guest_postal_code,
+		}
 	}
 
 	let product: Product | null = null
@@ -221,6 +244,7 @@ export async function generateOrderPdfBuffer(orderId: string): Promise<{ buffer:
 			authEmail = data?.user?.email ?? null
 		} catch {}
 	}
+	if (!authEmail) authEmail = bundle.order.guest_email ?? null
 	const doc = new PDFDocument({ size: 'A4', margin: 50 })
 	;(doc as unknown as { fontkit: typeof fontkit }).fontkit = fontkit
 	const buf = await loadBodyFont()

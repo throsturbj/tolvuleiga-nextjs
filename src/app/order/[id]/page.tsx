@@ -50,17 +50,6 @@ export default function OrderConfirmationPage() {
   const [selection, setSelection] = useState<OrderSelection | null>(null);
   const [confirmNoInsurance, setConfirmNoInsurance] = useState(false);
 
-  const addMonths = (date: Date, months: number) => {
-    const d = new Date(date);
-    const day = d.getDate();
-    d.setMonth(d.getMonth() + months);
-    // handle month overflow (e.g., Jan 31 + 1 month)
-    if (d.getDate() < day) {
-      d.setDate(0);
-    }
-    return d;
-  };
-
   // Load selection from sessionStorage
   useEffect(() => {
     try {
@@ -256,7 +245,6 @@ export default function OrderConfirmationPage() {
     try {
       const now = new Date();
       const months = selection?.months ?? 3;
-      const to = addMonths(now, months);
 
       const a = (selection?.addons ?? {}) as Record<string, boolean>;
       const skjar = !!(a['skjár'] || a['skjar']);
@@ -288,7 +276,7 @@ export default function OrderConfirmationPage() {
             status: 'Undirbúningur',
             orderNumber,
             timabilFra: now.toISOString(),
-            timabilTil: to.toISOString(),
+            timabilTil: null,
             skjar,
             lyklabord,
             mus,
@@ -487,16 +475,8 @@ export default function OrderConfirmationPage() {
 
             {/* Rental Selection Summary */}
             <div className="bg-gray-50 rounded-lg p-6 mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Leigutímabil og aukahlutir</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Trygging og aukahlutir</h2>
               <div className="space-y-2 text-sm text-gray-700">
-                <p>
-                  <span className="font-medium">Byrjun tímabils:</span>{' '}
-                  {(() => { const now = new Date(); return now.toLocaleDateString('is-IS'); })()}
-                </p>
-                <p>
-                  <span className="font-medium">Tímabil lýkur:</span>{' '}
-                  {(() => { const now = new Date(); const months = selection?.months ?? 3; const to = addMonths(now, months); return to.toLocaleDateString('is-IS'); })()}
-                </p>
                 <p>
                   <span className="font-medium">Trygging:</span>{' '}
                   {selection?.insured ? 'Já' : 'Nei'}

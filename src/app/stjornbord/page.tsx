@@ -420,14 +420,7 @@ export default function AdminDashboardPage() {
       const expiringSoon = typeof daysLeft === 'number' && daysLeft <= 2;
       return {
         ...o,
-        periodFmt:
-          o.timabilFra && o.timabilTil
-            ? `${formatDate(o.timabilFra)} → ${formatDate(o.timabilTil)}`
-            : o.timabilFra
-              ? formatDate(o.timabilFra)
-              : o.timabilTil
-                ? formatDate(o.timabilTil)
-                : "—",
+        periodFmt: o.timabilFra ? formatDate(o.timabilFra) : "—",
         expiringSoon,
       };
     });
@@ -818,7 +811,7 @@ export default function AdminDashboardPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Kennitala</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[16rem]">Vara</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Verð</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[14rem]">Tímabil</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[14rem]">Byrjun</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Aukahlutir</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Trygging</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Aðgerðir</th>
@@ -1040,21 +1033,12 @@ export default function AdminDashboardPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Frá</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Byrjun</label>
                     <input
                       type="datetime-local"
                       className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
                       value={isoToLocalInput(editDraft.timabilFra)}
                       onChange={(e) => setEditDraft((d) => d ? { ...d, timabilFra: localInputToIso(e.target.value) } : d)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Til</label>
-                    <input
-                      type="datetime-local"
-                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                      value={isoToLocalInput(editDraft.timabilTil)}
-                      onChange={(e) => setEditDraft((d) => d ? { ...d, timabilTil: localInputToIso(e.target.value) } : d)}
                     />
                   </div>
                   <div className="col-span-1 md:col-span-2">

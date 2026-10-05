@@ -46,11 +46,55 @@ function isMissingTable(code?: string | null, message?: string | null) {
   return code === "PGRST205" || /does not exist|schema cache/i.test(message || "");
 }
 
+function addMonths(date: Date, months: number) {
+  const d = new Date(date);
+  const day = d.getDate();
+  d.setMonth(d.getMonth() + months);
+  if (d.getDate() < day) d.setDate(0);
+  return d;
+}
+
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
 function daysUntil(iso?: string | null) {
   if (!iso) return null;
   const t = new Date(iso).getTime();
   if (!Number.isFinite(t)) return null;
-  return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
+  return Math.ceil((startOfDay(new Date(iso)).getTime() - startOfDay(new Date()).getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function nextMonthPassedAt(fromIso?: string | null, fallbackIso?: string | null) {
+  const raw = fromIso || fallbackIso;
+  if (!raw) return null;
+  const start = new Date(raw);
+  if (!Number.isFinite(start.getTime())) return null;
+  const today = startOfDay(new Date());
+  let next = addMonths(start, 1);
+  let guard = 0;
+  while (startOfDay(next) <= today && guard < 240) {
+    next = addMonths(next, 1);
+    guard += 1;
+  }
+  return next;
+}
+
+function freeAt(order: OrderLite | null) {
+  if (!order) return null;
+  if (order.timabilTil) {
+    const t = new Date(order.timabilTil);
+    return Number.isFinite(t.getTime()) ? t : null;
+  }
+  return nextMonthPassedAt(order.timabilFra, order.created_at);
+}
+
+function daysLeftOnOrder(order: OrderLite | null) {
+  const at = freeAt(order);
+  if (!at) return null;
+  return Math.ceil((startOfDay(at).getTime() - startOfDay(new Date()).getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function formatDateIs(iso?: string | null) {
@@ -62,24 +106,32 @@ function formatDateIs(iso?: string | null) {
   }
 }
 
-function leftLabel(days: number | null) {
+function leftLabel(days: number | null, monthly = false) {
   if (days === null) return "Óvíst hvenær laus";
-  if (days < 0) return "Laus núna";
-  if (days === 0) return "Laus í dag";
+  if (days < 0) return monthly ? "Mánuðurinn er liðinn" : "Laus núna";
+  if (days === 0) return monthly ? "Mánuðurinn lýkur í dag" : "Laus í dag";
+  if (monthly) {
+    if (days === 1) return "1 dagur eftir af mánuðinum";
+    return `${days} dagar eftir af mánuðinum`;
+  }
   if (days === 1) return "1 dagur eftir";
   return `${days} dagar eftir`;
 }
 
 function orderIsOut(order: OrderLite | null) {
   if (!order || DONE_STATUSES.has(order.status)) return false;
-  const days = daysUntil(order.timabilTil);
-  if (days !== null && days < 0) return false;
-  return ACTIVE_STATUSES.has(order.status) || Boolean(order.timabilTil);
+  if (order.timabilTil) {
+    const days = daysUntil(order.timabilTil);
+    if (days !== null && days < 0) return false;
+  }
+  return ACTIVE_STATUSES.has(order.status) || Boolean(order.timabilTil || order.timabilFra);
 }
 
 function availabilityTime(order: OrderLite | null) {
   if (!orderIsOut(order)) return 0;
-  const t = order?.timabilTil ? new Date(order.timabilTil).getTime() : NaN;
+  const at = freeAt(order);
+  if (!at) return FAR_FUTURE;
+  const t = at.getTime();
   return Number.isFinite(t) ? t : FAR_FUTURE;
 }
 
@@ -113,6 +165,7 @@ export default function OverviewTab({
   const [savingIncome, setSavingIncome] = useState<string | null>(null);
   const [linkingAsset, setLinkingAsset] = useState<string | null>(null);
   const [deletingIncome, setDeletingIncome] = useState<string | null>(null);
+  const [openIncome, setOpenIncome] = useState<Record<string, boolean>>({});
 
   const loadLedger = async () => {
     setLoading(true);
@@ -448,7 +501,7 @@ export default function OverviewTab({
               {sortedAssets.map((asset, i) => {
                 const order = asset.current_order_id ? orderById[asset.current_order_id] || null : null;
                 const out = orderIsOut(order);
-                const days = out ? daysUntil(order?.timabilTil) : null;
+                const days = out ? daysLeftOnOrder(order) : null;
                 return (
                   <li key={asset.id} className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0">
                     <span className="w-7 text-sm font-bold text-gray-400">{i + 1}.</span>
@@ -457,7 +510,7 @@ export default function OverviewTab({
                       <>
                         <span className="text-sm text-gray-700">{renterName(order)}</span>
                         <span className={`rounded-full px-3 py-1 text-sm font-bold ${days !== null && days <= 3 ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-800"}`}>
-                          {leftLabel(days)}
+                          {leftLabel(days, !order?.timabilTil)}
                         </span>
                       </>
                     ) : (
@@ -484,7 +537,8 @@ export default function OverviewTab({
                 const nextNumber = history.length + 1;
                 const order = asset.current_order_id ? orderById[asset.current_order_id] || null : null;
                 const out = orderIsOut(order);
-                const days = out ? daysUntil(order?.timabilTil) : null;
+                const days = out ? daysLeftOnOrder(order) : null;
+                const monthEnd = out && !order?.timabilTil ? freeAt(order) : null;
                 const matching = linkableOrders.filter((o) => asset.product_id && o.product_id === asset.product_id);
                 const others = linkableOrders.filter((o) => !asset.product_id || o.product_id !== asset.product_id);
 
@@ -505,8 +559,12 @@ export default function OverviewTab({
                       {out ? (
                         <div className="mt-3">
                           <div className="text-xl font-bold">{renterName(order)}</div>
-                          <div className="mt-1 text-3xl font-black">{leftLabel(days)}</div>
-                          {order?.timabilTil ? <div className="mt-1 text-sm text-white/75">til {formatDateIs(order.timabilTil)}</div> : null}
+                          <div className="mt-1 text-3xl font-black">{leftLabel(days, !order?.timabilTil)}</div>
+                          {order?.timabilTil ? (
+                            <div className="mt-1 text-sm text-white/75">til {formatDateIs(order.timabilTil)}</div>
+                          ) : monthEnd ? (
+                            <div className="mt-1 text-sm text-white/75">mánuðurinn lýkur {formatDateIs(monthEnd.toISOString())}</div>
+                          ) : null}
                           {order?.orderNumber ? <div className="text-sm text-white/75">pöntun {order.orderNumber}</div> : null}
                         </div>
                       ) : (
@@ -530,7 +588,7 @@ export default function OverviewTab({
                                   <optgroup label="Þessi vara">
                                     {matching.map((o) => (
                                       <option key={o.id} value={o.id}>
-                                        {renterName(o)} · {o.orderNumber || o.id.slice(0, 8)} · {leftLabel(daysUntil(o.timabilTil))}
+                                        {renterName(o)} · {o.orderNumber || o.id.slice(0, 8)} · {leftLabel(daysLeftOnOrder(o), !o.timabilTil)}
                                       </option>
                                     ))}
                                   </optgroup>
@@ -539,7 +597,7 @@ export default function OverviewTab({
                                   <optgroup label={matching.length > 0 ? "Aðrar pantanir" : "Pantanir"}>
                                     {others.map((o) => (
                                       <option key={o.id} value={o.id}>
-                                        {renterName(o)} · {o.orderNumber || o.id.slice(0, 8)} · {leftLabel(daysUntil(o.timabilTil))}
+                                        {renterName(o)} · {o.orderNumber || o.id.slice(0, 8)} · {leftLabel(daysLeftOnOrder(o), !o.timabilTil)}
                                       </option>
                                     ))}
                                   </optgroup>
@@ -602,48 +660,70 @@ export default function OverviewTab({
                       </div>
 
                       <div className="mt-5">
-                        <div className="mb-2 text-sm font-medium text-gray-900">Innkoma</div>
-                        {history.length === 0 ? (
-                          <p className="mb-3 text-sm text-gray-500">Engin innkoma skráð enn.</p>
-                        ) : (
-                          <ul className="mb-3 divide-y divide-gray-100 rounded-xl border border-gray-100">
-                            {history.map((row, index) => (
-                              <li key={row.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                                <span className="text-gray-600">Innkoma {index + 1}</span>
-                                <div className="flex items-center gap-3">
-                                  <span className="font-medium text-gray-900">{formatKr(row.amount)} kr</span>
-                                  <button
-                                    type="button"
-                                    disabled={deletingIncome === row.id}
-                                    onClick={() => void removeIncome(row.id)}
-                                    className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50"
-                                  >
-                                    Eyða
-                                  </button>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        <div className="flex flex-wrap items-end gap-2">
-                          <label className="min-w-[10rem] flex-1 text-sm">
-                            <span className="mb-1 block text-xs text-gray-500">Bæta við innkomu {nextNumber}</span>
-                            <input
-                              value={incomeByAsset[asset.id] || ""}
-                              onChange={(e) => setIncomeByAsset((prev) => ({ ...prev, [asset.id]: e.target.value }))}
-                              placeholder="Upphæð kr"
-                              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            disabled={savingIncome === asset.id}
-                            onClick={() => void addIncome(asset.id)}
-                            className="rounded-xl bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                          >
-                            {savingIncome === asset.id ? "Vista…" : `Skrá innkomu ${nextNumber}`}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setOpenIncome((prev) => ({ ...prev, [asset.id]: !prev[asset.id] }))}
+                          className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-100 px-3 py-2 text-left hover:bg-gray-50"
+                        >
+                          <span className="text-sm font-medium text-gray-900">
+                            Innkoma
+                            <span className="ml-2 font-normal text-gray-500">
+                              {history.length === 0
+                                ? "engin skráð"
+                                : history.length === 1
+                                  ? "1 færsla"
+                                  : `${history.length} færslur`}
+                            </span>
+                          </span>
+                          <span className="text-sm text-[var(--color-secondary)]">
+                            {openIncome[asset.id] ? "Sjá minna" : "Sjá meira"}
+                          </span>
+                        </button>
+                        {openIncome[asset.id] ? (
+                          <div className="mt-3">
+                            {history.length === 0 ? (
+                              <p className="mb-3 text-sm text-gray-500">Engin innkoma skráð enn.</p>
+                            ) : (
+                              <ul className="mb-3 divide-y divide-gray-100 rounded-xl border border-gray-100">
+                                {history.map((row, index) => (
+                                  <li key={row.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                                    <span className="text-gray-600">Innkoma {index + 1}</span>
+                                    <div className="flex items-center gap-3">
+                                      <span className="font-medium text-gray-900">{formatKr(row.amount)} kr</span>
+                                      <button
+                                        type="button"
+                                        disabled={deletingIncome === row.id}
+                                        onClick={() => void removeIncome(row.id)}
+                                        className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50"
+                                      >
+                                        Eyða
+                                      </button>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            <div className="flex flex-wrap items-end gap-2">
+                              <label className="min-w-[10rem] flex-1 text-sm">
+                                <span className="mb-1 block text-xs text-gray-500">Bæta við innkomu {nextNumber}</span>
+                                <input
+                                  value={incomeByAsset[asset.id] || ""}
+                                  onChange={(e) => setIncomeByAsset((prev) => ({ ...prev, [asset.id]: e.target.value }))}
+                                  placeholder="Upphæð kr"
+                                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                disabled={savingIncome === asset.id}
+                                onClick={() => void addIncome(asset.id)}
+                                className="rounded-xl bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                              >
+                                {savingIncome === asset.id ? "Vista…" : `Skrá innkomu ${nextNumber}`}
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </article>

@@ -1067,17 +1067,11 @@ export default function DashboardPage() {
                           const isLaptop = !!order.laptop_variant_uuid;
                           return (
                             <>
-                              <div className={`mt-5 grid grid-cols-1 ${isLaptop ? '' : 'sm:grid-cols-2'} gap-3 text-xs items-stretch`}>
+                              <div className="mt-5 grid grid-cols-1 gap-3 text-xs items-stretch">
                                 <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-200 h-full flex flex-col justify-between">
                                   <p className="text-gray-500 whitespace-nowrap">Byrjun tímabils</p>
                                   <p className="mt-1 font-semibold text-gray-900 text-sm">{formatDateOnly(order.timabilFra)}</p>
                                 </div>
-                                {!isLaptop ? (
-                                  <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-200 h-full flex flex-col justify-between">
-                                    <p className="text-gray-500 whitespace-nowrap">Tímabil lýkur</p>
-                                    <p className="mt-1 font-semibold text-gray-900 text-sm">{formatDateOnly(order.timabilTil)}</p>
-                                  </div>
-                                ) : null}
                               </div>
 
                               {!isLaptop ? (

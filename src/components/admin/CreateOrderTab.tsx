@@ -535,9 +535,8 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
                     </button>
                   ))}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+                <div>
+                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
                 </div>
               </div>
 

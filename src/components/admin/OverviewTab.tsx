@@ -7,10 +7,11 @@ import { formatKr } from "@/lib/products";
 type OrderLite = {
   id: string;
   status: string;
-  verd?: number | null;
+  verd?: number | string | null;
   product_id?: string | null;
   orderNumber?: string | null;
   auth_uid?: string | null;
+  guest_name?: string | null;
   timabilFra?: string | null;
   timabilTil?: string | null;
   created_at: string;
@@ -140,6 +141,24 @@ function orderIsOut(order: OrderLite | null) {
     if (days !== null && days < 0) return false;
   }
   return ACTIVE_STATUSES.has(order.status) || Boolean(order.timabilTil || order.timabilFra);
+}
+
+function orderMonthly(order: OrderLite) {
+  const n = typeof order.verd === "number" ? order.verd : parseInt(String(order.verd ?? "").replace(/\D+/g, ""), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function remainingPayments(order: OrderLite) {
+  if (DONE_STATUSES.has(order.status)) return 0;
+  const today = startOfDay(new Date());
+  if (order.timabilTil) {
+    const end = startOfDay(new Date(order.timabilTil));
+    if (!Number.isFinite(end.getTime()) || end <= today) return 0;
+    let months = (end.getFullYear() - today.getFullYear()) * 12 + (end.getMonth() - today.getMonth());
+    if (end.getDate() > today.getDate()) months += 1;
+    return Math.max(months, 1);
+  }
+  return ACTIVE_STATUSES.has(order.status) ? 1 : 0;
 }
 
 function availabilityTime(order: OrderLite | null) {
@@ -310,12 +329,14 @@ export default function OverviewTab({
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
   const allCost = totalCost + totalExpenses;
   const allDiff = totalBack - allCost;
+  const currentContractsGross = orders.reduce((sum, order) => sum + remainingPayments(order) * orderMonthly(order), 0);
+  const currentContracts = Math.round(currentContractsGross / 1.24);
   const openExpense = EXPENSE_CATEGORIES.find((c) => c.key === openCategory) || null;
 
   const renterName = (order: OrderLite | null) => {
     if (!order) return "";
-    if (order.auth_uid && ownerNames[order.auth_uid]) return ownerNames[order.auth_uid];
-    return order.orderNumber || "Óþekktur leigjandi";
+    if (order.auth_uid) return ownerNames[order.auth_uid] || "Óþekktur leigjandi";
+    return (order.guest_name || "").trim() || "Óþekktur leigjandi";
   };
 
   const addProduct = async () => {
@@ -593,9 +614,12 @@ export default function OverviewTab({
             ) : null}
           </div>
 
-          <div className="grid gap-3 border-t border-gray-200 pt-6 sm:grid-cols-3">
+          <div className="grid items-start gap-3 border-t border-gray-200 pt-6 sm:grid-cols-3">
             <SummaryCard label="Allur kostnaður" value={`${formatKr(allCost)} kr`} tone="neutral" />
-            <SummaryCard label="Fengið til baka" value={`${formatKr(totalBack)} kr`} tone="good" />
+            <div className="space-y-3">
+              <SummaryCard label="Fengið til baka" value={`${formatKr(totalBack)} kr`} tone="good" />
+              <SummaryCard label="Núverandi samningar" value={`${formatKr(currentContracts)} kr`} tone="good" />
+            </div>
             <SummaryCard
               label={allDiff >= 0 ? "Hagnaður alls" : "Eftir að ná inn alls"}
               value={`${formatKr(Math.abs(allDiff))} kr`}
@@ -645,10 +669,17 @@ export default function OverviewTab({
                 const order = asset.current_order_id ? orderById[asset.current_order_id] || null : null;
                 const out = orderIsOut(order);
                 const days = out ? daysLeftOnOrder(order) : null;
+                const earned = earnedByAsset[asset.id] || 0;
+                const paidPct = asset.purchase_cost > 0 ? Math.round((earned / asset.purchase_cost) * 100) : 0;
                 return (
                   <li key={asset.id} className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0">
                     <span className="w-7 text-sm font-bold text-gray-400">{i + 1}.</span>
-                    <span className="min-w-[8rem] flex-1 font-semibold text-gray-900">{asset.name}</span>
+                    <span className="min-w-[8rem] flex-1 font-semibold text-gray-900">
+                      {asset.name}
+                      <span className={`ml-2 text-sm font-bold ${paidPct >= 100 ? "text-emerald-600" : "text-red-400"}`}>
+                        {paidPct}%
+                      </span>
+                    </span>
                     {out ? (
                       <>
                         <span className="text-sm text-gray-700">{renterName(order)}</span>

@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { generateOrderPdfBuffer, buildAdminOrderText } from '@/lib/orders'
 import { sendMail, buildUserOrderConfirmationText } from '@/lib/email'
+import { requireAdmin } from '@/lib/admin-auth'
 
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await requireAdmin(req))) {
+      return NextResponse.json({ success: false, error: 'UNAUTHORIZED' }, { status: 401 })
+    }
     const body = await req.json().catch(() => null) as { orderId?: string } | null
     if (!body?.orderId || typeof body.orderId !== 'string') {
       return NextResponse.json({ success: false, error: 'orderId is required' }, { status: 400 })

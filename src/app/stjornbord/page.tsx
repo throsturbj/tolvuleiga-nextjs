@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { authHeader } from "@/lib/auth-utils";
 import CreateOrderTab from "@/components/admin/CreateOrderTab";
 import OverviewTab from "@/components/admin/OverviewTab";
 
@@ -364,15 +365,16 @@ export default function AdminDashboardPage() {
         }
         // Fetch names from users (service route) and emails from auth
         try {
+          const headers = { 'Content-Type': 'application/json', ...(await authHeader()) };
           const [usersRes, emailsRes] = await Promise.all([
             fetch('/api/admin/users', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers,
               body: JSON.stringify({ uids }),
             }),
             fetch('/api/admin/auth-emails', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers,
               body: JSON.stringify({ uids }),
             }),
           ]);
@@ -421,6 +423,7 @@ export default function AdminDashboardPage() {
       return {
         ...o,
         periodFmt: o.timabilFra ? formatDate(o.timabilFra) : "—",
+        periodTilFmt: o.timabilTil ? formatDate(o.timabilTil) : "",
         expiringSoon,
       };
     });
@@ -533,7 +536,7 @@ export default function AdminDashboardPage() {
       // Call server endpoint to delete order and associated PDF from storage
       const res = await fetch('/api/order/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
         body: JSON.stringify({ orderId }),
       });
       if (res.ok) {
@@ -568,7 +571,7 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch('/api/order/send-reminder', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
         body: JSON.stringify({ orderId }),
       });
       if (!res.ok) {
@@ -661,7 +664,7 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch('/api/order/generate-admin-pdf', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
         body: JSON.stringify({ orderId }),
       });
       if (res.ok) {
@@ -801,25 +804,31 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="overflow-auto">
+          <div className="max-h-[calc(100vh-14rem)] overflow-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead>
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Pöntun</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Staða</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Notandi</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Kennitala</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[16rem]">Vara</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Verð</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[14rem]">Byrjun</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Aukahlutir</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Trygging</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Aðgerðir</th>
+                  <th className="sticky top-0 left-0 z-30 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600 min-w-[10rem] shadow-[1px_0_0_0_#e5e7eb]">Notandi</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600">Pöntun</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600">Staða</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600">Kennitala</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600 min-w-[16rem]">Vara</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600">Verð</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600 min-w-[14rem]">Byrjun</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600 min-w-[14rem]">Tímabil til</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600">Aukahlutir</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600">Trygging</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 text-left px-4 py-3 font-medium text-gray-600">Aðgerðir</th>
                 </tr>
               </thead>
               <tbody>
                 {tableRows.map((o) => (
-                  <tr key={o.id} className={`border-b border-gray-100 hover:bg-gray-50/60 ${o.expiringSoon ? 'bg-red-50' : ''}`}>
+                  <tr key={o.id} className={`group border-b border-gray-100 ${o.expiringSoon ? 'bg-red-50 hover:bg-red-100/70' : 'hover:bg-gray-50/60'}`}>
+                    <td className={`sticky left-0 z-10 px-4 py-3 align-top min-w-[10rem] shadow-[1px_0_0_0_#e5e7eb] ${o.expiringSoon ? 'bg-red-50 group-hover:bg-red-100/70' : 'bg-white group-hover:bg-gray-50'}`}>
+                      <div className="text-[13px] text-gray-700 whitespace-nowrap">
+                        {o.auth_uid ? ownersByUid[o.auth_uid] || "—" : o.guest_name || "—"}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 align-top">
                       <div className="font-mono text-[13px] text-gray-800">
                         {o.orderNumber ?? "—"}
@@ -827,11 +836,6 @@ export default function AdminDashboardPage() {
                     </td>
                     <td className="px-4 py-3 align-top">
                       <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">{o.status}</span>
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <div className="text-[13px] text-gray-700">
-                        {o.auth_uid ? ownersByUid[o.auth_uid] || "—" : o.guest_name || "—"}
-                      </div>
                     </td>
                     <td className="px-4 py-3 align-top text-gray-700">{o.auth_uid ? kennitalaByUid[o.auth_uid] || "—" : o.guest_kennitala || "—"}</td>
                     <td className="px-4 py-3 align-top text-gray-700 min-w-[16rem] pr-3">
@@ -861,6 +865,7 @@ export default function AdminDashboardPage() {
                       {(() => { const p = formatPrice(o.verd); return p ? p : '—'; })()}
                     </td>
                     <td className="px-4 py-3 align-top text-gray-700 min-w-[14rem] whitespace-nowrap">{o.periodFmt}</td>
+                    <td className="px-4 py-3 align-top text-gray-700 min-w-[14rem] whitespace-nowrap">{o.periodTilFmt || "—"}</td>
                     <td className="px-4 py-3 align-top text-gray-700">
                       <div className="flex flex-wrap gap-2">
                         {o.skjar ? (
@@ -946,7 +951,7 @@ export default function AdminDashboardPage() {
                 ))}
                 {!loading && tableRows.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={11} className="px-4 py-10 text-center text-gray-500">
                       Engar pantanir fundust.
                     </td>
                   </tr>
@@ -1039,6 +1044,15 @@ export default function AdminDashboardPage() {
                       className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
                       value={isoToLocalInput(editDraft.timabilFra)}
                       onChange={(e) => setEditDraft((d) => d ? { ...d, timabilFra: localInputToIso(e.target.value) } : d)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Tímabil til</label>
+                    <input
+                      type="datetime-local"
+                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                      value={isoToLocalInput(editDraft.timabilTil)}
+                      onChange={(e) => setEditDraft((d) => d ? { ...d, timabilTil: localInputToIso(e.target.value) } : d)}
                     />
                   </div>
                   <div className="col-span-1 md:col-span-2">

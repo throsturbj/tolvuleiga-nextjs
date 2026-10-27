@@ -22,7 +22,6 @@ type Customer = {
   email: string;
 };
 
-const MONTH_OPTIONS = [1, 3, 6, 12] as const;
 const STATUSES = ["Bíður greiðslu", "Undirbúningur", "Í gangi"] as const;
 const TYPE_LABEL: Record<string, string> = {
   gaming_pc: "Borðtölva",
@@ -75,9 +74,8 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
   const [mouseId, setMouseId] = useState<string | null>(null);
   const [trygging, setTrygging] = useState(false);
   const [extraControllers, setExtraControllers] = useState(0);
-  const [months, setMonths] = useState<number>(3);
   const [fromDate, setFromDate] = useState(toDateInput(new Date()));
-  const [toDate, setToDate] = useState(toDateInput(addMonths(new Date(), 3)));
+  const [toDate, setToDate] = useState(toDateInput(addMonths(new Date(), 1)));
   const [status, setStatus] = useState<string>("Undirbúningur");
   const [priceOverride, setPriceOverride] = useState<string>("");
   const [message, setMessage] = useState("");
@@ -112,12 +110,6 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
       alive = false;
     };
   }, []);
-
-  useEffect(() => {
-    const from = new Date(fromDate);
-    if (Number.isNaN(from.getTime())) return;
-    setToDate(toDateInput(addMonths(from, months)));
-  }, [months, fromDate]);
 
   useEffect(() => {
     let alive = true;
@@ -268,7 +260,6 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
           productId: product.id,
           variantId,
           screenProductId: skjar ? screenId : null,
-          months,
           skjar,
           lyklabord,
           mus,
@@ -519,25 +510,15 @@ export default function CreateOrderTab({ onCreated }: { onCreated?: () => void }
                 </label>
               ) : null}
 
-              <div>
-                <div className="mb-1 text-xs font-medium text-gray-500">Tímabil</div>
-                <div className="mb-2 flex flex-wrap gap-2">
-                  {MONTH_OPTIONS.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setMonths(m)}
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${
-                        months === m ? "bg-[var(--color-secondary)] text-white" : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {m} mán.
-                    </button>
-                  ))}
-                </div>
-                <div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Byrjun</span>
                   <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-                </div>
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Tímabil til</span>
+                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+                </label>
               </div>
 
               {compatScreens.length > 0 ? (

@@ -94,6 +94,14 @@ function generateOrderNumber() {
   return out
 }
 
+function addMonths(date: Date, months: number) {
+  const d = new Date(date)
+  const day = d.getDate()
+  d.setMonth(d.getMonth() + months)
+  if (d.getDate() < day) d.setDate(0)
+  return d
+}
+
 function getCustomer(root: { [key: string]: Json }): { [key: string]: Json } | null {
   if (root.customer && typeof root.customer === 'object' && !Array.isArray(root.customer)) {
     return root.customer as { [key: string]: Json }
@@ -359,7 +367,7 @@ export async function POST(req: NextRequest) {
             : null
 
     const orderSelect =
-      'id, orderNumber, status, verd, timabilFra, auth_uid, laptop_variant_uuid, gamingpc_uuid, gamingconsole_uuid, screen_uuid, skjar, lyklabord, mus, trygging, created_at'
+      'id, orderNumber, status, verd, timabilFra, timabilTil, auth_uid, laptop_variant_uuid, gamingpc_uuid, gamingconsole_uuid, screen_uuid, skjar, lyklabord, mus, trygging, created_at'
 
     if (outcome === 'cancel') {
       let q = supabase
@@ -417,9 +425,16 @@ export async function POST(req: NextRequest) {
       holdQ = productMatchFilter(holdQ, product)
       const { data: holding } = await holdQ
       if (holding?.[0]) {
+        const holdingFrom = holding[0].timabilFra ? new Date(holding[0].timabilFra) : new Date()
+        const holdingTil = holding[0].timabilTil || addMonths(holdingFrom, 1).toISOString()
         const { error: updErr } = await supabase
           .from('orders')
-          .update({ status: CONFIRMED_STATUS, updated_at: new Date().toISOString() })
+          .update({
+            status: CONFIRMED_STATUS,
+            updated_at: new Date().toISOString(),
+            timabilFra: holding[0].timabilFra || holdingFrom.toISOString(),
+            timabilTil: holdingTil,
+          })
           .eq('id', holding[0].id)
         if (updErr) {
           return NextResponse.json({ success: false, error: updErr.message }, { status: 500 })
@@ -436,13 +451,14 @@ export async function POST(req: NextRequest) {
     }
 
     const orderNumber = generateOrderNumber()
-    const nowIso = new Date().toISOString()
+    const from = new Date()
     const insertPayload: Record<string, unknown> = {
       auth_uid: authUid,
       status: CONFIRMED_STATUS,
       orderNumber,
       verd: verdSource != null ? String(verdSource) : null,
-      timabilFra: nowIso,
+      timabilFra: from.toISOString(),
+      timabilTil: addMonths(from, 1).toISOString(),
     }
 
     if (product.kind === 'laptop') {
@@ -494,6 +510,7 @@ type OrderRow = {
   status?: string | null
   verd?: string | number | null
   timabilFra?: string | null
+  timabilTil?: string | null
   auth_uid?: string | null
   laptop_variant_uuid?: string | null
   gamingpc_uuid?: number | null

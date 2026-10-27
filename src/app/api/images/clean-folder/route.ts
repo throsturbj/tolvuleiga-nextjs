@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/admin-auth'
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await requireAdmin(req))) {
+      return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
+    }
     const body = await req.json().catch(() => ({}))
     const pcId = Number(body?.pcId)
     if (!Number.isFinite(pcId) || pcId <= 0) {

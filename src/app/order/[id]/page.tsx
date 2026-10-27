@@ -244,6 +244,9 @@ export default function OrderConfirmationPage() {
     setSubmitStatus('idle');
     try {
       const now = new Date();
+      const until = new Date(now);
+      until.setMonth(until.getMonth() + 1);
+      if (until.getDate() < now.getDate()) until.setDate(0);
       const months = selection?.months ?? 3;
 
       const a = (selection?.addons ?? {}) as Record<string, boolean>;
@@ -276,7 +279,7 @@ export default function OrderConfirmationPage() {
             status: 'Undirbúningur',
             orderNumber,
             timabilFra: now.toISOString(),
-            timabilTil: null,
+            timabilTil: until.toISOString(),
             skjar,
             lyklabord,
             mus,

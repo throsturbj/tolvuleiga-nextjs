@@ -47,6 +47,15 @@ export async function checkSession(): Promise<SessionInfo> {
 }
 
 /**
+ * Bearer header with the current login, for API routes that check who is calling
+ */
+export async function authHeader(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/**
  * Refresh the current session
  */
 export async function refreshSession(): Promise<SessionInfo> {

@@ -33,6 +33,21 @@ type RevenueRow = {
   created_at?: string;
 };
 
+type ExpenseRow = {
+  id: string;
+  category: string;
+  name: string | null;
+  amount: number;
+  created_at?: string;
+};
+
+const EXPENSE_CATEGORIES: Array<{ key: string; label: string; hint?: string }> = [
+  { key: "auglysingar", label: "Auglýsingar" },
+  { key: "vorur_isl", label: "Aðrar vörur (ÍSL)" },
+  { key: "vorur_utl", label: "Aðrar vörur (ÚTL)" },
+  { key: "rekstur", label: "Rekstrarkostnaður", hint: "Payday, bókhald, innheimtuþjónusta" },
+];
+
 const ACTIVE_STATUSES = new Set(["Bíður greiðslu", "Undirbúningur", "Í gangi", "Í vinnslu", "Uppsögn í gangi"]);
 const DONE_STATUSES = new Set(["Lokið", "Hætt við"]);
 const FAR_FUTURE = 8.64e15;
@@ -167,14 +182,25 @@ export default function OverviewTab({
   const [deletingIncome, setDeletingIncome] = useState<string | null>(null);
   const [openIncome, setOpenIncome] = useState<Record<string, boolean>>({});
 
+  const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
+  const [needsExpenseMigration, setNeedsExpenseMigration] = useState(false);
+  const [openCategory, setOpenCategory] = useState<string | null>(null);
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [deletingExpense, setDeletingExpense] = useState<string | null>(null);
+
   const loadLedger = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [a, r, p] = await Promise.all([
+      const [a, r, p, x] = await Promise.all([
         supabase.from("company_assets").select("*").order("created_at", { ascending: false }),
         supabase.from("asset_revenue").select("*").order("created_at", { ascending: true }),
         supabase.from("products").select("id,name").eq("hidden", false).order("name"),
+        supabase
+          .from("company_expenses")
+          .select("id,category,name,amount,created_at")
+          .in("category", EXPENSE_CATEGORIES.map((c) => c.key))
+          .order("created_at", { ascending: true }),
       ]);
       if (isMissingTable(a.error?.code, a.error?.message) || isMissingTable(r.error?.code, r.error?.message)) {
         setSchemaReady(false);
@@ -188,6 +214,14 @@ export default function OverviewTab({
       setAssets((a.data as Asset[]) || []);
       setRevenues((r.data as RevenueRow[]) || []);
       setProducts((p.data as Array<{ id: string; name: string }>) || []);
+      if (x.error) {
+        setExpenses([]);
+        if (isMissingTable(x.error.code, x.error.message)) setNeedsExpenseMigration(true);
+        else setError(x.error.message);
+      } else {
+        setNeedsExpenseMigration(false);
+        setExpenses((x.data as ExpenseRow[]) || []);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Gat ekki sótt yfirlit";
       if (isMissingTable(null, msg)) setSchemaReady(false);
@@ -264,9 +298,19 @@ export default function OverviewTab({
     });
   }, [assets, orderById]);
 
+  const expensesByCategory = useMemo(() => {
+    const map: Record<string, ExpenseRow[]> = {};
+    for (const row of expenses) (map[row.category] ||= []).push(row);
+    return map;
+  }, [expenses]);
+
   const totalCost = assets.reduce((s, a) => s + a.purchase_cost, 0);
   const totalBack = assets.reduce((s, a) => s + (earnedByAsset[a.id] || 0), 0);
   const totalDiff = totalBack - totalCost;
+  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+  const allCost = totalCost + totalExpenses;
+  const allDiff = totalBack - allCost;
+  const openExpense = EXPENSE_CATEGORIES.find((c) => c.key === openCategory) || null;
 
   const renterName = (order: OrderLite | null) => {
     if (!order) return "";
@@ -368,6 +412,38 @@ export default function OverviewTab({
     await loadLedger();
   };
 
+  const addExpense = async (category: string, expenseName: string, rawAmount: string) => {
+    const amount = parseInt(rawAmount.replace(/\D+/g, ""), 10) || 0;
+    const trimmed = expenseName.trim();
+    if (!trimmed || amount <= 0) {
+      setError("Settu inn nafn og verð.");
+      return false;
+    }
+    setSavingExpense(true);
+    setError(null);
+    const { error: err } = await supabase.from("company_expenses").insert({ category, name: trimmed, amount });
+    setSavingExpense(false);
+    if (err) {
+      if (isMissingTable(err.code, err.message) || err.code === "23502") setNeedsExpenseMigration(true);
+      else setError(err.message);
+      return false;
+    }
+    await loadLedger();
+    return true;
+  };
+
+  const removeExpense = async (id: string) => {
+    setDeletingExpense(id);
+    setError(null);
+    const { error: err } = await supabase.from("company_expenses").delete().eq("id", id);
+    setDeletingExpense(null);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    await loadLedger();
+  };
+
   const removeAsset = async (id: string) => {
     if (!window.confirm("Eyða þessari vöru úr yfirlitinu?")) return;
     await supabase.from("company_assets").delete().eq("id", id);
@@ -432,6 +508,12 @@ export default function OverviewTab({
           Supabase til að tengja pöntun við vöru.
         </p>
       ) : null}
+      {needsExpenseMigration ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Keyrðu <code className="rounded bg-white px-1.5 py-0.5 text-xs">sql/2026-10-21-company-expenses.sql</code> í
+          Supabase til að skrá kostnað.
+        </p>
+      ) : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       {view === "picture" ? (
@@ -450,13 +532,74 @@ export default function OverviewTab({
         />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <SummaryCard label="Keypt fyrir" value={`${formatKr(totalCost)} kr`} tone="neutral" />
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <SummaryCard label="Keypt fyrir" value={`${formatKr(totalCost)} kr`} tone="neutral" />
+              <SummaryCard label="Fengið til baka" value={`${formatKr(totalBack)} kr`} tone="good" />
+              <SummaryCard
+                label={totalDiff >= 0 ? "Hagnaður" : "Eftir að ná inn"}
+                value={`${formatKr(Math.abs(totalDiff))} kr`}
+                tone={totalDiff >= 0 ? "good" : "warn"}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {EXPENSE_CATEGORIES.map((c) => {
+                const rows = expensesByCategory[c.key] || [];
+                const sum = rows.reduce((s, row) => s + row.amount, 0);
+                const open = openCategory === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => setOpenCategory(open ? null : c.key)}
+                    className={`flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-sm transition ${
+                      open
+                        ? "border-[var(--color-secondary)] ring-2 ring-[var(--color-secondary)]/20"
+                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div>
+                      <div className="text-xs font-medium text-gray-500">{c.label}</div>
+                      {c.hint ? <div className="mt-0.5 text-[11px] text-gray-400">{c.hint}</div> : null}
+                    </div>
+                    <div className="mt-1">
+                      <div className="text-2xl font-bold text-gray-900">{formatKr(sum)} kr</div>
+                      <div className="mt-1 flex items-center justify-between gap-2 text-xs">
+                        <span className="text-gray-500">
+                          {rows.length === 0 ? "Ekkert skráð" : rows.length === 1 ? "1 færsla" : `${rows.length} færslur`}
+                        </span>
+                        <span className="font-medium text-[var(--color-secondary)]">{open ? "Loka" : "Bæta við"}</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {openExpense ? (
+              <ExpensePanel
+                key={openExpense.key}
+                label={openExpense.label}
+                hint={openExpense.hint}
+                rows={expensesByCategory[openExpense.key] || []}
+                saving={savingExpense}
+                deletingId={deletingExpense}
+                onAdd={(expenseName, amount) => addExpense(openExpense.key, expenseName, amount)}
+                onRemove={(id) => void removeExpense(id)}
+                onClose={() => setOpenCategory(null)}
+              />
+            ) : null}
+          </div>
+
+          <div className="grid gap-3 border-t border-gray-200 pt-6 sm:grid-cols-3">
+            <SummaryCard label="Allur kostnaður" value={`${formatKr(allCost)} kr`} tone="neutral" />
             <SummaryCard label="Fengið til baka" value={`${formatKr(totalBack)} kr`} tone="good" />
             <SummaryCard
-              label={totalDiff >= 0 ? "Hagnaður" : "Eftir að ná inn"}
-              value={`${formatKr(Math.abs(totalDiff))} kr`}
-              tone={totalDiff >= 0 ? "good" : "warn"}
+              label={allDiff >= 0 ? "Hagnaður alls" : "Eftir að ná inn alls"}
+              value={`${formatKr(Math.abs(allDiff))} kr`}
+              tone={allDiff >= 0 ? "good" : "warn"}
             />
           </div>
 
@@ -799,6 +942,103 @@ function PillarView({
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function ExpensePanel({
+  label,
+  hint,
+  rows,
+  saving,
+  deletingId,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  label: string;
+  hint?: string;
+  rows: ExpenseRow[];
+  saving: boolean;
+  deletingId: string | null;
+  onAdd: (name: string, amount: string) => Promise<boolean>;
+  onRemove: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+
+  const submit = async () => {
+    if (await onAdd(name, amount)) {
+      setName("");
+      setAmount("");
+    }
+  };
+
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-gray-900">{label}</h3>
+          {hint ? <p className="mt-1 text-sm text-gray-500">{hint}</p> : null}
+        </div>
+        <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-gray-700">
+          Loka
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-gray-500">Ekkert skráð enn.</p>
+      ) : (
+        <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-100">
+          {rows.map((row) => (
+            <li key={row.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+              <span className="text-gray-700">{row.name || "—"}</span>
+              <div className="flex items-center gap-3">
+                <span className="font-medium text-gray-900">{formatKr(row.amount)} kr</span>
+                <button
+                  type="button"
+                  disabled={deletingId === row.id}
+                  onClick={() => onRemove(row.id)}
+                  className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50"
+                >
+                  Eyða
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+        className="mt-3 flex flex-wrap items-end gap-2"
+      >
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nafn"
+          className="min-w-[12rem] flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+        />
+        <input
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="Verð kr"
+          inputMode="numeric"
+          className="w-36 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-xl bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          {saving ? "Vista…" : "Skrá"}
+        </button>
+      </form>
     </section>
   );
 }

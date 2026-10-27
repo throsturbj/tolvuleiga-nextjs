@@ -26,8 +26,9 @@ create table if not exists public.asset_revenue (
 create table if not exists public.company_expenses (
   id uuid primary key default gen_random_uuid(),
   category text not null default 'Annað',
-  year integer not null,
-  month integer not null check (month between 1 and 12),
+  name text,
+  year integer,
+  month integer check (month between 1 and 12),
   amount integer not null default 0,
   note text,
   created_at timestamptz not null default now()
@@ -38,22 +39,12 @@ create unique index if not exists company_assets_current_order_id_uidx on public
 create index if not exists asset_revenue_asset_id_idx on public.asset_revenue (asset_id, created_at);
 create unique index if not exists asset_revenue_order_id_uidx on public.asset_revenue (order_id) where order_id is not null;
 create index if not exists company_expenses_period_idx on public.company_expenses (year, month);
+create index if not exists company_expenses_category_idx on public.company_expenses (category, created_at);
 
 alter table public.company_assets enable row level security;
 alter table public.asset_revenue enable row level security;
 alter table public.company_expenses enable row level security;
 
-do $$
-begin
-  if not exists (select 1 from pg_policies where tablename = 'company_assets' and policyname = 'Authenticated all company_assets') then
-    create policy "Authenticated all company_assets" on public.company_assets for all to authenticated using (true) with check (true);
-  end if;
-  if not exists (select 1 from pg_policies where tablename = 'asset_revenue' and policyname = 'Authenticated all asset_revenue') then
-    create policy "Authenticated all asset_revenue" on public.asset_revenue for all to authenticated using (true) with check (true);
-  end if;
-  if not exists (select 1 from pg_policies where tablename = 'company_expenses' and policyname = 'Authenticated all company_expenses') then
-    create policy "Authenticated all company_expenses" on public.company_expenses for all to authenticated using (true) with check (true);
-  end if;
-end $$;
+-- Admin-only access policies: sql/2026-10-21-admin-only.sql
 
 grant select, insert, update, delete on public.company_assets, public.asset_revenue, public.company_expenses to authenticated;

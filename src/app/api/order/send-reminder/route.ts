@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { fetchOrderBundle } from '@/lib/orders'
 import { getServerSupabase } from '@/lib/supabase-server'
 import { sendOrderReminderEmail } from '@/lib/email'
+import { requireAdmin } from '@/lib/admin-auth'
 
 export const runtime = 'nodejs'
 
@@ -9,6 +10,9 @@ type Body = { orderId?: string; dashboardUrl?: string }
 
 export async function POST(req: NextRequest) {
 	try {
+		if (!(await requireAdmin(req))) {
+			return NextResponse.json({ success: false, error: 'UNAUTHORIZED' }, { status: 401 })
+		}
 		const body = (await req.json().catch(() => ({}))) as Body
 		const orderId = body.orderId
 		if (!orderId) {

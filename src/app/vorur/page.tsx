@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { authHeader } from "@/lib/auth-utils";
 import {
   AUKA_SPEC_FIELDS,
   AUKA_TYPE_LABEL,
@@ -360,18 +361,20 @@ export default function VorurAdminPage() {
     const folder = imageProduct.image_folder || imageProduct.id;
     setSaving(true);
     try {
+      const headers = { "Content-Type": "application/json", ...(await authHeader()) };
       await fetch("/api/images/clean-folder-generic", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ bucket, folder }),
       });
       const fileNames = imageFiles.map((f, i) => `${String(i).padStart(3, "0")}-${sanitizeFileName(f.name)}`);
       const signRes = await fetch("/api/images/signed-upload-generic", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ bucket, folder, fileNames }),
       });
       const signJson = await signRes.json();
+      if (!signRes.ok) throw new Error(signJson?.error || "Myndir tókust ekki");
       const entries: { path: string; token: string }[] = signJson?.entries || [];
       for (let i = 0; i < imageFiles.length; i++) {
         const { path, token } = entries[i];

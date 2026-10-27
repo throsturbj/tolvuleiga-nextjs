@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/admin-auth'
 
 const ALLOWED_BUCKETS = new Set(['screens', 'keyboards', 'mouses', 'consoles', 'laptopimages', 'gamingpcimages'])
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await requireAdmin(req))) {
+      return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
+    }
     const body = await req.json().catch(() => ({}))
     const bucket = String(body?.bucket || '')
     const folder = String(body?.folder || '')

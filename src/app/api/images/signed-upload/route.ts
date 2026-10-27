@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/admin-auth'
 
 function sanitizeFileName(name: string) {
   return name
@@ -12,6 +13,9 @@ function sanitizeFileName(name: string) {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await requireAdmin(req))) {
+      return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
+    }
     const body = await req.json().catch(() => ({}))
     const pcId = Number(body?.pcId)
     const fileNames: string[] = Array.isArray(body?.fileNames) ? body.fileNames : []

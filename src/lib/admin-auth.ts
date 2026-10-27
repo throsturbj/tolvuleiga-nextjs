@@ -17,7 +17,6 @@ export async function requireAdmin(req: NextRequest) {
     .select("isAdmin, full_name")
     .eq("auth_uid", data.user.id)
     .maybeSingle();
-  const metaAdmin = Boolean((data.user.user_metadata as Record<string, unknown> | undefined)?.isAdmin);
-  if (!profile?.isAdmin && !metaAdmin) return null;
+  if (!profile?.isAdmin) return null;
   return { id: data.user.id, email: data.user.email || "", fullName: (profile?.full_name || "").trim() };
 }

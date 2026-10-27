@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/admin-auth'
 
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await requireAdmin(req))) {
+      return NextResponse.json({ success: false, error: 'UNAUTHORIZED' }, { status: 401 })
+    }
     const body = await req.json().catch(() => null) as { orderId?: string } | null
     const orderId = body?.orderId
     if (!orderId || typeof orderId !== 'string') {

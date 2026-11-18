@@ -10,7 +10,9 @@ import IncludedItems from "@/components/IncludedItems";
 import {
   fetchProductByParam,
   formatKr,
+  formatMonthly,
   formatStorage,
+  formatWeekly,
   parsePrice,
   saveOrderSelection,
   specLines,
@@ -61,6 +63,8 @@ export default function ProductDetailPage() {
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
   const waitlistAutoRef = useRef(false);
   const [extraControllers, setExtraControllers] = useState(0);
+  const [billingChoice, setBillingChoice] = useState<"week" | "month">("week");
+  const [weeks, setWeeks] = useState<1 | 2 | 3>(1);
   const [screenPreviewUrl, setScreenPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -226,6 +230,10 @@ export default function ProductDetailPage() {
   const accessoryTotal = selectedAccessories.reduce((sum, a) => sum + parsePrice(a.price), 0);
 
   const monthlyBase = product?.type === "laptop" ? parsePrice(selectedVariant?.price) : parsePrice(product?.price);
+  const weeklyRate = parsePrice(product?.priceweek);
+  const hasWeekly = weeklyRate > 0;
+  const hasMonthly = monthlyBase > 0;
+  const activeBilling: "week" | "month" = hasWeekly && hasMonthly ? billingChoice : hasWeekly ? "week" : "month";
   const insuranceAmount =
     product?.type === "laptop" ? parsePrice(selectedVariant?.trygging) : parsePrice(product?.trygging);
   const insuranceAvailable = insuranceAmount > 0;
@@ -238,7 +246,11 @@ export default function ProductDetailPage() {
       : 0;
   const maxExtra = product?.type === "console" ? parseInt(specText(product.specs, "numberofextracontrollers") || "0", 10) || 0 : 0;
 
-  const finalPriceRaw = monthlyBase + screenPrice + keyboardPrice + mousePrice + accessoryTotal + extraCtrlPrice + (insured && insuranceAvailable ? insuranceAmount : 0);
+  const monthlyAddons = screenPrice + keyboardPrice + mousePrice + accessoryTotal + (insured && insuranceAvailable ? insuranceAmount : 0);
+  const finalPriceRaw =
+    activeBilling === "week"
+      ? weeklyRate + extraCtrlPrice + monthlyAddons
+      : monthlyBase + extraCtrlPrice + monthlyAddons;
   const finalPrice = Math.ceil(finalPriceRaw / 10) * 10;
   const formattedPrice = `${formatKr(finalPrice)} kr`;
   const bullets = product ? specLines(product).map((r) => `${r.label}: ${r.value}`) : [];
@@ -253,6 +265,8 @@ export default function ProductDetailPage() {
     setOrdering(true);
     saveOrderSelection({
       months: 3,
+      billing: activeBilling,
+      weeks: activeBilling === "week" ? weeks : undefined,
       addons: { skjár: addons.skjár, lyklabord: addons.lyklabord, mus: addons.mus },
       insured,
       finalPrice,
@@ -530,8 +544,40 @@ export default function ProductDetailPage() {
             <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
               <div className="min-w-0">
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-gray-900 break-words">{product.name}</h1>
+                {hasWeekly && hasMonthly ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBillingChoice("week")}
+                      className={`rounded-lg border px-3 py-2 text-sm font-semibold ${activeBilling === "week" ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white" : "border-gray-200 text-gray-800"}`}
+                    >
+                      {formatWeekly(weeklyRate)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBillingChoice("month")}
+                      className={`rounded-lg border px-3 py-2 text-sm font-semibold ${activeBilling === "month" ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white" : "border-gray-200 text-gray-800"}`}
+                    >
+                      {formatMonthly(monthlyBase)}
+                    </button>
+                  </div>
+                ) : null}
+                {activeBilling === "week" ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {([1, 2, 3] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setWeeks(option)}
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${weeks === option ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white" : "border-gray-200 text-gray-700"}`}
+                      >
+                        {option === 1 ? "1 vika" : `${option} vikur`}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 <p className={`mt-2 sm:mt-3 text-xl sm:text-2xl font-extrabold ${insured && insuranceAvailable ? "text-emerald-600" : "text-[var(--color-secondary)]"}`}>
-                  {formattedPrice}/mánuði
+                  {activeBilling === "week" ? <>{formattedPrice}/viku</> : <>{formattedPrice}/mánuði</>}
                 </p>
               </div>
 

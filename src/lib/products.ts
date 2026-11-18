@@ -26,6 +26,7 @@ export interface Product {
   description: string | null;
   innifalid: string | null;
   price: number | string | null;
+  priceweek: number | string | null;
   trygging: number | string | null;
   specs: Record<string, string | number | null | undefined>;
   uppselt: boolean;
@@ -150,6 +151,10 @@ export function formatMonthly(n: number): string {
   return `${formatKr(n)} kr/mánuði`;
 }
 
+export function formatWeekly(n: number): string {
+  return `${formatKr(n)} kr/viku`;
+}
+
 export function specText(specs: Product["specs"] | undefined, key: string): string {
   const v = specs?.[key];
   if (v == null) return "";
@@ -198,6 +203,8 @@ export function displayPrice(product: Pick<Product, "type" | "price">, fromVaria
 
 export type OrderSelection = {
   months: number;
+  billing?: "week" | "month";
+  weeks?: 1 | 2 | 3;
   addons?: { skjár?: boolean; lyklabord?: boolean; mus?: boolean };
   insured?: boolean;
   finalPrice?: number;

@@ -66,8 +66,11 @@ export default function OrderConfirmationPage() {
           };
           const insured = parsed.insured === true;
           const finalPrice = typeof parsed.finalPrice === 'number' && Number.isFinite(parsed.finalPrice) ? parsed.finalPrice : undefined;
+          const weeks = parsed.weeks === 2 || parsed.weeks === 3 ? parsed.weeks : 1;
           setSelection({
             months,
+            billing: parsed.billing === "week" ? "week" : "month",
+            weeks,
             addons: mapped,
             insured,
             finalPrice,
@@ -245,8 +248,14 @@ export default function OrderConfirmationPage() {
     try {
       const now = new Date();
       const until = new Date(now);
-      until.setMonth(until.getMonth() + 1);
-      if (until.getDate() < now.getDate()) until.setDate(0);
+      const weeklyOrder = selection?.billing === "week";
+      const rentedWeeks = selection?.weeks === 2 || selection?.weeks === 3 ? selection.weeks : 1;
+      if (weeklyOrder) {
+        until.setDate(until.getDate() + rentedWeeks * 7);
+      } else {
+        until.setMonth(until.getMonth() + 1);
+        if (until.getDate() < now.getDate()) until.setDate(0);
+      }
       const months = selection?.months ?? 3;
 
       const a = (selection?.addons ?? {}) as Record<string, boolean>;
@@ -415,7 +424,11 @@ export default function OrderConfirmationPage() {
                   {(() => {
                     const selFinal = selection?.finalPrice;
                     if (typeof selFinal === 'number' && Number.isFinite(selFinal) && selFinal > 0) {
-                      return `${selFinal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') } kr/mánuði`;
+                      const amount = `${selFinal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') }`;
+                      if (selection?.billing === "week") {
+                        return `${amount} kr/viku`;
+                      }
+                      return `${amount} kr/mánuði`;
                     }
                     // Fallback to simple discounted price if final not provided
                     const digits = parsePrice(product.price);

@@ -14,6 +14,7 @@ import gtaImage from "../../img/gta.jpg";
 import {
   displayPrice,
   formatMonthly,
+  formatWeekly,
   parsePrice,
   productSubtitle,
   type Product,
@@ -134,7 +135,7 @@ export default function Home() {
             .order("sort_order", { ascending: true }),
           supabasePublic
             .from("products")
-            .select("id, group_id, type, name, description, price, specs, uppselt, tilbod, image_bucket, image_folder")
+            .select("id, group_id, type, name, description, price, priceweek, specs, uppselt, tilbod, image_bucket, image_folder, created_at")
             .eq("hidden", false),
           supabasePublic.from("product_variants").select("product_id, price"),
         ]);
@@ -322,6 +323,9 @@ export default function Home() {
   const productsForGroup = (groupId: string) => catalog.filter((p) => p.group_id === groupId);
 
   const firstGroupSlug = groups[0]?.slug || "apple-laptops";
+  const firstConsole = catalog
+    .filter((p) => p.type === "console")
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")))[0];
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -351,12 +355,16 @@ export default function Home() {
     const dark = theme !== "light";
     const href = `/product/${p.id}`;
     const subtitle = productSubtitle(p);
+    const weeklyPrice = parsePrice(p.priceweek);
+    const storedMonthly = parsePrice(p.price);
     const priceLabel =
       p.fromPrice != null
         ? p.type === "laptop" || p.type === "console"
           ? `Frá ${formatMonthly(p.fromPrice)}`
           : formatMonthly(p.fromPrice)
         : null;
+    const weeklyLabel = weeklyPrice > 0 ? formatWeekly(weeklyPrice) : null;
+    const monthlyWithWeekly = weeklyPrice > 0 && storedMonthly > 0 ? formatMonthly(storedMonthly) : priceLabel;
     const accentPrice = theme === "teal" ? "text-teal-300/90" : dark ? "text-[var(--color-accent)]" : "text-[var(--color-secondary)]";
     const cta =
       theme === "teal"
@@ -416,7 +424,18 @@ export default function Home() {
           {subtitle ? (
             <p className={`text-sm mt-1 ${dark ? "text-white/60" : "text-gray-600"}`}>{subtitle}</p>
           ) : null}
-          {priceLabel ? <p className={`mt-2 text-xl font-bold ${accentPrice}`}>{priceLabel}</p> : null}
+          {weeklyLabel || priceLabel ? (
+            <div className="mt-2">
+              {weeklyLabel && monthlyWithWeekly ? (
+                <>
+                  <p className={`text-xl font-bold ${accentPrice}`}>{weeklyLabel}</p>
+                  <p className={`mt-0.5 text-base font-semibold ${accentPrice}`}>{monthlyWithWeekly}</p>
+                </>
+              ) : (
+                <p className={`text-xl font-bold ${accentPrice}`}>{weeklyLabel || priceLabel}</p>
+              )}
+            </div>
+          ) : null}
           <div className="mt-4 flex items-center gap-2">
             <Link href={href} className={cta} onClick={(e) => e.stopPropagation()}>
               Sjá nánar
@@ -522,14 +541,28 @@ export default function Home() {
 
         <div className="relative z-20 mx-auto flex min-h-[min(88vh,920px)] max-w-7xl flex-col justify-end px-4 pb-16 pt-28 sm:px-6 sm:pb-20 lg:px-8 lg:pb-24">
           {isGtaSlide ? (
-            <div className="hero-fade-up">
-              <h1 className="sr-only">Tölvuleiga</h1>
-              <Link
-                href="/pantanabeidni"
-                className="inline-flex rounded-md bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_30px_-12px_var(--color-accent)] transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
-              >
-                Hafa Samband
-              </Link>
+            <div>
+              <h1 className="hero-fade-up whitespace-nowrap text-[clamp(1.15rem,4.4vw,3.75rem)] font-semibold leading-none tracking-tight text-white">
+                PlayStation 5 til leigu!
+              </h1>
+              <div className="hero-fade-up hero-delay-2 mt-8">
+                {firstConsole ? (
+                  <Link
+                    href={`/product/${firstConsole.id}`}
+                    className="inline-flex rounded-md bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_30px_-12px_var(--color-accent)] transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+                  >
+                    Sjá Nánar
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="rounded-md bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white opacity-70"
+                  >
+                    Sjá Nánar
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="max-w-xl">

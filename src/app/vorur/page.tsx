@@ -61,6 +61,7 @@ export default function VorurAdminPage() {
     description: "",
     innifalid: "",
     price: "",
+    priceweek: "",
     trygging: "",
     hidden: false,
     uppselt: false,
@@ -198,6 +199,7 @@ export default function VorurAdminPage() {
       description: productForm.description.trim() || null,
       innifalid: productForm.innifalid.trim() || null,
       price: productForm.price ? parsePrice(productForm.price) : null,
+      priceweek: parsePrice(productForm.priceweek) > 0 ? parsePrice(productForm.priceweek) : null,
       trygging: productForm.trygging ? parsePrice(productForm.trygging) : null,
       specs: specsFromForm(productForm.type, productForm.specs),
       hidden: productForm.hidden,
@@ -221,6 +223,7 @@ export default function VorurAdminPage() {
       description: "",
       innifalid: "",
       price: "",
+      priceweek: "",
       trygging: "",
       hidden: false,
       uppselt: false,
@@ -240,7 +243,8 @@ export default function VorurAdminPage() {
         name: editingProduct.name,
         description: editingProduct.description,
         innifalid: editingProduct.innifalid,
-        price: editingProduct.price,
+        price: editingProduct.price === "" || editingProduct.price == null ? null : parsePrice(editingProduct.price),
+        priceweek: parsePrice(editingProduct.priceweek) > 0 ? parsePrice(editingProduct.priceweek) : null,
         trygging: editingProduct.trygging,
         specs: editingProduct.specs,
         hidden: editingProduct.hidden,
@@ -532,6 +536,7 @@ export default function VorurAdminPage() {
                   {groups.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
                 </select>
                 <input className={inputCls} placeholder="Nafn" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} />
+                <input className={inputCls} placeholder="Verð / viku" value={productForm.priceweek} onChange={(e) => setProductForm({ ...productForm, priceweek: e.target.value })} />
                 <input className={inputCls} placeholder="Verð / mán" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} />
                 <input className={inputCls} placeholder="Trygging" value={productForm.trygging} onChange={(e) => setProductForm({ ...productForm, trygging: e.target.value })} />
                 <input className={inputCls} placeholder="Innifalið" value={productForm.innifalid} onChange={(e) => setProductForm({ ...productForm, innifalid: e.target.value })} />
@@ -548,9 +553,8 @@ export default function VorurAdminPage() {
                     />
                   ))}
                 </div>
-              ) : (
-                <textarea className={inputCls} rows={2} placeholder="Lýsing (fartölvur)" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} />
-              )}
+              ) : null}
+              <textarea className={inputCls} rows={3} placeholder="Lýsing" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} />
               <div className="flex items-center gap-4 text-sm">
                 <label className="flex items-center gap-2"><input type="checkbox" checked={productForm.hidden} onChange={(e) => setProductForm({ ...productForm, hidden: e.target.checked })} /> Falin</label>
                 <label className="flex items-center gap-2"><input type="checkbox" checked={productForm.uppselt} onChange={(e) => setProductForm({ ...productForm, uppselt: e.target.checked })} /> Uppselt</label>
@@ -648,7 +652,8 @@ export default function VorurAdminPage() {
                 <option value="">— Hópur —</option>
                 {groups.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
               </select>
-              <input className={inputCls} placeholder="Verð" value={editingProduct.price ?? ""} onChange={(e) => setEditingProduct({ ...editingProduct, price: e.target.value })} />
+              <input className={inputCls} placeholder="Verð / viku" value={editingProduct.priceweek ?? ""} onChange={(e) => setEditingProduct({ ...editingProduct, priceweek: e.target.value })} />
+              <input className={inputCls} placeholder="Verð / mán" value={editingProduct.price ?? ""} onChange={(e) => setEditingProduct({ ...editingProduct, price: e.target.value })} />
               <input className={inputCls} placeholder="Trygging" value={editingProduct.trygging ?? ""} onChange={(e) => setEditingProduct({ ...editingProduct, trygging: e.target.value })} />
               <input className={inputCls} placeholder="Innifalið" value={editingProduct.innifalid || ""} onChange={(e) => setEditingProduct({ ...editingProduct, innifalid: e.target.value })} />
               <textarea className={inputCls} rows={2} placeholder="Lýsing" value={editingProduct.description || ""} onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })} />

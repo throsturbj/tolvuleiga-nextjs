@@ -10,6 +10,7 @@ import { supabasePublic } from "@/lib/supabase-public";
 import { debug } from "@/lib/debug";
 import { joinProductWaitlist } from "@/lib/waitlist";
 import heroImage from "../../img/forsidumynd1.jpg";
+import gtaImage from "../../img/gta.jpg";
 import {
   displayPrice,
   formatMonthly,
@@ -19,6 +20,11 @@ import {
   type ProductGroup,
   type ProductVariant,
 } from "@/lib/products";
+
+const HERO_SLIDES = [
+  { id: "gta", src: gtaImage, alt: "GTA" },
+  { id: "forsida", src: heroImage, alt: "Nemendur að vinna á fartölvum" },
+] as const;
 
 type CatalogProduct = Product & {
   images: string[];
@@ -47,6 +53,14 @@ export default function Home() {
   const pendingWaitlistId = useRef<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState<number>(0);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const isGtaSlide = HERO_SLIDES[heroIndex]?.id === "gta";
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setHeroIndex((current) => (current + 1) % HERO_SLIDES.length);
+    }, 7000);
+    return () => window.clearTimeout(id);
+  }, [heroIndex]);
   const centerToIndex = (idx: number, behavior: ScrollBehavior = "smooth") => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -481,41 +495,67 @@ export default function Home() {
         </div>
       ) : null}
       <section className="relative isolate min-h-[min(88vh,920px)] overflow-hidden bg-[#0a0f0c]">
-        <Image
-          src={heroImage}
-          alt="Nemendur að vinna á fartölvum"
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-[center_35%] hero-image-zoom"
+        {HERO_SLIDES.map((slide, index) => (
+          <Image
+            key={slide.id}
+            src={slide.src}
+            alt={slide.alt}
+            fill
+            sizes="100vw"
+            {...(index === 0 ? { priority: true } : { loading: "eager" as const })}
+            aria-hidden={index !== heroIndex}
+            className={`object-cover transition-opacity duration-1000 ${
+              slide.id === "gta" ? "object-center hero-image-zoom" : "object-[center_35%]"
+            } ${index === heroIndex ? "z-10 opacity-100" : "z-0 opacity-0"}`}
+          />
+        ))}
+        <div
+          className={`absolute inset-0 z-10 bg-gradient-to-r ${
+            isGtaSlide ? "from-black/55 via-black/15 to-transparent" : "from-black/75 via-black/45 to-black/15"
+          }`}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/45 to-black/15" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-black/25" />
+        <div
+          className={`absolute inset-0 z-10 bg-gradient-to-t ${
+            isGtaSlide ? "from-black/55 via-transparent to-black/25" : "from-black/70 via-black/15 to-black/25"
+          }`}
+        />
 
-        <div className="relative mx-auto flex min-h-[min(88vh,920px)] max-w-7xl flex-col justify-end px-4 pb-16 pt-28 sm:px-6 sm:pb-20 lg:px-8 lg:pb-24">
-          <div className="max-w-xl">
-            <h1 className="hero-fade-up text-5xl font-semibold tracking-tight text-white sm:text-6xl lg:text-7xl">
-              Tölvuleiga
-            </h1>
-            <p className="hero-fade-up hero-delay-1 mt-5 max-w-md text-base leading-relaxed text-white/85 sm:text-lg">
-              Hágæða tölvubúnaður fyrir leik, vinnu og nám.
-            </p>
-            <div className="hero-fade-up hero-delay-2 mt-8">
-              <button
-                onClick={() => {
-                  const el = document.getElementById(firstGroupSlug);
-                  if (el && typeof el.scrollIntoView === "function") {
-                    el.scrollIntoView({ behavior: "smooth", block: "start" });
-                  } else {
-                    window.location.hash = `#${firstGroupSlug}`;
-                  }
-                }}
-                className="rounded-md bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_30px_-12px_var(--color-accent)] transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+        <div className="relative z-20 mx-auto flex min-h-[min(88vh,920px)] max-w-7xl flex-col justify-end px-4 pb-16 pt-28 sm:px-6 sm:pb-20 lg:px-8 lg:pb-24">
+          {isGtaSlide ? (
+            <div className="hero-fade-up">
+              <h1 className="sr-only">Tölvuleiga</h1>
+              <Link
+                href="/pantanabeidni"
+                className="inline-flex rounded-md bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_30px_-12px_var(--color-accent)] transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
               >
-                Sjá Vörur
-              </button>
+                Hafa Samband
+              </Link>
             </div>
-          </div>
+          ) : (
+            <div className="max-w-xl">
+              <h1 className="hero-fade-up text-5xl font-semibold tracking-tight text-white sm:text-6xl lg:text-7xl">
+                Tölvuleiga
+              </h1>
+              <p className="hero-fade-up hero-delay-1 mt-5 max-w-md text-base leading-relaxed text-white/85 sm:text-lg">
+                Hágæða tölvubúnaður fyrir leik, vinnu og nám.
+              </p>
+              <div className="hero-fade-up hero-delay-2 mt-8">
+                <button
+                  onClick={() => {
+                    const el = document.getElementById(firstGroupSlug);
+                    if (el && typeof el.scrollIntoView === "function") {
+                      el.scrollIntoView({ behavior: "smooth", block: "start" });
+                    } else {
+                      window.location.hash = `#${firstGroupSlug}`;
+                    }
+                  }}
+                  className="rounded-md bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_30px_-12px_var(--color-accent)] transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+                >
+                  Sjá Vörur
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

@@ -17,6 +17,7 @@ const PROTECTED_PATHS = [
   '/stjornbord',
   '/vorur',
   '/notendaupplysingar',
+  '/pantanabeidni',
 ]
 
 export async function middleware(req: NextRequest) {
@@ -100,6 +101,7 @@ export const config = {
     '/stjornbord/:path*',
     '/vorur/:path*',
     '/notendaupplysingar/:path*',
+    '/pantanabeidni/:path*',
     // Always run on auth to keep cookies refreshed when landing there
     '/auth',
   ],

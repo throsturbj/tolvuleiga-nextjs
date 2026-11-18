@@ -88,6 +88,67 @@ export async function sendContactEmail(
 	})
 }
 
+export async function sendOrderRequestEmails(args: {
+	userEmail: string
+	userName: string
+	address: string
+	message: string
+	adminEmail?: string
+}): Promise<void> {
+	const admin = args.adminEmail || process.env.CONTACT_TO || 'tolvuleiga@tolvuleiga.is'
+	const name = args.userName.trim()
+	const address = args.address.trim() || '—'
+	const message = args.message.trim()
+
+	const adminText = `Ný pöntunarbeiðni (GTA):
+
+Nafn: ${name}
+Netfang: ${args.userEmail}
+Heimilisfang: ${address}
+
+Skilaboð:
+${message}`
+
+	const userText = `Góðan dag,
+
+Við höfum móttekið pöntunarbeiðni þína og munum hafa samband.
+
+Nafn: ${name}
+Netfang: ${args.userEmail}
+Heimilisfang: ${address}
+
+Skilaboð:
+${message}
+
+Kærar kveðjur,
+Tölvuleiga.is`
+
+	const userHtml = `
+<div style="font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#111">
+  <p>Góðan dag,</p>
+  <p>Við höfum móttekið pöntunarbeiðni þína og munum hafa samband.</p>
+  <p><strong>Nafn:</strong> ${escapeHtml(name)}<br/>
+  <strong>Netfang:</strong> ${escapeHtml(args.userEmail)}<br/>
+  <strong>Heimilisfang:</strong> ${escapeHtml(address)}</p>
+  <p><strong>Skilaboð:</strong><br/>${escapeHtml(message).replace(/\n/g, '<br/>')}</p>
+  <p style="margin-top:24px">Kærar kveðjur,<br/>Tölvuleiga.is</p>
+</div>`
+
+	await Promise.all([
+		sendMail({
+			to: args.userEmail,
+			subject: 'Staðfesting á pöntunarbeiðni',
+			text: userText,
+			html: userHtml,
+		}),
+		sendMail({
+			to: admin,
+			subject: 'Ný pöntunarbeiðni: GTA',
+			text: adminText,
+		}),
+	])
+}
+
 export async function sendOrderEmails(args: {
 	userEmail: string
 	adminEmail?: string

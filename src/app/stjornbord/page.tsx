@@ -87,6 +87,8 @@ export default function AdminDashboardPage() {
   const [preorderUserNameByUid, setPreorderUserNameByUid] = useState<Record<string, string>>({});
   const [preorderEmailByUid, setPreorderEmailByUid] = useState<Record<string, string>>({});
   const [preorderProductNameById, setPreorderProductNameById] = useState<Record<string, string>>({});
+  const [deletePreorder, setDeletePreorder] = useState<{ id: string; name: string; product: string } | null>(null);
+  const [deletingPreorder, setDeletingPreorder] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -524,6 +526,25 @@ export default function AdminDashboardPage() {
       setError(e instanceof Error ? e.message : 'Uppfærsla mistókst');
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const confirmDeletePreorder = async () => {
+    if (!isAdmin || !deletePreorder) return;
+    setDeletingPreorder(true);
+    setError(null);
+    try {
+      const { error } = await supabase.from('preorders').delete().eq('id', deletePreorder.id);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      setPreorders((prev) => prev.filter((p) => p.id !== deletePreorder.id));
+      setDeletePreorder(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Ekki tókst að eyða af biðlista');
+    } finally {
+      setDeletingPreorder(false);
     }
   };
 
@@ -975,6 +996,7 @@ export default function AdminDashboardPage() {
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Notandi</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Netfang</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Vara</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Aðgerðir</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -986,18 +1008,28 @@ export default function AdminDashboardPage() {
                       (po.product_id && preorderProductNameById[po.product_id]) ||
                       (typeof po.gamingpc_uuid === 'number' && pcNamesById[po.gamingpc_uuid]) ||
                       '—';
+                    const displayName = name || '—';
                     return (
                       <tr key={po.id} className="border-b border-gray-100 hover:bg-gray-50/60">
                         <td className="px-4 py-3 align-top">{formatDate(po.created_at)}</td>
-                        <td className="px-4 py-3 align-top">{name || '—'}</td>
+                        <td className="px-4 py-3 align-top">{displayName}</td>
                         <td className="px-4 py-3 align-top">{email || '—'}</td>
                         <td className="px-4 py-3 align-top">{productName}</td>
+                        <td className="px-4 py-3 align-top">
+                          <button
+                            type="button"
+                            onClick={() => setDeletePreorder({ id: po.id, name: displayName, product: productName })}
+                            className="inline-flex items-center px-2.5 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 text-xs"
+                          >
+                            Eyða
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
                   {preorders.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-gray-500">
+                      <td colSpan={5} className="px-4 py-10 text-center text-gray-500">
                         Engar skráningar á biðlista fundust.
                       </td>
                     </tr>
@@ -1007,6 +1039,38 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         )}
+        {/* Confirm waitlist delete */}
+        {deletePreorder ? (
+          <div className="fixed inset-0 z-50">
+            <div className="absolute inset-0 bg-black/40" onClick={deletingPreorder ? undefined : () => setDeletePreorder(null)} />
+            <div className="relative z-10 mx-auto mt-24 w-full max-w-md rounded-lg bg-white shadow-xl">
+              <div className="px-6 py-5">
+                <p className="text-base text-gray-900">
+                  Ertu viss um að eyða þessari pöntun: {deletePreorder.name} og {deletePreorder.product}
+                </p>
+                {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeletePreorder(null)}
+                  disabled={deletingPreorder}
+                  className="inline-flex items-center px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm disabled:opacity-50"
+                >
+                  Hætta við
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmDeletePreorder()}
+                  disabled={deletingPreorder}
+                  className="inline-flex items-center px-3 py-1.5 rounded border border-red-500 text-red-600 hover:bg-red-50 text-sm disabled:opacity-50"
+                >
+                  {deletingPreorder ? "Eyði…" : "Eyða"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {/* Edit modal */}
         {editOrderId && editDraft ? (
           <div className="fixed inset-0 z-50">

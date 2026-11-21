@@ -204,6 +204,8 @@ export default function OverviewTab({
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [needsExpenseMigration, setNeedsExpenseMigration] = useState(false);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
+  const [highlightedAssetId, setHighlightedAssetId] = useState<string | null>(null);
+  const [assetSort, setAssetSort] = useState<"percent" | "number" | "days">("days");
   const [savingExpense, setSavingExpense] = useState(false);
   const [deletingExpense, setDeletingExpense] = useState<string | null>(null);
 
@@ -307,15 +309,28 @@ export default function OverviewTab({
   );
 
   const sortedAssets = useMemo(() => {
+    const computerNumber = (name: string) => {
+      const match = name.match(/tölva\s+(\d+)/i);
+      return match ? parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
+    };
+    const paidPercent = (asset: Asset) =>
+      asset.purchase_cost > 0 ? ((earnedByAsset[asset.id] || 0) / asset.purchase_cost) * 100 : 0;
+    const byName = (a: Asset, b: Asset) => a.name.localeCompare(b.name, "is");
     return [...assets].sort((a, b) => {
+      if (assetSort === "percent") {
+        const diff = paidPercent(b) - paidPercent(a);
+        return diff !== 0 ? diff : computerNumber(a.name) - computerNumber(b.name);
+      }
+      if (assetSort === "number") {
+        const diff = computerNumber(a.name) - computerNumber(b.name);
+        return diff !== 0 ? diff : byName(a, b);
+      }
       const oa = a.current_order_id ? orderById[a.current_order_id] || null : null;
       const ob = b.current_order_id ? orderById[b.current_order_id] || null : null;
-      const ta = availabilityTime(oa);
-      const tb = availabilityTime(ob);
-      if (ta !== tb) return ta - tb;
-      return a.name.localeCompare(b.name, "is");
+      const diff = availabilityTime(oa) - availabilityTime(ob);
+      return diff !== 0 ? diff : byName(a, b);
     });
-  }, [assets, orderById]);
+  }, [assets, assetSort, earnedByAsset, orderById]);
 
   const expensesByCategory = useMemo(() => {
     const map: Record<string, ExpenseRow[]> = {};
@@ -471,6 +486,16 @@ export default function OverviewTab({
     await loadLedger();
   };
 
+  const scrollToAsset = (id: string) => {
+    const el = document.getElementById(`overview-asset-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setHighlightedAssetId(id);
+    window.setTimeout(() => {
+      setHighlightedAssetId((current) => (current === id ? null : current));
+    }, 1600);
+  };
+
   if (!schemaReady) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-950">
@@ -491,7 +516,11 @@ export default function OverviewTab({
           <h2 className="text-xl font-semibold text-gray-900">Yfirlit</h2>
           <p className="mt-1 text-sm text-gray-500">
             {view === "products"
-              ? "Næsta lausa vara efst. Tengdu pöntun til að sjá nafn og hvað er eftir."
+              ? assetSort === "percent"
+                ? "Hæsta hlutfall efst. Smelltu á vöru til að fara niður á spjaldið."
+                : assetSort === "number"
+                  ? "Tölva 1 efst. Smelltu á vöru til að fara niður á spjaldið."
+                  : "Næsta lausa vara efst. Smelltu á vöru til að fara niður á spjaldið."
               : "Ein súla per vöru. Grátt er kaupverð, grænt er hvað hún hefur skilað."}
           </p>
         </div>
@@ -664,6 +693,29 @@ export default function OverviewTab({
           {loading && assets.length === 0 ? <p className="text-sm text-gray-500">Hleður…</p> : null}
 
           {sortedAssets.length > 0 ? (
+            <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["percent", "Raða eftir %"],
+                  ["number", "Raða eftir Tölvu #"],
+                  ["days", "Raða eftir Dögum"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setAssetSort(key)}
+                  className={`rounded-xl px-4 py-2 text-sm font-medium ${
+                    assetSort === key
+                      ? "bg-gray-900 text-white"
+                      : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <ol className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
               {sortedAssets.map((asset, i) => {
                 const order = asset.current_order_id ? orderById[asset.current_order_id] || null : null;
@@ -672,28 +724,35 @@ export default function OverviewTab({
                 const earned = earnedByAsset[asset.id] || 0;
                 const paidPct = asset.purchase_cost > 0 ? Math.round((earned / asset.purchase_cost) * 100) : 0;
                 return (
-                  <li key={asset.id} className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0">
-                    <span className="w-7 text-sm font-bold text-gray-400">{i + 1}.</span>
-                    <span className="min-w-[8rem] flex-1 font-semibold text-gray-900">
-                      {asset.name}
-                      <span className={`ml-2 text-sm font-bold ${paidPct >= 100 ? "text-emerald-600" : "text-red-400"}`}>
-                        {paidPct}%
-                      </span>
-                    </span>
-                    {out ? (
-                      <>
-                        <span className="text-sm text-gray-700">{renterName(order)}</span>
-                        <span className={`rounded-full px-3 py-1 text-sm font-bold ${days !== null && days <= 3 ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-800"}`}>
-                          {leftLabel(days, !order?.timabilTil)}
+                  <li key={asset.id} className="border-b border-gray-100 last:border-b-0">
+                    <button
+                      type="button"
+                      onClick={() => scrollToAsset(asset.id)}
+                      className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left transition hover:bg-gray-50"
+                    >
+                      <span className="w-7 text-sm font-bold text-gray-400">{i + 1}.</span>
+                      <span className="min-w-[8rem] flex-1 font-semibold text-gray-900">
+                        {asset.name}
+                        <span className={`ml-2 text-sm font-bold ${paidPct >= 100 ? "text-emerald-600" : "text-red-400"}`}>
+                          {paidPct}%
                         </span>
-                      </>
-                    ) : (
-                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-800">Laus</span>
-                    )}
+                      </span>
+                      {out ? (
+                        <>
+                          <span className="text-sm text-gray-700">{renterName(order)}</span>
+                          <span className={`rounded-full px-3 py-1 text-sm font-bold ${days !== null && days <= 3 ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-800"}`}>
+                            {leftLabel(days, !order?.timabilTil)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-800">Laus</span>
+                      )}
+                    </button>
                   </li>
                 );
               })}
             </ol>
+            </div>
           ) : null}
 
           {assets.length === 0 && !loading ? (
@@ -717,7 +776,15 @@ export default function OverviewTab({
                 const others = linkableOrders.filter((o) => !asset.product_id || o.product_id !== asset.product_id);
 
                 return (
-                  <article key={asset.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                  <article
+                    key={asset.id}
+                    id={`overview-asset-${asset.id}`}
+                    className={`scroll-mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm transition ${
+                      highlightedAssetId === asset.id
+                        ? "border-[var(--color-secondary)] ring-2 ring-[var(--color-secondary)]/30"
+                        : "border-gray-200"
+                    }`}
+                  >
                     <div className={`px-5 py-4 ${out ? "bg-[var(--color-secondary)] text-white" : "bg-emerald-600 text-white"}`}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
